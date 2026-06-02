@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<!-- saved from url=(0051)file:///C:/Users/chereau/Downloads/filenamer_4.html -->
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LabFileNamer</title>
+<link href="./LabFileNamer_files/css2" rel="stylesheet">
+<style>
+  :root {
+    --bg:      #0d0f12;
+    --surface: #141720;
+    --panel:   #1a1e2a;
+    --border:  #252b3b;
+    --accent:  #4af0a0;
+    --accent2: #f0a04a;
+    --muted:   #4a5268;
+    --text:    #c8d0e0;
+    --dim:     #6b7592;
+    --mono:    'IBM Plex Mono', monospace;
+    --sans:    'IBM Plex Sans', sans-serif;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-weight: 300;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px 14px 32px;
+  }
+
+  /* Header */
+  header {
+    width: 100%; max-width: 740px;
+    display: flex; align-items: center; gap: 10px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 10px; margin-bottom: 12px;
+  }
+  .logo {
+    width: 24px; height: 24px; border: 1.5px solid var(--accent); border-radius: 4px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--mono); font-size: 12px; font-weight: 600; color: var(--accent); flex-shrink: 0;
+  }
+  header h1 { font-family: var(--mono); font-size: 13px; font-weight: 500; color: #e8edf5; letter-spacing: 0.04em; }
+  header p  { font-size: 9px; color: var(--dim); letter-spacing: 0.07em; text-transform: uppercase; }
+  .vtag {
+    margin-left: auto; font-family: var(--mono); font-size: 9px; color: var(--muted);
+    padding: 2px 5px; border: 1px solid var(--border); border-radius: 3px;
+  }
+
+  main { width: 100%; max-width: 740px; display: flex; flex-direction: column; gap: 6px; }
+
+  /* 3-column grid */
+  .fields { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
+
+  /* Field row */
+  .field {
+    display: flex; align-items: stretch;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 5px;
+    overflow: hidden; transition: border-color 0.15s;
+  }
+  .field:focus-within { border-color: var(--accent); }
+
+  .ftag {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    padding: 0 7px; min-width: 40px; flex-shrink: 0;
+    background: var(--surface); border-right: 1px solid var(--border);
+  }
+  .ftag .code { font-family: var(--mono); font-size: 8px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; }
+  .ftag .prev { font-family: var(--mono); font-size: 8px; margin-top: 2px; opacity: 0.8; min-height: 9px; }
+
+  .finput { flex: 1; padding: 5px 7px; display: flex; flex-direction: column; min-width: 0; }
+  .finput .lbl { font-size: 8px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim); margin-bottom: 2px; }
+
+  select, input[type="text"] {
+    width: 100%; background: transparent; border: none; outline: none; appearance: none;
+    color: var(--text); font-family: var(--sans); font-size: 12px; font-weight: 400; padding: 0;
+  }
+  select {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5' viewBox='0 0 8 5'%3E%3Cpath d='M1 1l3 3 3-3' stroke='%234a5268' stroke-width='1.2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 2px center;
+    padding-right: 14px; cursor: pointer;
+  }
+  input::placeholder { color: var(--muted); font-size: 11px; }
+
+  /* Segment colours */
+  .c-inst { color: #7eb8f7; } .c-pi   { color: #b57bff; } .c-sci  { color: #f7c948; }
+  .c-proj { color: #f09860; } .c-samp { color: #4af0a0; } .c-dev  { color: #f07080; }
+
+  /* Output */
+  .output {
+    background: var(--surface); border: 1px solid var(--accent); border-radius: 6px;
+    padding: 10px 13px; position: relative; overflow: hidden;
+  }
+  .output::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2), var(--accent)); opacity: 0.5;
+  }
+  .out-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+  .out-lbl  { font-family: var(--mono); font-size: 8px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent); }
+
+  .fname {
+    font-family: var(--mono); font-size: 15px; font-weight: 500;
+    color: #e8edf5; letter-spacing: 0.03em; word-break: break-all; line-height: 1.4; min-height: 20px;
+  }
+  .fname .sep       { color: var(--muted); }
+  .fname .seg-inst  { color: #7eb8f7; } .fname .seg-pi   { color: #b57bff; }
+  .fname .seg-sci   { color: #f7c948; } .fname .seg-proj { color: #f09860; }
+  .fname .seg-samp  { color: #4af0a0; } .fname .seg-dev  { color: #f07080; }
+  .fname .seg-date  { color: #72d0e8; }
+  .fname .seg-empty { color: var(--muted); font-style: italic; font-size: 11px; }
+
+  .out-foot {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px;
+    margin-top: 8px; padding-top: 7px; border-top: 1px solid var(--border);
+  }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; }
+  .li { display: flex; align-items: center; gap: 3px; font-family: var(--mono); font-size: 8px; color: var(--dim); }
+  .ld { width: 5px; height: 5px; border-radius: 1px; }
+  .pattern { font-family: var(--mono); font-size: 8px; color: var(--muted); white-space: nowrap; }
+  .pattern span { color: var(--dim); }
+
+  /* Copy button */
+  .copy-btn {
+    display: flex; align-items: center; gap: 4px;
+    background: transparent; border: 1px solid var(--border); border-radius: 3px;
+    color: var(--dim); font-family: var(--mono); font-size: 9px; padding: 2px 8px;
+    cursor: pointer; transition: all 0.15s; letter-spacing: 0.04em; white-space: nowrap;
+  }
+  .copy-btn:hover   { border-color: var(--accent); color: var(--accent); }
+  .copy-btn.copied  { border-color: var(--accent); color: var(--accent); background: rgba(74,240,160,0.07); }
+
+  @media (max-width: 520px) { .fields { grid-template-columns: 1fr 1fr; } }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Ψ</div>
+  <div>
+    <h1>LabFileNamer</h1>
+    <p>Consistent nomenclature · neuroscience</p>
+  </div>
+  <div class="vtag">v1.0</div>
+</header>
+
+<main>
+  <div class="fields">
+
+    <div class="field">
+      <div class="ftag">
+        <span class="code c-inst">INST</span>
+        <span class="prev c-inst" id="p-inst"></span>
+      </div>
+      <div class="finput">
+        <span class="lbl">Institution</span>
+        <select id="institution" onchange="update()">
+          <option value="">— select —</option>
+          <option value="NEUFO">NEUFO — Neurosciences Fondamentales</option>
+          <option value="PATIM">PATIM — Pathology &amp; Imaging</option>
+          <option value="MIMOL">MIMOL — Molecular Imaging</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="field">
+      <div class="ftag">
+        <span class="code c-pi">PI</span>
+        <span class="prev c-pi" id="p-pi"></span>
+      </div>
+      <div class="finput">
+        <span class="lbl">Lab PI last name</span>
+        <input type="text" id="pi" placeholder="e.g. Holtmaat" oninput="update()" autocomplete="off" spellcheck="false">
+      </div>
+    </div>
+
+    <div class="field">
+      <div class="ftag">
+        <span class="code c-sci">SCI</span>
+        <span class="prev c-sci" id="p-sci"></span>
+      </div>
+      <div class="finput">
+        <span class="lbl">Scientist (first last)</span>
+        <input type="text" id="scientist" placeholder="e.g. Marie Curie" oninput="update()" autocomplete="off" spellcheck="false">
+      </div>
+    </div>
+
+    <div class="field">
+      <div class="ftag">
+        <span class="code c-proj">PROJ</span>
+        <span class="prev c-proj" id="p-proj"></span>
+      </div>
+      <div class="finput">
+        <span class="lbl">Project name</span>
+        <input type="text" id="project" placeholder="e.g. VIPDisinhibition" oninput="update()" autocomplete="off" spellcheck="false">
+      </div>
+    </div>
+
+    <div class="field">
+      <div class="ftag">
+        <span class="code c-samp">SAMP</span>
+        <span class="prev c-samp" id="p-samp"></span>
+      </div>
+      <div class="finput">
+        <span class="lbl">Sample / animal ID</span>
+        <input type="text" id="sample" placeholder="e.g. M042 or WT-23-F" oninput="update()" autocomplete="off" spellcheck="false">
+      </div>
+    </div>
+
+    <div class="field">
+      <div class="ftag">
+        <span class="code c-dev">DEV</span>
+        <span class="prev c-dev" id="p-dev"></span>
+      </div>
+      <div class="finput">
+        <span class="lbl">Acquisition device</span>
+        <input type="text" id="device" placeholder="e.g. Rig4 or 2P-B" oninput="update()" autocomplete="off" spellcheck="false">
+      </div>
+    </div>
+
+  </div>
+
+  <div class="output">
+    <div class="out-head">
+      <span class="out-lbl">▸ Generated basename</span>
+      <button class="copy-btn" id="copyBtn" onclick="copyName()">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+        </svg>Copy
+      </button>
+    </div>
+    <div class="fname" id="output"><span class="seg-date">20260601</span></div>
+    <div class="out-foot">
+      <div class="legend">
+        <div class="li"><div class="ld" style="background:#7eb8f7"></div>INST</div>
+        <div class="li"><div class="ld" style="background:#b57bff"></div>PI</div>
+        <div class="li"><div class="ld" style="background:#f7c948"></div>SCI</div>
+        <div class="li"><div class="ld" style="background:#f09860"></div>PROJ</div>
+        <div class="li"><div class="ld" style="background:#4af0a0"></div>SAMP</div>
+        <div class="li"><div class="ld" style="background:#f07080"></div>DEV</div>
+        <div class="li"><div class="ld" style="background:#72d0e8"></div>DATE</div>
+      </div>
+      <div class="pattern">pattern: <span>INST_PI_SCI_PROJ_SAMP_DEV_YYYYMMDD</span></div>
+    </div>
+  </div>
+</main>
+
+<script>
+  function sanitize(s){ return s.replace(/[^a-zA-Z0-9\-]/g,'').toUpperCase(); }
+  function toSlug(s,n){ return s.replace(/\s+/g,'').replace(/[^a-zA-Z0-9]/g,'').slice(0,n); }
+  function initials(n){
+    const p=n.trim().split(/\s+/).filter(Boolean);
+    if(!p.length) return '';
+    if(p.length===1) return p[0].slice(0,2).toUpperCase();
+    return p.map(x=>x[0].toUpperCase()).join('');
+  }
+  function today(){
+    const d=new Date();
+    return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
+  }
+
+  function encode(){
+    return {
+      inst: document.getElementById('institution').value,
+      pi:   document.getElementById('pi').value.trim().replace(/[^a-zA-Z]/g,'').slice(0,3).toUpperCase(),
+      sci:  initials(document.getElementById('scientist').value),
+      proj: toSlug(document.getElementById('project').value, 8),
+      samp: sanitize(document.getElementById('sample').value.trim()),
+      dev:  document.getElementById('device').value.trim().replace(/[^a-zA-Z0-9\-]/g,''),
+      date: today()
+    };
+  }
+
+  function update(){
+    const e = encode();
+    document.getElementById('p-inst').textContent = e.inst;
+    document.getElementById('p-pi').textContent   = e.pi;
+    document.getElementById('p-sci').textContent  = e.sci;
+    document.getElementById('p-proj').textContent = e.proj;
+    document.getElementById('p-samp').textContent = e.samp;
+    document.getElementById('p-dev').textContent  = e.dev;
+
+    const segs = [
+      {v:e.inst,c:'seg-inst'},{v:e.pi,c:'seg-pi'},{v:e.sci,c:'seg-sci'},
+      {v:e.proj,c:'seg-proj'},{v:e.samp,c:'seg-samp'},{v:e.dev,c:'seg-dev'},{v:e.date,c:'seg-date'}
+    ];
+    const out = document.getElementById('output');
+    const filled = segs.filter(s=>s.v);
+    if(!filled.length){ out.innerHTML='<span class="seg-empty">fill in the fields above…</span>'; return; }
+    out.innerHTML = filled.map((s,i,a)=>
+      `<span class="${s.c}">${s.v}</span>`+(i<a.length-1?'<span class="sep">_</span>':'')
+    ).join('');
+  }
+
+  function copyName(){
+    const e=encode();
+    const name=[e.inst,e.pi,e.sci,e.proj,e.samp,e.dev,e.date].filter(Boolean).join('_');
+    if(!name) return;
+    navigator.clipboard.writeText(name).then(()=>{
+      const b=document.getElementById('copyBtn');
+      b.classList.add('copied');
+      b.innerHTML=`<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Copied!`;
+      setTimeout(()=>{
+        b.classList.remove('copied');
+        b.innerHTML=`<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>Copy`;
+      },1800);
+    });
+  }
+
+  update();
+</script>
+
+
+</body></html>
