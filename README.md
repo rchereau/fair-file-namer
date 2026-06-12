@@ -1,120 +1,168 @@
-# LabFileNamer
+# FAIR File Namer
 
-**A lightweight, browser-based file-naming generator for experimental neuroscience labs.**
+**A simple file- and folder-naming tool for fundamental-research labs.**
+Templates are scoped to a **lab**, built by dragging field tiles into order, and
+shared across the group through the eLabNext ELN.
 
-LabFileNamer turns ad-hoc, inconsistent filenames into a single shared, FAIR-friendly
-convention. Instead of typing a filename by hand, you pick a few predefined fields and a
-standardized, human-readable and machine-interpretable basename is generated live for you to
-copy and use for newly acquired files.
-
-It is designed to live at the **point of acquisition** (on the acquisition computer), where
-naming habits form and where standardization has the strongest long-term impact on data
-findability, traceability, and reuse.
+Built in the context of the CAS in Research Data Stewardship, with a focus on
+neuroscience data management at the UNIGE Faculty of Medicine.
 
 ---
 
-## What it does
+## The idea
 
-You fill in (or select) up to six fields; a seventh (the date) is added automatically. The tool
-builds the basename in real time, colour-codes each segment, and copies the result to your
-clipboard with one click.
+There is no single hard-coded nomenclature. Instead:
 
-**Pattern:** `INST_PI_SCI_PROJ_SAMP_DEV_YYYYMMDD`
-
-Segments are joined with underscores (`_`). Empty fields are skipped, so the filename stays clean
-even if you only fill in some of them.
+- A **master user** builds templates for each **lab**. Pick a lab and you see only its templates.
+- Fields are not freely configurable — they come from managed lists:
+  - **Department** — a fixed list, set once in code.
+  - **Operator** — a list of names the master user maintains.
+  - **Device** — a list of acquisition devices the master user maintains; each device also
+    carries generic info (software, version, microscope, …) that is written into the metadata.
+  - **Project / Sample / Condition** — free text the user types (Condition e.g. `baseline`, `drug`).
+  - **Date** — automatic.
+  - The master user can add a few **custom fields** (free text / list / date) via one button.
+- **Per-machine default device:** on an acquisition computer, set the device once
+  (★ *Set as this machine's default*) and it is prefilled on every use — no need to re-pick it.
+- **ELN auto-fill:** once integrated, **Department, Lab, Operator and Project** come from the
+  eLabNext context and are shown locked, so the user only fills what's specific to the file.
+- Building a template is just **dragging small tiles** into the order you want, with a
+  **live example** updating underneath. No per-field settings.
+- The metadata shows as a **live rendered document**: an auto-built header (file name decoded into a
+  table, the generation **date and time (HH:MM)**, plus the selected device's info) with an editable
+  **rich-text notes** area below it. A small toolbar sets the **font and size** and applies
+  **bold / italic / underline / lists**. Export as Markdown (copy or `.md`) or a `.json` sidecar.
 
 ---
 
-## The fields
+## Two screens
 
-| Code | Field | Input | How it is encoded |
-|------|-------|-------|-------------------|
-| `INST` | Institution / unit | dropdown | the selected code (e.g. `NEUFO`, `PATIM`, `MIMOL`) |
-| `PI`   | Lab PI last name | text | first 3 letters, letters only, UPPERCASE |
-| `SCI`  | Scientist (first last) | text | initials, UPPERCASE (a single name → its first 2 letters) |
-| `PROJ` | Project name | text | spaces and symbols removed, max 8 characters (case preserved) |
-| `SAMP` | Sample / animal ID | text | letters, digits and hyphens only, UPPERCASE |
-| `DEV`  | Acquisition device | text | letters, digits and hyphens only (case preserved) |
-| `DATE` | *(automatic)* | — | today's date as `YYYYMMDD` |
+### Use (everyone)
+1. Pick your **lab**, then a **template**.
+2. Fill the fields — Department, Operator and Device are dropdowns, Project/Sample are text, Date is automatic.
+3. The **Metadata & notes** panel renders live: an auto-built header (file name → table, device
+   info) plus an editable notes area; use the toolbar to set font/size and format the text.
+4. Then **Copy file name**, **Copy metadata (Markdown)**, **Download .md**, **Download .json**, or **Record in experiment**.
 
-### Example
+### Manage (master user only)
+- Pick the lab, the template type (**File name** / **Folder path**) and the template.
+- **Drag the tiles** to order the fields; click a field below to add it; ✕ to remove. Live example below.
+- **Double-click a tile** (or its ✎) to open a popup and set how that field is abbreviated in the file
+  name: Date gets format options including **time** (`_HHMM` minute, `_HHMMSS` second precision);
+  Department/Operator/Condition can be **first initial**, **initials/acronym**, first-3, upper or lower.
+  The **full value is always kept in the metadata** regardless of the abbreviation.
+- A collapsible **Manage lists & fields** panel holds: the **labs**, the **operator** name list,
+  the fixed **departments** (read-only), and **custom fields** with an **Add field** button.
+- **Export / Import** the whole library as JSON.
 
-Selecting institution `NEUFO`, PI `Holtmaat`, scientist `Marie Curie`, project
-`VIPDisinhibition`, sample `M042`, device `2P-B` on 2 June 2026 produces:
+> On reordering: small draggable tiles with a live example are far simpler than an
+> "available/selected + arrows" shuttle — the order you see is the result you get.
 
+---
+
+## Fields
+
+| Field | How the value is obtained | Editable by |
+|-------|---------------------------|-------------|
+| **Department** | dropdown, fixed list | code only (`DEPARTMENTS` in the add-on) |
+| **Operator** | dropdown, name list | master user |
+| **Device** | dropdown, device list (each carries generic metadata) | master user |
+| **Project / Sample** | free text typed by the user | — |
+| **Condition** | free text (e.g. `baseline`, `drug`) | — |
+| **Date** | automatic (`YYYYMMDD` by default) | — |
+| **Custom** | free text, a list, or a date | master user (Add field) |
+
+The master user maintains the **device list** in Manage → *Manage lists & fields → Acquisition
+devices*. Each device has a name (used in the file name) and a free block of `Key: value` lines
+(e.g. `Software: ScanImage`, `Version: 2023.1`). When a user picks that device, those lines are
+added to the metadata header and the sidecar automatically.
+
+Values are auto-cleaned for filenames (letters, digits and `-` kept; spaces and other
+characters removed). Empty fields are dropped, so partial names stay tidy. Example:
+`NEUFO_MarieCurie_VIPlearning_M042-f_20260612`.
+
+> To change the fixed department list, edit the `DEPARTMENTS` array near the top of
+> `fair_file_namer_addon.js`.
+
+---
+
+## Data model (the library)
+
+One JSON document, stored as `templateLibrary` in the add-on configuration:
+
+```jsonc
+{
+  "version": 3,
+  "operators": ["Marie Curie", "Jean Dupont"],
+  "devices": [ { "id", "name", "info": { "Software": "ScanImage", "Version": "2023.1" } } ],
+  "fields": [ { "id", "name", "source", "options?", "format?", "builtin?" } ],
+  "labs": [
+    { "id", "name",
+      "fileTemplates":   [ { "id", "name", "default", "separator", "fieldIds": [ … ] } ],
+      "folderTemplates": [ { …same shape, separator "/"… } ] }
+  ]
+}
 ```
-NEUFO_HOL_MC_VIPDisin_M042_2P-B_20260602
-```
+
+A template is just an ordered list of `fieldIds` pointing into the shared `fields` catalog.
 
 ---
 
-## Usage
+## Storage & roles in eLabNext
 
-1. Open the live page (see **Run it** below), or simply double-click `index.html` to open it in
-   any modern web browser.
-2. Choose your institution and type the remaining fields. The generated basename updates as you type.
-3. Click **Copy** and paste the basename when saving your acquisition file.
+See the [add-on configuration docs](https://developer.elabnext.com/docs/add-on-configuration).
 
-No installation, no account, and no internet connection are required to use it.
+- Install the add-on at **GROUP scope** → each lab/group gets its own configuration bucket.
+- `init(configuration, addonContext)` reads the saved `templateLibrary` on load.
+- **Master vs member:** keep `allowMemberEditing` **off** (default) so only the master user sees
+  the **Manage** tab; everyone else only uses the templates. This keeps the convention from drifting.
 
----
+### Publishing a library
+1. In **Manage**, build the labs/templates and click **Export library JSON** (also copied to clipboard).
+2. Paste it into the add-on's **Configure → templateLibrary** (GROUP scope) and save.
+3. The whole group now sees the templates in **Use**.
 
-## Run it
-
-### Locally
-Download `index.html` and open it in a browser. That's it — the tool is a single, self-contained
-file with no build step and no dependencies.
-
-### As a public web page (GitHub Pages)
-1. Put `index.html` in the root of a **public** GitHub repository.
-2. Go to **Settings → Pages**, set *Source* to **Deploy from a branch**, choose
-   branch **main** and folder **/ (root)**, and **Save**.
-3. After a minute, your tool is live at `https://<your-username>.github.io/<repo-name>/`.
-
-### On lab acquisition machines
-Save `index.html` locally on each acquisition computer and set it as the browser homepage (or add
-a desktop shortcut) so it is the default first step before saving files.
+> `saveLibrary()` also attempts a direct `eLabSDK.Plugin.setConfiguration` write if your instance
+> exposes it (fails soft). The Export → Configure path is the reliable, documented route. Confirm the
+> method against your [SDK Reference](https://developer.elabnext.com/docs/elabsdk-v2) before relying on it.
 
 ---
 
-## Adapt it for your lab or institution
+## Files
 
-The convention is meant to be customized. Everything lives in the single `index.html` file.
-
-- **Institution list:** edit the `<option>` entries under the `institution` dropdown to add your
-  own unit codes.
-- **Fields:** add, remove, or relabel fields by editing the corresponding `.field` block and its
-  matching entry in the `encode()` function.
-- **Encoding rules:** the helper functions near the bottom (`sanitize`, `toSlug`, `initials`,
-  `today`) control how each field is shortened and cleaned — adjust the character limits or casing
-  there.
-- **Pattern / order:** change the order of segments in both `update()` and `copyName()` to alter
-  the final pattern.
-- **Standards compatibility:** the field structure can be mapped to community standards such as
-  [BIDS](https://bids.neuroimaging.io) so the generated names slot into an existing ecosystem.
+| File | Purpose |
+|------|---------|
+| `fair_file_namer_addon.js` | The add-on. Runs in eLabNext **and** standalone. |
+| `configurationSchema.json` | Upload to Developer Platform → **Code → configurationSchema**. |
+| `defaultConfiguration.json` | Upload as the **Default configuration** (ships a demo lab). |
+| `index.html` | Standalone test harness — open in a browser (uses localStorage). |
 
 ---
 
-## Notes
+## Try it / develop
 
-- **Privacy:** everything runs in your browser. Nothing you type is uploaded, logged, or stored —
-  the only action the tool takes is copying text to your clipboard.
-- **Fonts:** the page requests the *IBM Plex* web fonts for its look. If they are unavailable
-  (e.g. offline, or when only `index.html` is uploaded), the layout falls back to your system's
-  monospace and sans-serif fonts and remains fully functional. To guarantee the intended fonts
-  online, replace the local stylesheet link with the Google Fonts link for IBM Plex Mono and Sans.
-- **Scope:** file naming alone does not make data fully FAIR, but it is a low-effort first step
-  that builds consistency in from the moment data are created, rather than retrofitting it later.
+- **Standalone:** open `index.html` in a browser. Full UI, saved to local storage; you are the master user.
+- **Side-loading:** enable Developer Mode, side-load `fair_file_namer_addon.js` (uses the bundled default + localStorage).
+- **Publish:** move the two JSON files to the Developer Platform uploads, set scope to **GROUP**, publish.
+
+---
+
+## Notes & next steps
+
+- The fixed department list lives in code (`DEPARTMENTS`); change it once per faculty.
+- The `Operator` dropdown is master-maintained; multi-word names are kept as cleaned text
+  (e.g. `Marie Curie` → `MarieCurie`). Ask if you'd prefer automatic initials.
+- **Machine default device** is stored per browser (`localStorage`), independent of the shared
+  library — each acquisition computer keeps its own. The metadata **font and size** are remembered the same way.
+- The notes editor uses the browser's rich-text editing (`contenteditable` + `execCommand`); notes are
+  saved as both plain text and HTML in the sidecar, and converted to Markdown for the `.md` export.
+- **ELN auto-fill** is wired through `resolveELNContext()`: the logged-in user → Operator works
+  today; Department, Lab and Project have clearly-marked `TODO(ELN)` spots to connect to your
+  instance's group/experiment data. When a value is present it is shown locked in the Use screen.
+- Sidecar `.json` files carry the decoded fields + notes with the data — the part that actually helps FAIR reuse.
 
 ---
 
 ## License
 
-Suggested: released under the **MIT License** — add a `LICENSE` file to allow others to freely
-reuse and adapt the tool. Adjust to your institution's preference.
-
----
-
-*Prototype developed in the context of the CAS in Research Data Stewardship, with a neuroscience
-data-management focus (UNIGE Faculty of Medicine).*
+MIT — see `LICENSE`.

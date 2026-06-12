@@ -1,0 +1,17 @@
+{
+  "templateLibrary": {
+    "type": "string",
+    "format": "textarea",
+    "title": "Template library (JSON)",
+    "description": "The lab's file-name templates, folder-path templates and metadata schema, stored as a single JSON document. Do not edit by hand: open the add-on, go to 'Manage templates', build your templates, click 'Export library JSON', and paste the copied JSON here. Saved at GROUP scope, so it is shared with everyone in the lab.",
+    "default": ""
+  },
+  "allowMemberEditing": {
+    "type": "boolean",
+    "format": "checkbox",
+    "title": "Let any group member edit templates",
+    "description": "If off (recommended), regular members only see the 'Use' tab; a designated template admin curates the convention. If on, everyone sees 'Manage templates'.",
+    "default": false,
+    "required": false
+  }
+}
