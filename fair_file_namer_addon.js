@@ -36,6 +36,7 @@
   var LS_DEVICE = 'fng.machine.defaultDevice';   // per-machine (per-browser) default device
   var LS_DOCFONT = 'fng.doc.font';               // per-machine metadata display font
   var LS_DOCSIZE = 'fng.doc.size';               // per-machine metadata display size
+  var LS_HIST = 'fng.recentNames';               // per-machine recent file names
 
   // Display options for the rendered metadata document.
   var FONTS = { sans: 'IBM Plex Sans, system-ui, -apple-system, Segoe UI, sans-serif', serif: 'Georgia, "Times New Roman", serif', mono: 'ui-monospace, Menlo, Consolas, monospace' };
@@ -70,6 +71,7 @@
       { id: 'f-proj', name: 'Project',    source: 'freetext',   builtin: true },
       { id: 'f-samp', name: 'Sample',     source: 'freetext',   builtin: true },
       { id: 'f-cond', name: 'Condition',  source: 'freetext',   builtin: true },
+      { id: 'f-run',  name: 'Run',        source: 'counter', pad: 2, scope: 'daily', builtin: true },
       { id: 'f-date', name: 'Date',       source: 'date', format: 'YYYYMMDD', builtin: true }
     ];
   }
@@ -100,7 +102,9 @@
    * ENCODING ENGINE (pure)
    * ======================================================================== */
   function pad(n, w) { var s = String(n); while (s.length < w) s = '0' + s; return s; }
-  function sanitizeVal(s) { return String(s == null ? '' : s).replace(/[^A-Za-z0-9\-]/g, ''); }
+  // fold diacritics so accented names survive (é→e, ü→u, ç→c) instead of being dropped
+  function foldAccents(s) { try { return String(s == null ? '' : s).normalize('NFD').replace(/[̀-ͯ]/g, ''); } catch (e) { return String(s == null ? '' : s); } }
+  function sanitizeVal(s) { return foldAccents(s).replace(/[^A-Za-z0-9\-]/g, ''); }
   function fmtDate(d, f) {
     var Y = d.getFullYear(), M = pad(d.getMonth() + 1, 2), D = pad(d.getDate(), 2),
         h = pad(d.getHours(), 2), m = pad(d.getMinutes(), 2), s = pad(d.getSeconds(), 2);
@@ -122,7 +126,7 @@
   // How a value-bearing field is abbreviated INTO the file name. The full value
   // is always kept in the metadata header regardless of this choice.
   function applyFmt(s, fmt) {
-    s = String(s == null ? '' : s);
+    s = foldAccents(s);
     switch (fmt) {
       case 'initial': { var c = s.replace(/[^A-Za-z0-9]/g, '').charAt(0); return c ? c.toUpperCase() : ''; }
       case 'acronym':
@@ -138,9 +142,20 @@
       default:       return sanitizeVal(s);
     }
   }
+  // ---- auto-incrementing counter (per machine, in localStorage) ----------
+  function counterKey(field, ctx) {
+    var k = 'fng.counter.' + field.id + '.' + ((ctx && ctx.tplId) || '');
+    if ((field.scope || 'daily') === 'daily') k += '.' + fmtDate((ctx && ctx.now) || new Date(), 'YYYYMMDD');
+    return k;
+  }
+  function counterRead(field, ctx) { try { return parseInt(localStorage.getItem(counterKey(field, ctx)) || '0', 10) || 0; } catch (e) { return 0; } }
+  function counterNext(field, ctx) { return counterRead(field, ctx) + 1; }   // the value shown / used
+  function counterBump(field, ctx) { try { localStorage.setItem(counterKey(field, ctx), String(counterRead(field, ctx) + 1)); } catch (e) {} }
+
   function encodeField(field, values, ctx) {
     if (!field) return '';
     if (field.source === 'date') return fmtDate((ctx && ctx.now) || new Date(), field.format || 'YYYYMMDD');
+    if (field.source === 'counter') return pad(counterNext(field, ctx), field.pad || 2);
     return applyFmt(values[field.id], field.format);
   }
   function fieldById(lib, id) { return (lib.fields || []).filter(function (f) { return f.id === id; })[0]; }
@@ -152,11 +167,12 @@
       .filter(function (s) { return s !== '' && s != null; })
       .join(sep);
   }
-  // fields in a template that the USER must fill (everything except auto date)
+  // fields in a template that the USER must fill (everything except auto date/counter)
   function inputFields(tpl, lib) {
     return (tpl ? tpl.fieldIds : []).map(function (id) { return fieldById(lib, id); })
-      .filter(function (f) { return f && f.source !== 'date'; });
+      .filter(function (f) { return f && f.source !== 'date' && f.source !== 'counter'; });
   }
+  function isAuto(f) { return f && (f.source === 'date' || f.source === 'counter'); }
 
   /* ==========================================================================
    * STORE
@@ -225,6 +241,10 @@
       + '.fng-in:focus,.fng-sel:focus,.fng-ta:focus{border-color:var(--ac);}'
       + '.fng-ta{width:100%;min-height:58px;resize:vertical;}'
       + '.fng-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;}'
+      + '.fng-fillrow{display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;}'
+      + '.fng-fillrow>.fng-f{flex:1 1 110px;min-width:0;}'
+      + '.fng-fillrow>.fng-f.fng-narrow{flex:0 1 130px;}'
+      + '.fng-fillrow .fng-sel,.fng-fillrow .fng-in,.fng-fillrow .fng-f>div{width:100%;}'
       + '.fng-btn{background:transparent;border:1px solid var(--bd);border-radius:6px;color:#aab4cc;font-size:12px;padding:7px 12px;cursor:pointer;}'
       + '.fng-btn:hover{border-color:var(--ac);color:var(--ac);}'
       + '.fng-btn.pri{border-color:var(--ac);color:var(--ac);}'
@@ -287,6 +307,12 @@
       + '.fng-modal-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}'
       + '.fng-modal-x{background:none;border:none;color:var(--dim);font-size:16px;cursor:pointer;}'
       + '.fng-modal-x:hover{color:#f07080;}'
+      // required / validation / copy feedback / recent
+      + '.fng-l.req:after{content:" *";color:var(--ac);}'
+      + '.fng-missing select,.fng-missing input{border-color:#f0a04a;}'
+      + '.fng-copy.ok{border-color:var(--ac);color:var(--ac);}'
+      + '.fng-recent{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:3px 0;}'
+      + '.fng-recent code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;color:#ffd9a0;word-break:break-all;}'
       + '</style>';
   }
   function dot(i) { return '<span class="dot" style="background:' + SEG[i % SEG.length] + '"></span>'; }
@@ -294,7 +320,7 @@
   /* ==========================================================================
    * STATE
    * ======================================================================== */
-  ROOT.ui = { mode: 'use', labId: null, tplId: null, values: {}, notesHtml: '',
+  ROOT.ui = { mode: 'use', labId: null, tplId: null, values: {}, notesHtml: '', dateOverride: '',
     docFont: (function () { try { return localStorage.getItem(LS_DOCFONT) || 'sans'; } catch (e) { return 'sans'; } })(),
     docSize: (function () { try { return localStorage.getItem(LS_DOCSIZE) || 'm'; } catch (e) { return 'm'; } })() };
   ROOT.build = { labId: null, kind: 'file', tplId: null };
@@ -331,6 +357,15 @@
       }
     });
   }
+
+  // date used for the Date field — current time, or an overridden acquisition date (keeping time)
+  function nowDate() {
+    if (!ROOT.ui.dateOverride) return new Date();
+    var p = String(ROOT.ui.dateOverride).split('-'), d = new Date();
+    if (p.length === 3) return new Date(+p[0], +p[1] - 1, +p[2], d.getHours(), d.getMinutes(), d.getSeconds());
+    return new Date();
+  }
+  ROOT.setDateOverride = function (v) { ROOT.ui.dateOverride = v || ''; refreshUsePreview(); refreshHeader(); };
 
   function labs() { return ROOT.library.labs; }
   function labById(id) { return labs().filter(function (l) { return l.id === id; })[0]; }
@@ -390,27 +425,69 @@
       } else {
         ctrl = '<input class="fng-in" value="' + esc(v) + '" autocomplete="off" spellcheck="false" oninput="' + R() + '.setVal(\'' + f.id + '\',this.value)">';
       }
-      return '<div class="fng-f"><span class="fng-l">' + esc(f.name) + '</span>' + ctrl + extra + '</div>';
+      var lblcls = 'fng-l' + (f.required ? ' req' : '');
+      var miss = f.required && !String(v).trim();
+      var fcls = 'fng-f' + (f.source === 'department' ? ' fng-narrow' : '');
+      return '<div class="' + fcls + '"><span class="' + lblcls + '">' + esc(f.name) + '</span>'
+        + '<div' + (miss ? ' class="fng-missing"' : '') + '>' + ctrl + '</div>' + extra + '</div>';
     }).join('') || '<p class="fng-muted">This template is fully automatic — nothing to fill in.</p>';
 
-    return '<div class="fng-row">' + labSel + tplSel + '</div>'
-      + '<h3>Fill in</h3><div class="fng-grid">' + inputs + '</div>'
+    var hasDate = (tpl.fieldIds || []).some(function (id) { var f = fieldById(L, id); return f && f.source === 'date'; });
+    var hasCounter = (tpl.fieldIds || []).some(function (id) { var f = fieldById(L, id); return f && f.source === 'counter'; });
+    var dateCtl = hasDate ? '<div class="fng-f"><span class="fng-l">Acquisition date</span>'
+      + '<input class="fng-in" type="date" value="' + esc(ROOT.ui.dateOverride || fmtDate(new Date(), 'YYYY-MM-DD')) + '" title="Defaults to today — pick another if needed" onchange="' + R() + '.setDateOverride(this.value)"></div>' : '';
+
+    return '<div class="fng-row">' + labSel + tplSel + dateCtl + '</div>'
+      + '<h3>Fill in</h3><div class="fng-fillrow">' + inputs + '</div>'
       + usePreview()
       + '<h3>Metadata &amp; notes</h3>'
       + '<p class="lead">The header is built automatically from the file name and updates live. Type your notes below it; use the toolbar to format.</p>'
       + renderMetaDoc()
       + '<div class="fng-acts">'
+      + (hasCounter ? '<button class="fng-btn pri" onclick="' + R() + '.nextRun()">Next run ▸</button>' : '')
       + '<button class="fng-btn" onclick="' + R() + '.copyPath()">Copy full path</button>'
       + '<button class="fng-btn" onclick="' + R() + '.copyMarkdown()">Copy metadata (Markdown)</button>'
       + '<button class="fng-btn" onclick="' + R() + '.downloadMarkdown()">Download .md</button>'
       + '<button class="fng-btn" onclick="' + R() + '.downloadSidecar()">Download .json</button>'
       + '<button class="fng-btn" onclick="' + R() + '.recordToSection()">Record in experiment</button>'
-      + '</div>';
+      + '<button class="fng-btn" onclick="' + R() + '.resetForm()">Reset</button>'
+      + '</div>'
+      + recentBlock() + decodeBlock();
   }
+
+  // recent file names generated on this machine
+  function recentBlock() {
+    var h = recentNames(); if (!h.length) return '';
+    return '<details class="fng-adv"><summary>Recent file names (this machine)</summary><div class="fng-card">'
+      + h.map(function (n, i) { return '<div class="fng-recent"><code>' + esc(n) + '</code><button class="fng-btn sm" onclick="' + R() + '.copyRecent(' + i + ')">Copy</button></div>'; }).join('')
+      + '</div></details>';
+  }
+
+  // best-effort decode: split a file name by the template separator and map to fields in order
+  function decodeBlock() {
+    var lab = useLab(), tpl = lab && useFileTpl(lab); if (!tpl) return '';
+    var out = '';
+    if (ROOT.ui.decodeResult) {
+      out = '<table class="fng-doc-t" style="margin-top:8px"><thead><tr><th>Field</th><th>Segment</th></tr></thead><tbody>'
+        + ROOT.ui.decodeResult.map(function (r) { return '<tr><td>' + esc(r.field) + '</td><td>' + esc(r.seg) + '</td></tr>'; }).join('') + '</tbody></table>';
+    }
+    return '<details class="fng-adv"><summary>Decode an existing file name</summary><div class="fng-card">'
+      + '<p class="fng-muted">Splits a name by this template\'s separator (<code>' + esc(tpl.separator || '_') + '</code>) and maps each part to a field, in order. Abbreviated/auto parts can\'t be reversed to their full value.</p>'
+      + '<div class="fng-row"><input class="fng-in" id="fng-decin" placeholder="paste a file name…" style="flex:1"><button class="fng-btn sm" onclick="' + R() + '.decodeName()">Decode</button></div>'
+      + out + '</div></details>';
+  }
+  ROOT.decodeName = function () {
+    var el = document.getElementById('fng-decin'); var s = el ? el.value.trim() : '';
+    var lab = useLab(), tpl = lab && useFileTpl(lab); if (!tpl || !s) return;
+    var parts = s.split(tpl.separator || '_');
+    var names = (tpl.fieldIds || []).map(function (id) { var f = fieldById(ROOT.library, id); return f ? f.name : id; });
+    ROOT.ui.decodeResult = names.map(function (n, i) { return { field: n, seg: parts[i] == null ? '—' : parts[i] }; });
+    rerender();
+  };
 
   function usePreview() {
     var L = ROOT.library, lab = useLab(), tpl = useFileTpl(lab); if (!tpl) return '';
-    var ctx = { now: new Date() };
+    var ctx = { now: nowDate(), tplId: tpl.id };
     var segs = (tpl.fieldIds || []).map(function (id, i) {
       var v = encodeField(fieldById(L, id), ROOT.ui.values, ctx);
       return v ? '<span style="color:' + SEG[i % SEG.length] + '">' + esc(v) + '</span>' : '';
@@ -426,7 +503,7 @@
     }
     return '<div class="fng-ex" id="fng-ex"><div class="h">File name</div>'
       + '<div class="fng-namerow"><div class="fng-name">' + nameHtml + '</div>'
-      + '<button class="fng-copy" title="Copy file name" onclick="' + R() + '.copyName()">'
+      + '<button class="fng-copy" id="fng-copybtn" title="Copy file name" onclick="' + R() + '.copyName()">'
       + '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path></svg>'
       + '</button></div>' + pathHtml + '</div>';
   }
@@ -460,13 +537,15 @@
   function headerObject() {
     var L = ROOT.library, lab = useLab(); if (!lab) return null;
     var tpl = useFileTpl(lab); if (!tpl) return null;
-    var ctx = { now: new Date() }, fields = {};
+    var ctx = { now: nowDate(), tplId: tpl.id }, fields = {};
     (tpl.fieldIds || []).forEach(function (id) {
       var f = fieldById(L, id); if (!f) return;
-      fields[f.name] = f.source === 'date' ? encodeField(f, {}, ctx) : (ROOT.ui.values[id] || '');
+      fields[f.name] = isAuto(f) ? encodeField(f, {}, ctx) : (ROOT.ui.values[id] || '');
     });
     var folder = defaultTpl(lab.folderTemplates);
-    var h = { fileName: curName(), fullPath: folder ? curPath() : '', lab: lab.name, template: tpl.name, fields: fields };
+    var sepc = tpl.separator || '_';
+    var pattern = (tpl.fieldIds || []).map(function (id) { var ff = fieldById(L, id); return ff ? ff.name : id; }).join(sepc);
+    var h = { fileName: curName(), fullPath: folder ? curPath() : '', lab: lab.name, template: tpl.name, separator: sepc, pattern: pattern, fields: fields };
     // attach the selected device's generic info (software, version, …)
     (tpl.fieldIds || []).forEach(function (id) {
       var f = fieldById(L, id);
@@ -568,11 +647,11 @@
   // full metadata as Markdown (header + the user's notes)
   function notesMarkdown() { return headerMarkdown() + '\n\n---\n\n' + NOTE_MARK + '\n\n' + htmlToMd(ROOT.ui.notesHtml || ''); }
 
-  function curName() { var lab = useLab(); return lab ? buildName(useFileTpl(lab), ROOT.library, ROOT.ui.values, { now: new Date() }) : ''; }
+  function curName() { var lab = useLab(); var tpl = lab && useFileTpl(lab); return tpl ? buildName(tpl, ROOT.library, ROOT.ui.values, { now: nowDate(), tplId: tpl.id }) : ''; }
   function curPath() {
     var lab = useLab(); if (!lab) return '';
-    var folder = defaultTpl(lab.folderTemplates);
-    var p = folder ? buildName(folder, ROOT.library, ROOT.ui.values, { now: new Date() }) : '';
+    var tpl = useFileTpl(lab), folder = defaultTpl(lab.folderTemplates);
+    var p = folder ? buildName(folder, ROOT.library, ROOT.ui.values, { now: nowDate(), tplId: tpl ? tpl.id : '' }) : '';
     return (p ? p + '/' : '') + curName();
   }
   function sidecar() {
@@ -581,19 +660,46 @@
     return { header: h, notes: htmlToText(ROOT.ui.notesHtml || ''), notesHtml: ROOT.ui.notesHtml || '' };
   }
   function copyText(t) { if (t && navigator.clipboard) navigator.clipboard.writeText(t); }
-  ROOT.copyName = function () { copyText(curName()); toast('File name copied.'); };
-  ROOT.copyPath = function () { copyText(curPath()); toast('Full path copied.'); };
-  ROOT.downloadSidecar = function () {
-    var name = curName(); if (!name) return;
-    download(name + '.json', JSON.stringify(sidecar(), null, 2), 'application/json');
+  // required-field gate before committing a name
+  function missingRequired() {
+    var lab = useLab(); if (!lab) return []; var tpl = useFileTpl(lab); if (!tpl) return [];
+    return inputFields(tpl, ROOT.library).filter(function (f) { return f.required && !String(ROOT.ui.values[f.id] || '').trim(); }).map(function (f) { return f.name; });
+  }
+  function guard() { var m = missingRequired(); if (m.length) { toast('Please fill required field(s): ' + m.join(', ')); return false; } return true; }
+
+  ROOT.copyName = function () {
+    if (!guard()) return;
+    copyText(curName()); pushHistory(curName());
+    var b = document.getElementById('fng-copybtn');
+    if (b) { var o = b.innerHTML; b.classList.add('ok'); b.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><polyline points="20 6 9 17 4 12"></polyline></svg>'; setTimeout(function () { b.classList.remove('ok'); b.innerHTML = o; }, 1300); }
+    toast('File name copied.');
   };
+  ROOT.copyPath = function () { if (!guard()) return; copyText(curPath()); toast('Full path copied.'); };
+  ROOT.downloadSidecar = function () { if (!guard()) return; var name = curName(); if (!name) return; pushHistory(name); download(name + '.json', JSON.stringify(sidecar(), null, 2), 'application/json'); };
   ROOT.copyMarkdown = function () { copyText(notesMarkdown()); toast('Metadata (Markdown) copied.'); };
-  ROOT.downloadMarkdown = function () {
-    var name = curName(); if (!name) return;
-    download(name + '.md', notesMarkdown(), 'text/markdown');
-  };
+  ROOT.downloadMarkdown = function () { if (!guard()) return; var name = curName(); if (!name) return; pushHistory(name); download(name + '.md', notesMarkdown(), 'text/markdown'); };
+
+  // advance counters for the next file; reset clears what the user typed
+  function bumpCounters() {
+    var lab = useLab(); if (!lab) return; var tpl = useFileTpl(lab); if (!tpl) return;
+    var ctx = { now: new Date(), tplId: tpl.id };
+    (tpl.fieldIds || []).forEach(function (id) { var f = fieldById(ROOT.library, id); if (f && f.source === 'counter') counterBump(f, ctx); });
+  }
+  ROOT.nextRun = function () { bumpCounters(); rerender(); toast('Counter advanced for the next file.'); };
+  ROOT.resetForm = function () { ROOT.ui.values = {}; ROOT.ui.notesHtml = ''; ROOT.ui.dateOverride = ''; rerender(); };
+
+  // recent file names on this machine
+  function pushHistory(name) {
+    if (!name) return;
+    var h = recentNames(); h = h.filter(function (x) { return x !== name; }); h.unshift(name); h = h.slice(0, 10);
+    try { localStorage.setItem(LS_HIST, JSON.stringify(h)); } catch (e) {}
+  }
+  function recentNames() { try { return JSON.parse(localStorage.getItem(LS_HIST) || '[]') || []; } catch (e) { return []; } }
+  ROOT.copyRecent = function (i) { var h = recentNames(); copyText(h[i] || ''); toast('Copied.'); };
   ROOT.recordToSection = function (section, expJournalID) {
+    if (!guard()) return;
     var o = sidecar(), h = o.header; if (!h || !h.fileName) return;
+    pushHistory(h.fileName);
     var rows = '<tr><td style="color:#6b7592;padding-right:10px">File name</td><td><strong>' + esc(h.fileName) + '</strong></td></tr>';
     if (h.fullPath) rows += '<tr><td style="color:#6b7592">Full path</td><td>' + esc(h.fullPath) + '</td></tr>';
     rows += '<tr><td style="color:#6b7592">Lab</td><td>' + esc(h.lab) + '</td></tr>'
@@ -686,6 +792,8 @@
         + 'ondragstart="' + R() + '.dragStart(event,' + i + ')" ondragend="' + R() + '.dragEnd()" '
         + 'ondragover="' + R() + '.dragOver(event,' + i + ')" ondrop="' + R() + '.drop(event,' + i + ')" ondragleave="' + R() + '.dragLeave(' + i + ')">'
         + dot(i) + esc(f.name)
+        + '<button class="rm" title="move left" onclick="' + R() + '.moveTile(' + i + ',-1)">◀</button>'
+        + '<button class="rm" title="move right" onclick="' + R() + '.moveTile(' + i + ',1)">▶</button>'
         + '<button class="rm" title="edit attributes" onclick="' + R() + '.openField(\'' + f.id + '\')">✎</button>'
         + '<button class="rm" title="remove" onclick="' + R() + '.removeTile(' + i + ')">✕</button></span>';
     }).join('') || '<span class="fng-muted">Click fields below to add them.</span>';
@@ -705,7 +813,7 @@
   }
 
   function buildExample(lab, tpl) {
-    var L = ROOT.library, ctx = { now: new Date() };
+    var L = ROOT.library, ctx = { now: new Date(), tplId: tpl.id };
     var sample = {};
     inputFields(tpl, L).forEach(function (f) {
       if (f.source === 'department') sample[f.id] = (DEPARTMENTS[0] || {}).code || 'DEPT';
@@ -747,6 +855,12 @@
       rows += '<div class="fng-f"><span class="fng-l">Date / time format</span><select class="fng-sel" onchange="' + R() + '.setFieldFormat(\'' + id + '\',this.value)">'
         + dtf.map(function (t) { return '<option value="' + t + '"' + (t === cur ? ' selected' : '') + '>' + t + ' — ' + esc(fmtDate(new Date(), t)) + '</option>'; }).join('') + '</select></div>'
         + '<p class="fng-muted">In the file name now: <b>' + esc(fmtDate(new Date(), cur)) + '</b>. Use <code>_HHMM</code> for minute or <code>_HHMMSS</code> for second precision.</p>';
+    } else if (f.source === 'counter') {
+      var cctx = { now: new Date(), tplId: (buildTpl(buildLab()) || {}).id };
+      rows += '<div class="fng-f"><span class="fng-l">Padding (digits)</span><input class="fng-in" type="number" min="1" max="6" value="' + (f.pad || 2) + '" onchange="' + R() + '.setFieldNum(\'' + id + '\',\'pad\',this.value)"></div>'
+        + '<div class="fng-f"><span class="fng-l">Reset</span><select class="fng-sel" onchange="' + R() + '.setFieldScope(\'' + id + '\',this.value)">'
+        + ['daily', 'global'].map(function (s) { return '<option value="' + s + '"' + ((f.scope || 'daily') === s ? ' selected' : '') + '>' + (s === 'daily' ? 'every day' : 'never (global)') + '</option>'; }).join('') + '</select></div>'
+        + '<p class="fng-muted">Next value: <b>' + esc(pad(counterNext(f, cctx), f.pad || 2)) + '</b> · <a class="fng-x2" onclick="' + R() + '.resetCounter(\'' + id + '\')">reset counter</a>. Advances when you click <b>Next run ▸</b> in Use.</p>';
     } else {
       var sample = fieldSample(f), curf = f.format || 'full';
       var opts = [['full', 'Full (cleaned value)'], ['initial', 'First initial'], ['acronym', 'Initials / acronym'], ['first3', 'First 3 letters'], ['upper', 'UPPERCASE'], ['lower', 'lowercase']];
@@ -756,7 +870,8 @@
         rows += '<div class="fng-f"><span class="fng-l">Options (comma-separated)</span>'
           + '<input class="fng-in" value="' + esc((f.options || []).join(', ')) + '" oninput="' + R() + '.setFieldOptions(\'' + id + '\',this.value)"></div>';
       }
-      rows += '<p class="fng-muted">Example for “' + esc(sample) + '” → <b>' + esc(applyFmt(sample, curf)) + '</b> in the file name. The <b>full value is always kept in the metadata</b>.</p>';
+      rows += '<div class="fng-f"><span class="fng-l">Required</span><select class="fng-sel" onchange="' + R() + '.setFieldReq(\'' + id + '\',this.value)"><option value="0">no</option><option value="1"' + (f.required ? ' selected' : '') + '>yes</option></select></div>'
+        + '<p class="fng-muted">Example for “' + esc(sample) + '” → <b>' + esc(applyFmt(sample, curf)) + '</b> in the file name. The <b>full value is always kept in the metadata</b>.</p>';
     }
 
     return '<div class="fng-modal" onclick="if(event.target===this)' + R() + '.closeField()">'
@@ -770,6 +885,10 @@
   ROOT.setFieldName = function (id, v) { var f = fieldById(ROOT.library, id); if (f) f.name = v; };          // no rerender (keep focus)
   ROOT.setFieldFormat = function (id, v) { var f = fieldById(ROOT.library, id); if (f) f.format = v; rerender(); };
   ROOT.setFieldOptions = function (id, v) { var f = fieldById(ROOT.library, id); if (f) f.options = v.split(',').map(function (s) { return s.trim(); }).filter(Boolean); };
+  ROOT.setFieldReq = function (id, v) { var f = fieldById(ROOT.library, id); if (f) f.required = (v === '1'); rerender(); };
+  ROOT.setFieldNum = function (id, prop, v) { var f = fieldById(ROOT.library, id); if (f) f[prop] = (v === '' ? undefined : parseInt(v, 10)); rerender(); };
+  ROOT.setFieldScope = function (id, v) { var f = fieldById(ROOT.library, id); if (f) f.scope = v; rerender(); };
+  ROOT.resetCounter = function (id) { try { var pre = 'fng.counter.' + id + '.'; for (var i = localStorage.length - 1; i >= 0; i--) { var k = localStorage.key(i); if (k && k.indexOf(pre) === 0) localStorage.removeItem(k); } } catch (e) {} rerender(); toast('Counter reset.'); };
 
   // --- the lists & fields the master maintains (kept out of the way) ---
   function manageLists() {
@@ -790,13 +909,13 @@
 
     var customs = L.fields.filter(function (f) { return !f.builtin; });
     var customList = customs.map(function (f) {
-      var meta = f.source === 'list' ? 'list: ' + (f.options || []).join(', ') : f.source === 'date' ? 'date ' + f.format : 'free text';
+      var meta = f.source === 'list' ? 'list: ' + (f.options || []).join(', ') : f.source === 'date' ? 'date ' + f.format : f.source === 'counter' ? 'counter' : 'free text';
       return '<span class="fng-chiprm">' + esc(f.name) + ' <span class="fng-muted">(' + esc(meta) + ')</span><button onclick="' + R() + '.delField(\'' + f.id + '\')">✕</button></span>';
     }).join('') || '<span class="fng-muted">no custom fields</span>';
 
     var nf = ROOT.newField;
     var typeSel = '<select class="fng-sel" onchange="' + R() + '.setNF(\'type\',this.value)">'
-      + ['freetext', 'list', 'date'].map(function (t) { return '<option value="' + t + '"' + (nf.type === t ? ' selected' : '') + '>' + (t === 'freetext' ? 'free text' : t) + '</option>'; }).join('') + '</select>';
+      + ['freetext', 'list', 'date', 'counter'].map(function (t) { return '<option value="' + t + '"' + (nf.type === t ? ' selected' : '') + '>' + (t === 'freetext' ? 'free text' : t) + '</option>'; }).join('') + '</select>';
     var extra = nf.type === 'list'
       ? '<div class="fng-f" style="flex:1"><span class="fng-l">Options (comma-separated)</span><input class="fng-in" value="' + esc(nf.optionsCsv) + '" placeholder="A, B, C" oninput="' + R() + '.setNF(\'optionsCsv\',this.value)"></div>'
       : nf.type === 'date'
@@ -857,6 +976,7 @@
   };
   ROOT.addTile = function (fid) { var t = buildTpl(buildLab()); if (t) { t.fieldIds.push(fid); rerender(); } };
   ROOT.removeTile = function (i) { var t = buildTpl(buildLab()); if (t) { t.fieldIds.splice(i, 1); rerender(); } };
+  ROOT.moveTile = function (i, dir) { var t = buildTpl(buildLab()); if (!t) return; var j = i + dir; if (j < 0 || j >= t.fieldIds.length) return; var m = t.fieldIds.splice(i, 1)[0]; t.fieldIds.splice(j, 0, m); rerender(); };
 
   ROOT._drag = null;
   ROOT.dragStart = function (ev, i) { ROOT._drag = i; var el = document.getElementById('fng-t-' + i); if (el) el.classList.add('drag'); try { ev.dataTransfer.effectAllowed = 'move'; } catch (e) {} };
@@ -920,6 +1040,7 @@
     var f = { id: uid('cf'), name: name, source: nf.type };
     if (nf.type === 'list') f.options = (nf.optionsCsv || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
     if (nf.type === 'date') f.format = nf.format || 'YYYYMMDD';
+    if (nf.type === 'counter') { f.pad = 2; f.scope = 'daily'; }
     ROOT.library.fields.push(f);
     ROOT.newField = { name: '', type: 'freetext', optionsCsv: '', format: 'YYYYMMDD' };
     rerender();
@@ -1046,7 +1167,11 @@
     ROOT.library = loadLibrary(cfg);
     // Only a master user manages templates. Default true; tighten via the
     // `allowMemberEditing` config flag or eLabSDK2.System.Group permissions.
-    ROOT._isMaster = (cfg.allowMemberEditing === true) || (addonContext && addonContext.isMaster) || true;
+    // Who may manage templates. TODO(ELN): replace the final fallback with a real
+    // eLab group-admin / permission check once the sandbox is available. For now,
+    // honor the config flag; default to true so the add-on is usable before that
+    // wiring exists (tighten to `false` once the permission source is connected).
+    ROOT._isMaster = (cfg.allowMemberEditing === true) || !!(addonContext && addonContext.isMaster) || true;
     registerSection();
   };
 

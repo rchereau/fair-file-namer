@@ -38,19 +38,25 @@ There is no single hard-coded nomenclature. Instead:
 ## Two screens
 
 ### Use (everyone)
-1. Pick your **lab**, then a **template**.
-2. Fill the fields — Department, Operator and Device are dropdowns, Project/Sample are text, Date is automatic.
-3. The **Metadata & notes** panel renders live: an auto-built header (file name → table, device
-   info) plus an editable notes area; use the toolbar to set font/size and format the text.
-4. Then **Copy file name**, **Copy metadata (Markdown)**, **Download .md**, **Download .json**, or **Record in experiment**.
+1. Pick your **lab**, then a **template**. Optionally override the **acquisition date**.
+2. Fill the fields — Department/Operator/Device are dropdowns, Project/Sample/Condition are text, Date and Run are automatic.
+   Required fields are marked with `*` and block committing until filled.
+3. The file name shows on top with a **copy icon**. Below, the **Metadata & notes** panel renders live:
+   an auto-built header (file name → table, device info, generation date + time) plus an editable
+   notes area; use the toolbar to set font/size and format the text.
+4. Then **Copy file name** / path / **Markdown**, **Download .md / .json**, **Record in experiment**,
+   **Next run ▸** (advance the counter for the next file) or **Reset**.
+5. Collapsibles: **Recent file names** on this machine, and a best-effort **Decode** of an existing name.
 
 ### Manage (master user only)
 - Pick the lab, the template type (**File name** / **Folder path**) and the template.
 - **Drag the tiles** to order the fields; click a field below to add it; ✕ to remove. Live example below.
 - **Double-click a tile** (or its ✎) to open a popup and set how that field is abbreviated in the file
   name: Date gets format options including **time** (`_HHMM` minute, `_HHMMSS` second precision);
-  Department/Operator/Condition can be **first initial**, **initials/acronym**, first-3, upper or lower.
+  Department/Operator/Condition can be **first initial**, **initials/acronym**, first-3, upper or lower;
+  text/list fields can be marked **required**; **Run** (counter) gets padding + daily/global reset.
   The **full value is always kept in the metadata** regardless of the abbreviation.
+- Reorder with drag **or** the ◀ ▶ buttons on each tile (touch / keyboard friendly).
 - A collapsible **Manage lists & fields** panel holds: the **labs**, the **operator** name list,
   the fixed **departments** (read-only), and **custom fields** with an **Add field** button.
 - **Export / Import** the whole library as JSON.
@@ -69,8 +75,13 @@ There is no single hard-coded nomenclature. Instead:
 | **Device** | dropdown, device list (each carries generic metadata) | master user |
 | **Project / Sample** | free text typed by the user | — |
 | **Condition** | free text (e.g. `baseline`, `drug`) | — |
-| **Date** | automatic (`YYYYMMDD` by default) | — |
-| **Custom** | free text, a list, or a date | master user (Add field) |
+| **Date** | automatic (date and/or time) | — |
+| **Run** | automatic counter (per day or global), zero-padded | master user (padding/scope) |
+| **Custom** | free text, a list, a date, or a counter | master user (Add field) |
+
+Free-text values are cleaned for filenames; **accented characters are folded** (`Chéreau → Chereau`,
+`Genève → Geneve`) rather than dropped. The **Run** counter prevents same-day name collisions — click
+**Next run ▸** after each file (or it just shows the next number).
 
 The master user maintains the **device list** in Manage → *Manage lists & fields → Acquisition
 devices*. Each device has a name (used in the file name) and a free block of `Key: value` lines
@@ -150,16 +161,26 @@ See the [add-on configuration docs](https://developer.elabnext.com/docs/add-on-c
 ## Notes & next steps
 
 - The fixed department list lives in code (`DEPARTMENTS`); change it once per faculty.
-- The `Operator` dropdown is master-maintained; multi-word names are kept as cleaned text
-  (e.g. `Marie Curie` → `MarieCurie`). Ask if you'd prefer automatic initials.
-- **Machine default device** is stored per browser (`localStorage`), independent of the shared
-  library — each acquisition computer keeps its own. The metadata **font and size** are remembered the same way.
+- Per-field abbreviation (full / initial / acronym / …) is set in the tile popup; the Operator dropdown
+  is master-maintained. Accented characters are folded automatically.
+- **Machine default device**, metadata **font/size**, the **Run counter**, and **recent file names** are
+  all stored per browser (`localStorage`), independent of the shared library.
 - The notes editor uses the browser's rich-text editing (`contenteditable` + `execCommand`); notes are
   saved as both plain text and HTML in the sidecar, and converted to Markdown for the `.md` export.
-- **ELN auto-fill** is wired through `resolveELNContext()`: the logged-in user → Operator works
-  today; Department, Lab and Project have clearly-marked `TODO(ELN)` spots to connect to your
-  instance's group/experiment data. When a value is present it is shown locked in the Use screen.
-- Sidecar `.json` files carry the decoded fields + notes with the data — the part that actually helps FAIR reuse.
+- Sidecar `.json` files carry the decoded fields, the **pattern**, and the notes with the data — the
+  part that actually helps FAIR reuse.
+
+### Deferred until the eLabNext sandbox is available
+- **ELN auto-fill** (`resolveELNContext()`): logged-in user → Operator is wired; Department, Lab and
+  Project have `TODO(ELN)` stubs to connect to your instance's group/experiment data (shown locked when present).
+- **Role gating:** the Manage tab is currently visible to everyone (usable-by-default); the real
+  master-user check needs the eLab group-permission source (`_isMaster` in `init()`).
+- Confirming the programmatic `setConfiguration` save path against a live instance.
+
+### Possible later work (needs a dependency or model change)
+- Swap the `execCommand` notes editor for a small library (TipTap/Quill) for longevity.
+- Per-template field-format overrides (today a field's format is shared across templates).
+- Actual folder creation on acquisition machines (File System Access API) and BIDS mapping.
 
 ---
 
