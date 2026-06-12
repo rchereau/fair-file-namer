@@ -245,6 +245,11 @@
       + '.fng-fillrow>.fng-f{flex:1 1 110px;min-width:0;}'
       + '.fng-fillrow>.fng-f.fng-narrow{flex:0 1 130px;}'
       + '.fng-fillrow .fng-sel,.fng-fillrow .fng-in,.fng-fillrow .fng-f>div{width:100%;}'
+      + '.fng-devwrap{display:flex;gap:6px;align-items:center;}'
+      + '.fng-devwrap .fng-sel{flex:1;width:auto;}'
+      + '.fng-star{flex:none;background:transparent;border:1px solid var(--bd);border-radius:6px;color:var(--dim);cursor:pointer;font-size:14px;line-height:1;padding:7px 9px;}'
+      + '.fng-star:hover{border-color:var(--ac);color:var(--ac);}'
+      + '.fng-star.on{color:var(--ac);border-color:var(--ac);}'
       + '.fng-btn{background:transparent;border:1px solid var(--bd);border-radius:6px;color:#aab4cc;font-size:12px;padding:7px 12px;cursor:pointer;}'
       + '.fng-btn:hover{border-color:var(--ac);color:var(--ac);}'
       + '.fng-btn.pri{border-color:var(--ac);color:var(--ac);}'
@@ -414,11 +419,10 @@
         ctrl = '<select class="fng-sel" onchange="' + R() + '.setVal(\'' + f.id + '\',this.value)"><option value="">— select —</option>'
           + (L.operators || []).map(function (o) { return '<option value="' + esc(o) + '"' + (o === v ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join('') + '</select>';
       } else if (f.source === 'device') {
-        ctrl = '<select class="fng-sel" onchange="' + R() + '.setVal(\'' + f.id + '\',this.value)"><option value="">— select —</option>'
-          + (L.devices || []).map(function (d) { return '<option value="' + esc(d.name) + '"' + (d.name === v ? ' selected' : '') + '>' + esc(d.name) + '</option>'; }).join('') + '</select>';
-        var md = machineDevice();
-        extra = '<div class="fng-hint"><button class="fng-btn sm" onclick="' + R() + '.setMachineDevice()">★ Set as this machine\'s default</button>'
-          + (md ? ' <span class="fng-muted">default here: <b>' + esc(md) + '</b> · <a class="fng-x2" onclick="' + R() + '.clearMachineDevice()">clear</a></span>' : '') + '</div>';
+        var on = v && v === machineDevice();
+        ctrl = '<div class="fng-devwrap"><select class="fng-sel" onchange="' + R() + '.setVal(\'' + f.id + '\',this.value)"><option value="">— select —</option>'
+          + (L.devices || []).map(function (d) { return '<option value="' + esc(d.name) + '"' + (d.name === v ? ' selected' : '') + '>' + esc(d.name) + '</option>'; }).join('') + '</select>'
+          + '<button class="fng-star' + (on ? ' on' : '') + '" title="' + (on ? 'Default device on this machine — click to remove' : 'Set as this machine\'s default device') + '" onclick="' + R() + '.setMachineDevice()">★</button></div>';
       } else if (f.source === 'list') {
         ctrl = '<select class="fng-sel" onchange="' + R() + '.setVal(\'' + f.id + '\',this.value)"><option value="">— select —</option>'
           + (f.options || []).map(function (o) { return '<option value="' + esc(o) + '"' + (o === v ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join('') + '</select>';
@@ -519,8 +523,17 @@
     var lab = useLab(), tpl = useFileTpl(lab), id = deviceFieldId(tpl);
     var v = id ? (ROOT.ui.values[id] || '') : '';
     if (!v) { toast('Pick a device first, then set it as the machine default.'); return; }
-    try { localStorage.setItem(LS_DEVICE, v); } catch (e) {}
-    toast('“' + v + '” is now the default device on this machine.'); rerender();
+    var md = machineDevice();
+    if (v === md) {   // already the default → offer to remove it
+      if (!window.confirm || window.confirm('Remove “' + v + '” as the default device on this machine?')) {
+        try { localStorage.removeItem(LS_DEVICE); } catch (e) {} rerender();
+      }
+      return;
+    }
+    if (!window.confirm || window.confirm('“' + v + '” will be the default name for the device on this machine.')) {
+      try { localStorage.setItem(LS_DEVICE, v); } catch (e) {}
+      toast('“' + v + '” is now the default device on this machine.'); rerender();
+    }
   };
   ROOT.clearMachineDevice = function () { try { localStorage.removeItem(LS_DEVICE); } catch (e) {} rerender(); };
   ROOT.setVal = function (k, v) { ROOT.ui.values[k] = v; refreshUsePreview(); refreshHeader(); };
