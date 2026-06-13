@@ -37,7 +37,7 @@
       <h1>FAIR File Namer</h1>
       <p>Lab-authored naming conventions · standalone preview</p>
     </div>
-    <div class="vtag">v2.0</div>
+    <div class="vtag">v3.0</div>
   </header>
 
   <!-- The add-on renders its full UI (Use + Manage templates) into this host
@@ -52,6 +52,7 @@
     eLabNext.
   </div>
 
-  <script src="./fair_file_namer_addon.js"></script>
+  <!-- Load the add-on with a cache-buster so reopening always gets the latest code. -->
+  <script>document.write('<scr' + 'ipt src="./fair_file_namer_addon.js?t=' + Date.now() + '"><\/scr' + 'ipt>');</script>
 </body>
 </html>

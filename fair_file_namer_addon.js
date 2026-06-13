@@ -254,6 +254,7 @@
       + '.fng-btn:hover{border-color:var(--ac);color:var(--ac);}'
       + '.fng-btn.pri{border-color:var(--ac);color:var(--ac);}'
       + '.fng-btn.sm{padding:4px 9px;font-size:11px;}'
+      + '.fng-btn:disabled,.fng-btn.saved{opacity:.45;cursor:default;border-color:var(--bd);color:var(--dim);}'
       + '.fng-acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;}'
       // example/preview box
       + '.fng-ex{background:var(--sf);border:1px solid var(--ac);border-radius:8px;padding:12px 14px;margin-top:12px;}'
@@ -462,31 +463,34 @@
   // recent file names generated on this machine
   function recentBlock() {
     var h = recentNames(); if (!h.length) return '';
-    return '<details class="fng-adv"><summary>Recent file names (this machine)</summary><div class="fng-card">'
+    return '<details class="fng-adv"' + (ROOT.ui.recentOpen ? ' open' : '') + ' ontoggle="' + R() + '.setRecentOpen(this.open)"><summary>Recent file names (this machine)</summary><div class="fng-card">'
       + h.map(function (n, i) { return '<div class="fng-recent"><code>' + esc(n) + '</code><button class="fng-btn sm" onclick="' + R() + '.copyRecent(' + i + ')">Copy</button></div>'; }).join('')
       + '</div></details>';
   }
 
   // best-effort decode: split a file name by the template separator and map to fields in order
+  function decodeOut() {
+    if (!ROOT.ui.decodeResult) return '';
+    return '<table class="fng-doc-t" style="margin-top:8px"><thead><tr><th>Field</th><th>Segment</th></tr></thead><tbody>'
+      + ROOT.ui.decodeResult.map(function (r) { return '<tr><td>' + esc(r.field) + '</td><td>' + esc(r.seg) + '</td></tr>'; }).join('') + '</tbody></table>';
+  }
   function decodeBlock() {
     var lab = useLab(), tpl = lab && useFileTpl(lab); if (!tpl) return '';
-    var out = '';
-    if (ROOT.ui.decodeResult) {
-      out = '<table class="fng-doc-t" style="margin-top:8px"><thead><tr><th>Field</th><th>Segment</th></tr></thead><tbody>'
-        + ROOT.ui.decodeResult.map(function (r) { return '<tr><td>' + esc(r.field) + '</td><td>' + esc(r.seg) + '</td></tr>'; }).join('') + '</tbody></table>';
-    }
-    return '<details class="fng-adv"><summary>Decode an existing file name</summary><div class="fng-card">'
+    return '<details class="fng-adv"' + (ROOT.ui.decodeOpen ? ' open' : '') + ' ontoggle="' + R() + '.setDecodeOpen(this.open)"><summary>Decode an existing file name</summary><div class="fng-card">'
       + '<p class="fng-muted">Splits a name by this template\'s separator (<code>' + esc(tpl.separator || '_') + '</code>) and maps each part to a field, in order. Abbreviated/auto parts can\'t be reversed to their full value.</p>'
-      + '<div class="fng-row"><input class="fng-in" id="fng-decin" placeholder="paste a file name…" style="flex:1"><button class="fng-btn sm" onclick="' + R() + '.decodeName()">Decode</button></div>'
-      + out + '</div></details>';
+      + '<div class="fng-row"><input class="fng-in" id="fng-decin" placeholder="paste a file name…" style="flex:1;min-width:0"><button class="fng-btn sm" onclick="' + R() + '.decodeName()">Decode</button></div>'
+      + '<div id="fng-decout">' + decodeOut() + '</div></div></details>';
   }
+  ROOT.setDecodeOpen = function (b) { ROOT.ui.decodeOpen = b; };
+  ROOT.setRecentOpen = function (b) { ROOT.ui.recentOpen = b; };
+  ROOT.setManageOpen = function (b) { ROOT.ui.manageOpen = b; };
   ROOT.decodeName = function () {
     var el = document.getElementById('fng-decin'); var s = el ? el.value.trim() : '';
     var lab = useLab(), tpl = lab && useFileTpl(lab); if (!tpl || !s) return;
     var parts = s.split(tpl.separator || '_');
     var names = (tpl.fieldIds || []).map(function (id) { var f = fieldById(ROOT.library, id); return f ? f.name : id; });
     ROOT.ui.decodeResult = names.map(function (n, i) { return { field: n, seg: parts[i] == null ? '—' : parts[i] }; });
-    rerender();
+    var o = document.getElementById('fng-decout'); if (o) o.innerHTML = decodeOut();   // update only the result, keep panel open
   };
 
   function usePreview() {
@@ -777,7 +781,9 @@
     var editor = tpl ? tileEditor(lab, tpl) : '<p class="fng-muted" style="margin-top:12px">Create a template to start.</p>';
 
     var saveBar = '<div class="fng-acts">'
-      + '<button class="fng-btn pri" onclick="' + R() + '.save()">Save</button>'
+      + (isDirty()
+          ? '<button class="fng-btn pri" id="fng-savebtn" onclick="' + R() + '.save()">Save</button>'
+          : '<button class="fng-btn saved" id="fng-savebtn" disabled>Saved ✓</button>')
       + '<button class="fng-btn" onclick="' + R() + '.exportLib()">Export library JSON</button>'
       + '<button class="fng-btn" onclick="' + R() + '.importLib()">Import library JSON</button>'
       + '</div><p class="fng-muted" style="margin-top:6px">To publish to the whole lab: <b>Export</b>, then paste the JSON into the add-on\'s <b>Configure → templateLibrary</b> (GROUP scope).</p>';
@@ -895,9 +901,9 @@
   }
   ROOT.openField = function (id) { ROOT.fieldDlg.fieldId = id; rerender(); };
   ROOT.closeField = function () { ROOT.fieldDlg.fieldId = null; rerender(); };
-  ROOT.setFieldName = function (id, v) { var f = fieldById(ROOT.library, id); if (f) f.name = v; };          // no rerender (keep focus)
+  ROOT.setFieldName = function (id, v) { var f = fieldById(ROOT.library, id); if (f) f.name = v; dirty(); };  // no rerender (keep focus)
   ROOT.setFieldFormat = function (id, v) { var f = fieldById(ROOT.library, id); if (f) f.format = v; rerender(); };
-  ROOT.setFieldOptions = function (id, v) { var f = fieldById(ROOT.library, id); if (f) f.options = v.split(',').map(function (s) { return s.trim(); }).filter(Boolean); };
+  ROOT.setFieldOptions = function (id, v) { var f = fieldById(ROOT.library, id); if (f) f.options = v.split(',').map(function (s) { return s.trim(); }).filter(Boolean); dirty(); };
   ROOT.setFieldReq = function (id, v) { var f = fieldById(ROOT.library, id); if (f) f.required = (v === '1'); rerender(); };
   ROOT.setFieldNum = function (id, prop, v) { var f = fieldById(ROOT.library, id); if (f) f[prop] = (v === '' ? undefined : parseInt(v, 10)); rerender(); };
   ROOT.setFieldScope = function (id, v) { var f = fieldById(ROOT.library, id); if (f) f.scope = v; rerender(); };
@@ -935,7 +941,7 @@
         ? '<div class="fng-f"><span class="fng-l">Date format</span><select class="fng-sel" onchange="' + R() + '.setNF(\'format\',this.value)">' + ['YYYYMMDD', 'YYYY-MM-DD', 'YYMMDD', 'YYYYMM', 'YYYY'].map(function (x) { return '<option' + (nf.format === x ? ' selected' : '') + '>' + x + '</option>'; }).join('') + '</select></div>'
         : '';
 
-    return '<details class="fng-adv"><summary>Manage lists &amp; fields</summary>'
+    return '<details class="fng-adv"' + (ROOT.ui.manageOpen ? ' open' : '') + ' ontoggle="' + R() + '.setManageOpen(this.open)"><summary>Manage lists &amp; fields</summary>'
       + '<div class="fng-card"><h3 style="margin-top:0">Labs</h3>'
       + '<div class="fng-mini">' + labs().map(function (l, i) { return '<span class="fng-chiprm">' + esc(l.name) + '<button onclick="' + R() + '.renameLab(\'' + l.id + '\')">✎</button><button onclick="' + R() + '.delLab(\'' + l.id + '\')">✕</button></span>'; }).join('') + '</div>'
       + '<div class="fng-row" style="margin-top:8px"><button class="fng-btn sm" onclick="' + R() + '.addLab()">+ Add lab</button></div></div>'
@@ -980,7 +986,7 @@
     var lab = buildLab(), list = buildTpls(lab), i = list.findIndex(function (t) { return t.id === ROOT.build.tplId; });
     if (i >= 0) list.splice(i, 1); ROOT.build.tplId = null; rerender();
   };
-  ROOT.setTplName = function (v) { var t = buildTpl(buildLab()); if (t) t.name = v; };
+  ROOT.setTplName = function (v) { var t = buildTpl(buildLab()); if (t) t.name = v; dirty(); };
   ROOT.setSep = function (v) { var t = buildTpl(buildLab()); if (t) { t.separator = v || (ROOT.build.kind === 'folder' ? '/' : '_'); refreshExample(); } };
   ROOT.setDefault = function (v) {
     var lab = buildLab(), t = buildTpl(lab); if (!t) return;
@@ -1036,14 +1042,14 @@
     if (v) { ROOT.library.devices.push({ id: uid('dev'), name: v, info: {} }); rerender(); }
   };
   ROOT.delDevice = function (i) { ROOT.library.devices.splice(i, 1); rerender(); };
-  ROOT.setDeviceName = function (i, v) { var d = ROOT.library.devices[i]; if (d) d.name = v; };
+  ROOT.setDeviceName = function (i, v) { var d = ROOT.library.devices[i]; if (d) d.name = v; dirty(); };
   ROOT.setDeviceInfo = function (i, text) {
     var d = ROOT.library.devices[i]; if (!d) return;
     var info = {};
     (text || '').split(/\n/).forEach(function (line) {
       var idx = line.indexOf(':'); if (idx > 0) { var k = line.slice(0, idx).trim(); if (k) info[k] = line.slice(idx + 1).trim(); }
     });
-    d.info = info;
+    d.info = info; dirty();
   };
 
   // custom fields
@@ -1070,7 +1076,20 @@
   };
 
   // save / export / import
-  ROOT.save = function () { saveLibrary(); toast('Saved locally. Export → paste into Configure to share with the lab.'); };
+  function snapshot() { try { return JSON.stringify(ROOT.library); } catch (e) { return ''; } }
+  function isDirty() { return snapshot() !== ROOT._savedSnapshot; }
+  // reflect the saved/unsaved state on the Save button (greyed when nothing to save)
+  function dirty() {
+    var b = document.getElementById('fng-savebtn'); if (!b) return;
+    if (isDirty()) { b.disabled = false; b.textContent = 'Save'; b.classList.add('pri'); b.classList.remove('saved'); }
+    else { b.disabled = true; b.textContent = 'Saved ✓'; b.classList.remove('pri'); b.classList.add('saved'); }
+  }
+  ROOT.save = function () {
+    saveLibrary();
+    ROOT._savedSnapshot = snapshot();
+    dirty();
+    toast('Saved locally. Export → paste into Configure to share with the lab.');
+  };
   ROOT.exportLib = function () {
     var pretty = JSON.stringify(ROOT.library, null, 2);
     download('fileNamer_templates.json', pretty);
@@ -1178,6 +1197,7 @@
     if (ROOT._registered) return; ROOT._registered = true;
     var cfg = configuration || ROOT.configurationValues || {};
     ROOT.library = loadLibrary(cfg);
+    ROOT._savedSnapshot = snapshot();   // start in a clean (greyed Save) state
     // Only a master user manages templates. Default true; tighten via the
     // `allowMemberEditing` config flag or eLabSDK2.System.Group permissions.
     // Who may manage templates. TODO(ELN): replace the final fallback with a real
@@ -1201,13 +1221,17 @@
 
   /* --- standalone bootstrap (open index.html directly) -------------------- */
   if (typeof document !== 'undefined') {
-    document.addEventListener('DOMContentLoaded', function () {
+    function fngBoot() {
       var host = document.getElementById('fng-host');
       if (host && !(window.eLabSDK && eLabSDK.Experiment)) {
         ROOT._host = host; ROOT.library = loadLibrary({}); ROOT._isMaster = true;
+        ROOT._savedSnapshot = snapshot();
         host.innerHTML = shell();
       }
-    });
+    }
+    // run now if the DOM is already parsed (e.g. cache-busted async load), else wait
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fngBoot);
+    else fngBoot();
   }
 
   /* --- headless test exports ---------------------------------------------- */
