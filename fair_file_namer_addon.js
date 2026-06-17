@@ -65,6 +65,7 @@
    * ======================================================================== */
   function builtinFields() {
     return [
+      { id: 'f-lab',  name: 'Lab',        source: 'lab',        builtin: true },
       { id: 'f-dept', name: 'Department', source: 'department', builtin: true },
       { id: 'f-oper', name: 'Operator',   source: 'operator',   builtin: true },
       { id: 'f-dev',  name: 'Device',     source: 'device',     builtin: true },
@@ -88,7 +89,7 @@
         id: 'lab-demo', name: 'Demo Lab',
         fileTemplates: [{
           id: 'tpl1', name: 'Acquisition', default: true, separator: '_',
-          fieldIds: ['f-dept', 'f-oper', 'f-dev', 'f-proj', 'f-samp', 'f-cond', 'f-date']
+          fieldIds: ['f-lab', 'f-dept', 'f-oper', 'f-dev', 'f-proj', 'f-samp', 'f-cond', 'f-date']
         }],
         folderTemplates: [{
           id: 'fld1', name: 'Project tree', default: true, separator: '/',
@@ -152,13 +153,46 @@
   function counterNext(field, ctx) { return counterRead(field, ctx) + 1; }   // the value shown / used
   function counterBump(field, ctx) { try { localStorage.setItem(counterKey(field, ctx), String(counterRead(field, ctx) + 1)); } catch (e) {} }
 
+  function opName(o) { return typeof o === 'string' ? o : ((o && o.name) || ''); }
+  // entity = operator or lab { name, initials?, first3? }; the manager may edit
+  // the initials / first-3 directly to disambiguate, otherwise they're computed.
+  function abbrIni(e) { return (e && e.initials != null && String(e.initials) !== '') ? sanitizeVal(e.initials) : applyFmt(opName(e), 'acronym'); }
+  function abbrF3(e)  { return (e && e.first3   != null && String(e.first3)   !== '') ? sanitizeVal(e.first3)   : applyFmt(opName(e), 'first3'); }
   function encodeField(field, values, ctx) {
     if (!field) return '';
     if (field.source === 'date') return fmtDate((ctx && ctx.now) || new Date(), field.format || 'YYYYMMDD');
     if (field.source === 'counter') return pad(counterNext(field, ctx), field.pad || 2);
+    if (field.source === 'operator') {
+      var nm = values[field.id] || '', fmt = field.format || 'full', op = operatorByName(nm);
+      if (fmt === 'acronym' || fmt === 'initials') return op ? abbrIni(op) : applyFmt(nm, 'acronym');
+      if (fmt === 'first3') return op ? abbrF3(op) : applyFmt(nm, 'first3');
+      return applyFmt(nm, fmt);
+    }
+    if (field.source === 'lab') {
+      var lab = ctx && ctx.lab; if (!lab) return '';
+      var lf = field.format || 'full';
+      if (lf === 'acronym' || lf === 'initials') return abbrIni(lab);
+      if (lf === 'first3') return abbrF3(lab);
+      return applyFmt(lab.name, lf);
+    }
     return applyFmt(values[field.id], field.format);
   }
   function fieldById(lib, id) { return (lib.fields || []).filter(function (f) { return f.id === id; })[0]; }
+  function operatorByName(name) { var ops = (ROOT.library && ROOT.library.operators) || []; for (var i = 0; i < ops.length; i++) { if (opName(ops[i]) === name) return ops[i]; } return null; }
+  function countMap(arr) { var m = {}; (arr || []).forEach(function (v) { v = String(v == null ? '' : v); if (v) m[v] = (m[v] || 0) + 1; }); return m; }
+  function anyDup(arr) { var m = countMap(arr); for (var k in m) { if (m[k] > 1) return true; } return false; }
+  // duplicate full name / initials / first-3 among operators OR labs, or duplicate device name
+  function hasCollisions() {
+    var L = ROOT.library; if (!L) return false;
+    var groups = [L.operators || [], L.labs || []];
+    for (var g = 0; g < groups.length; g++) {
+      var arr = groups[g];
+      if (anyDup(arr.map(function (e) { return applyFmt(opName(e), 'full'); }))) return true;
+      if (anyDup(arr.map(abbrIni)) || anyDup(arr.map(abbrF3))) return true;
+    }
+    if (anyDup((L.devices || []).map(function (d) { return d.name; }))) return true;
+    return false;
+  }
   function buildName(tpl, lib, values, ctx) {
     if (!tpl) return '';
     var sep = tpl.separator || '_';
@@ -170,9 +204,9 @@
   // fields in a template that the USER must fill (everything except auto date/counter)
   function inputFields(tpl, lib) {
     return (tpl ? tpl.fieldIds : []).map(function (id) { return fieldById(lib, id); })
-      .filter(function (f) { return f && f.source !== 'date' && f.source !== 'counter'; });
+      .filter(function (f) { return f && f.source !== 'date' && f.source !== 'counter' && f.source !== 'lab'; });
   }
-  function isAuto(f) { return f && (f.source === 'date' || f.source === 'counter'); }
+  function isAuto(f) { return f && (f.source === 'date' || f.source === 'counter' || f.source === 'lab'); }
 
   /* ==========================================================================
    * STORE
@@ -184,7 +218,13 @@
   function normalize(lib) {
     lib = lib || {};
     lib.version = 3;
-    lib.operators = lib.operators || [];
+    // operators are objects { name, initials?, first3? } — convert legacy strings / id
+    lib.operators = (lib.operators || []).map(function (o) {
+      if (typeof o === 'string') return { name: o };
+      o = o || { name: '' };
+      if (o.id && o.initials == null) { o.initials = o.id; delete o.id; }   // migrate old single override
+      return o;
+    });
     lib.devices = lib.devices || [];
     lib.fields = (lib.fields && lib.fields.length) ? lib.fields : builtinFields();
     // make sure the builtin fields always exist
@@ -319,6 +359,9 @@
       + '.fng-copy.ok{border-color:var(--ac);color:var(--ac);}'
       + '.fng-recent{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:3px 0;}'
       + '.fng-recent code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;color:#ffd9a0;word-break:break-all;}'
+      + '.fng-bang{color:#f0604a;font-weight:700;}'
+      + '.fng-dupcell{color:#f0604a;}'
+      + '.fng-dupin{border-color:#f0604a !important;}'
       + '</style>';
   }
   function dot(i) { return '<span class="dot" style="background:' + SEG[i % SEG.length] + '"></span>'; }
@@ -418,7 +461,7 @@
           + DEPARTMENTS.map(function (d) { return '<option value="' + esc(d.code) + '"' + (d.code === v ? ' selected' : '') + '>' + esc(d.code) + ' — ' + esc(d.label) + '</option>'; }).join('') + '</select>';
       } else if (f.source === 'operator') {
         ctrl = '<select class="fng-sel" onchange="' + R() + '.setVal(\'' + f.id + '\',this.value)"><option value="">— select —</option>'
-          + (L.operators || []).map(function (o) { return '<option value="' + esc(o) + '"' + (o === v ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join('') + '</select>';
+          + (L.operators || []).map(function (o) { var n = opName(o); return '<option value="' + esc(n) + '"' + (n === v ? ' selected' : '') + '>' + esc(n) + '</option>'; }).join('') + '</select>';
       } else if (f.source === 'device') {
         var on = v && v === machineDevice();
         ctrl = '<div class="fng-devwrap"><select class="fng-sel" onchange="' + R() + '.setVal(\'' + f.id + '\',this.value)"><option value="">— select —</option>'
@@ -495,7 +538,7 @@
 
   function usePreview() {
     var L = ROOT.library, lab = useLab(), tpl = useFileTpl(lab); if (!tpl) return '';
-    var ctx = { now: nowDate(), tplId: tpl.id };
+    var ctx = { now: nowDate(), tplId: tpl.id, lab: lab };
     var segs = (tpl.fieldIds || []).map(function (id, i) {
       var v = encodeField(fieldById(L, id), ROOT.ui.values, ctx);
       return v ? '<span style="color:' + SEG[i % SEG.length] + '">' + esc(v) + '</span>' : '';
@@ -554,10 +597,11 @@
   function headerObject() {
     var L = ROOT.library, lab = useLab(); if (!lab) return null;
     var tpl = useFileTpl(lab); if (!tpl) return null;
-    var ctx = { now: nowDate(), tplId: tpl.id }, fields = {};
+    var ctx = { now: nowDate(), tplId: tpl.id, lab: lab }, fields = {};
     (tpl.fieldIds || []).forEach(function (id) {
       var f = fieldById(L, id); if (!f) return;
-      fields[f.name] = isAuto(f) ? encodeField(f, {}, ctx) : (ROOT.ui.values[id] || '');
+      // metadata keeps the FULL value (lab/operator names), the file name abbreviates
+      fields[f.name] = f.source === 'lab' ? lab.name : (isAuto(f) ? encodeField(f, {}, ctx) : (ROOT.ui.values[id] || ''));
     });
     var folder = defaultTpl(lab.folderTemplates);
     var sepc = tpl.separator || '_';
@@ -664,11 +708,11 @@
   // full metadata as Markdown (header + the user's notes)
   function notesMarkdown() { return headerMarkdown() + '\n\n---\n\n' + NOTE_MARK + '\n\n' + htmlToMd(ROOT.ui.notesHtml || ''); }
 
-  function curName() { var lab = useLab(); var tpl = lab && useFileTpl(lab); return tpl ? buildName(tpl, ROOT.library, ROOT.ui.values, { now: nowDate(), tplId: tpl.id }) : ''; }
+  function curName() { var lab = useLab(); var tpl = lab && useFileTpl(lab); return tpl ? buildName(tpl, ROOT.library, ROOT.ui.values, { now: nowDate(), tplId: tpl.id, lab: lab }) : ''; }
   function curPath() {
     var lab = useLab(); if (!lab) return '';
     var tpl = useFileTpl(lab), folder = defaultTpl(lab.folderTemplates);
-    var p = folder ? buildName(folder, ROOT.library, ROOT.ui.values, { now: nowDate(), tplId: tpl ? tpl.id : '' }) : '';
+    var p = folder ? buildName(folder, ROOT.library, ROOT.ui.values, { now: nowDate(), tplId: tpl ? tpl.id : '', lab: lab }) : '';
     return (p ? p + '/' : '') + curName();
   }
   function sidecar() {
@@ -780,13 +824,19 @@
 
     var editor = tpl ? tileEditor(lab, tpl) : '<p class="fng-muted" style="margin-top:12px">Create a template to start.</p>';
 
-    var saveBar = '<div class="fng-acts">'
-      + (isDirty()
+    var col = hasCollisions();
+    var saveBtn = col
+      ? '<button class="fng-btn" id="fng-savebtn" disabled title="Resolve the duplicates flagged with ! first">Save</button>'
+      : (isDirty()
           ? '<button class="fng-btn pri" id="fng-savebtn" onclick="' + R() + '.save()">Save</button>'
-          : '<button class="fng-btn saved" id="fng-savebtn" disabled>Saved ✓</button>')
-      + '<button class="fng-btn" onclick="' + R() + '.exportLib()">Export library JSON</button>'
+          : '<button class="fng-btn saved" id="fng-savebtn" disabled>Saved ✓</button>');
+    var saveBar = '<div class="fng-acts">' + saveBtn
+      + (col ? '<button class="fng-btn" disabled title="Resolve duplicates first">Export library JSON</button>'
+             : '<button class="fng-btn" onclick="' + R() + '.exportLib()">Export library JSON</button>')
       + '<button class="fng-btn" onclick="' + R() + '.importLib()">Import library JSON</button>'
-      + '</div><p class="fng-muted" style="margin-top:6px">To publish to the whole lab: <b>Export</b>, then paste the JSON into the add-on\'s <b>Configure → templateLibrary</b> (GROUP scope).</p>';
+      + '</div>'
+      + (col ? '<p style="margin-top:6px;color:#f0604a;font-size:12px">⚠ Resolve the duplicate identifiers flagged with <b>!</b> in Manage lists &amp; fields before saving or exporting.</p>'
+             : '<p class="fng-muted" style="margin-top:6px">To publish to the whole lab: <b>Export</b>, then paste the JSON into the add-on\'s <b>Configure → templateLibrary</b> (GROUP scope).</p>');
 
     return head + editor + saveBar + manageLists() + fieldDialog();
   }
@@ -832,11 +882,11 @@
   }
 
   function buildExample(lab, tpl) {
-    var L = ROOT.library, ctx = { now: new Date(), tplId: tpl.id };
+    var L = ROOT.library, ctx = { now: new Date(), tplId: tpl.id, lab: lab };
     var sample = {};
     inputFields(tpl, L).forEach(function (f) {
       if (f.source === 'department') sample[f.id] = (DEPARTMENTS[0] || {}).code || 'DEPT';
-      else if (f.source === 'operator') sample[f.id] = (L.operators[0] || 'Marie Curie');
+      else if (f.source === 'operator') sample[f.id] = opName(L.operators[0]) || 'Marie Curie';
       else if (f.source === 'device') sample[f.id] = ((L.devices || [])[0] || {}).name || '2P-B';
       else if (f.source === 'list') sample[f.id] = (f.options || ['Opt'])[0];
       else sample[f.id] = f.name === 'Project' ? 'VIPlearning' : f.name === 'Sample' ? 'M042' : f.name;
@@ -857,7 +907,8 @@
   // ---- per-field attribute popup (double-click a tile) -------------------
   function fieldSample(f) {
     if (f.source === 'department') return (DEPARTMENTS[0] || {}).code || 'NEUFO';
-    if (f.source === 'operator')   return (ROOT.library.operators[0] || 'Marie Curie');
+    if (f.source === 'operator')   return opName(ROOT.library.operators[0]) || 'Marie Curie';
+    if (f.source === 'lab')        return (labs()[0] || {}).name || 'Demo Lab';
     if (f.source === 'device')     return ((ROOT.library.devices || [])[0] || {}).name || '2P-B';
     if (f.source === 'list')       return (f.options || ['Option'])[0];
     return f.name === 'Condition' ? 'baseline drug' : f.name === 'Project' ? 'VIP learning' : f.name;
@@ -882,15 +933,18 @@
         + '<p class="fng-muted">Next value: <b>' + esc(pad(counterNext(f, cctx), f.pad || 2)) + '</b> · <a class="fng-x2" onclick="' + R() + '.resetCounter(\'' + id + '\')">reset counter</a>. Advances when you click <b>Next run ▸</b> in Use.</p>';
     } else {
       var sample = fieldSample(f), curf = f.format || 'full';
-      var opts = [['full', 'Full (cleaned value)'], ['initial', 'First initial'], ['acronym', 'Initials / acronym'], ['first3', 'First 3 letters'], ['upper', 'UPPERCASE'], ['lower', 'lowercase']];
+      var opts = [['full', 'Full (cleaned value)'], ['acronym', 'Initials / acronym'], ['first3', 'First 3 letters'], ['upper', 'UPPERCASE'], ['lower', 'lowercase']];
+      if (f.source !== 'operator' && f.source !== 'lab') opts.splice(1, 0, ['initial', 'First initial']);
       rows += '<div class="fng-f"><span class="fng-l">File-name format</span><select class="fng-sel" onchange="' + R() + '.setFieldFormat(\'' + id + '\',this.value)">'
         + opts.map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === curf ? ' selected' : '') + '>' + o[1] + ' — “' + esc(applyFmt(sample, o[0])) + '”</option>'; }).join('') + '</select></div>';
       if (f.source === 'list') {
         rows += '<div class="fng-f"><span class="fng-l">Options (comma-separated)</span>'
           + '<input class="fng-in" value="' + esc((f.options || []).join(', ')) + '" oninput="' + R() + '.setFieldOptions(\'' + id + '\',this.value)"></div>';
       }
-      rows += '<div class="fng-f"><span class="fng-l">Required</span><select class="fng-sel" onchange="' + R() + '.setFieldReq(\'' + id + '\',this.value)"><option value="0">no</option><option value="1"' + (f.required ? ' selected' : '') + '>yes</option></select></div>'
-        + '<p class="fng-muted">Example for “' + esc(sample) + '” → <b>' + esc(applyFmt(sample, curf)) + '</b> in the file name. The <b>full value is always kept in the metadata</b>.</p>';
+      if (f.source !== 'lab') {
+        rows += '<div class="fng-f"><span class="fng-l">Required</span><select class="fng-sel" onchange="' + R() + '.setFieldReq(\'' + id + '\',this.value)"><option value="0">no</option><option value="1"' + (f.required ? ' selected' : '') + '>yes</option></select></div>';
+      }
+      rows += '<p class="fng-muted">Example for “' + esc(sample) + '” → <b>' + esc(applyFmt(sample, curf)) + '</b> in the file name. ' + (f.source === 'operator' || f.source === 'lab' ? 'Initials/first-3 are managed (and disambiguated) in the table. ' : '') + 'The <b>full value is always kept in the metadata</b>.</p>';
     }
 
     return '<div class="fng-modal" onclick="if(event.target===this)' + R() + '.closeField()">'
@@ -912,15 +966,46 @@
   // --- the lists & fields the master maintains (kept out of the way) ---
   function manageLists() {
     var L = ROOT.library;
-    var ops = (L.operators || []).map(function (o, i) {
-      return '<span class="fng-chiprm">' + esc(o) + '<button title="remove" onclick="' + R() + '.delOperator(' + i + ')">✕</button></span>';
-    }).join('') || '<span class="fng-muted">no operators yet</span>';
+    var opList = L.operators || [];
+    // an editable cell: input + (when duplicated) a red ! after it
+    function cellInput(jsCall, val, bad, w) {
+      return '<td><input class="fng-in' + (bad ? ' fng-dupin' : '') + '" style="width:' + (w || 120) + 'px" value="' + esc(val) + '" onchange="' + jsCall + '">' + (bad ? '<span class="fng-bang" title="Duplicate — make it unique"> !</span>' : '') + '</td>';
+    }
+    // Full name | Initials | First 3 table shared by operators and labs; flags any
+    // column whose value matches another row, and lets the manager edit it.
+    function abbrTable(list, keyOf, fns) {
+      var fullV = list.map(function (e) { return applyFmt(opName(e), 'full'); });
+      var iniV = list.map(abbrIni), f3V = list.map(abbrF3);
+      var fD = countMap(fullV), iD = countMap(iniV), tD = countMap(f3V), any = false;
+      var rows = list.map(function (e, i) {
+        var k = keyOf(e, i);
+        var fb = fullV[i] && fD[fullV[i]] > 1, ib = iniV[i] && iD[iniV[i]] > 1, tb = f3V[i] && tD[f3V[i]] > 1;
+        if (fb || ib || tb) any = true;
+        var iniDisp = (e.initials != null && e.initials !== '') ? e.initials : applyFmt(opName(e), 'acronym');
+        var f3Disp = (e.first3 != null && e.first3 !== '') ? e.first3 : applyFmt(opName(e), 'first3');
+        return '<tr>' + cellInput(R() + '.' + fns.name + '(' + k + ',this.value)', opName(e), fb, 150)
+          + cellInput(R() + '.' + fns.ini + '(' + k + ',this.value)', iniDisp, ib, 80)
+          + cellInput(R() + '.' + fns.f3 + '(' + k + ',this.value)', f3Disp, tb, 80)
+          + '<td><button class="fng-btn sm" title="remove" onclick="' + R() + '.' + fns.del + '(' + k + ')">✕</button></td></tr>';
+      }).join('');
+      return { rows: rows, any: any };
+    }
+    function abbrTableHtml(t, emptyMsg, kind, head) {
+      return t.rows
+        ? '<table class="fng-doc-t"><thead><tr><th>' + head + '</th><th>Initials</th><th>First 3</th><th></th></tr></thead><tbody>' + t.rows + '</tbody></table>'
+          + (t.any ? '<p class="fng-muted" style="margin-top:6px">Fields flagged <span class="fng-bang">!</span> match another ' + kind + ' — edit them to make each unique.</p>' : '')
+        : '<span class="fng-muted">' + emptyMsg + '</span>';
+    }
+    var ops = abbrTableHtml(abbrTable(opList, function (e, i) { return '' + i; }, { name: 'setOperatorName', ini: 'setOperatorInitials', f3: 'setOperatorFirst3', del: 'delOperator' }), 'no operators yet', 'operator', 'Full name');
+    var labsTable = abbrTableHtml(abbrTable(labs(), function (l) { return '\'' + l.id + '\''; }, { name: 'setLabName', ini: 'setLabInitials', f3: 'setLabFirst3', del: 'delLab' }), 'no labs yet', 'lab', 'Lab name');
+    var devDup = countMap((L.devices || []).map(function (d) { return d.name; }));
 
     var devs = (L.devices || []).map(function (d, i) {
       var infoText = Object.keys(d.info || {}).map(function (k) { return k + ': ' + d.info[k]; }).join('\n');
+      var dDup = devDup[d.name] > 1;
       return '<div class="fng-card" style="margin-top:8px">'
-        + '<div class="fng-row" style="align-items:flex-end"><div class="fng-f" style="flex:1"><span class="fng-l">Device name (used in the file name)</span>'
-        + '<input class="fng-in" value="' + esc(d.name) + '" oninput="' + R() + '.setDeviceName(' + i + ',this.value)"></div>'
+        + '<div class="fng-row" style="align-items:flex-end"><div class="fng-f" style="flex:1"><span class="fng-l">Device name (used in the file name)' + (dDup ? ' <span class="fng-bang" title="Another device has this name — device names must be unique">!</span>' : '') + '</span>'
+        + '<input class="fng-in' + (dDup ? ' fng-dupin' : '') + '" value="' + esc(d.name) + '" onchange="' + R() + '.setDeviceName(' + i + ',this.value)"></div>'
         + '<button class="fng-btn sm" onclick="' + R() + '.delDevice(' + i + ')">Remove</button></div>'
         + '<div class="fng-f" style="margin-top:6px"><span class="fng-l">Generic info — one "Key: value" per line (added to metadata)</span>'
         + '<textarea class="fng-ta" style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px" placeholder="Software: ScanImage" oninput="' + R() + '.setDeviceInfo(' + i + ',this.value)">' + esc(infoText) + '</textarea></div></div>';
@@ -943,11 +1028,11 @@
 
     return '<details class="fng-adv"' + (ROOT.ui.manageOpen ? ' open' : '') + ' ontoggle="' + R() + '.setManageOpen(this.open)"><summary>Manage lists &amp; fields</summary>'
       + '<div class="fng-card"><h3 style="margin-top:0">Labs</h3>'
-      + '<div class="fng-mini">' + labs().map(function (l, i) { return '<span class="fng-chiprm">' + esc(l.name) + '<button onclick="' + R() + '.renameLab(\'' + l.id + '\')">✎</button><button onclick="' + R() + '.delLab(\'' + l.id + '\')">✕</button></span>'; }).join('') + '</div>'
+      + labsTable
       + '<div class="fng-row" style="margin-top:8px"><button class="fng-btn sm" onclick="' + R() + '.addLab()">+ Add lab</button></div></div>'
 
-      + '<div class="fng-card"><h3 style="margin-top:0">Operators (name list)</h3>'
-      + '<div class="fng-mini">' + ops + '</div>'
+      + '<div class="fng-card"><h3 style="margin-top:0">Operators</h3>'
+      + ops
       + '<div class="fng-row" style="margin-top:8px"><input class="fng-in" id="fng-newop" placeholder="Full name"><button class="fng-btn sm" onclick="' + R() + '.addOperator()">+ Add operator</button></div></div>'
 
       + '<div class="fng-card"><h3 style="margin-top:0">Acquisition devices</h3>'
@@ -1016,6 +1101,9 @@
     var l = { id: uid('lab'), name: name, fileTemplates: [], folderTemplates: [] };
     labs().push(l); ROOT.build.labId = l.id; ROOT.build.tplId = null; rerender();
   };
+  ROOT.setLabName = function (id, v) { var l = labById(id); if (l) l.name = v; rerender(); };
+  ROOT.setLabInitials = function (id, v) { var l = labById(id); if (l) setOverride(l, 'initials', 'acronym', v); rerender(); };
+  ROOT.setLabFirst3 = function (id, v) { var l = labById(id); if (l) setOverride(l, 'first3', 'first3', v); rerender(); };
   ROOT.renameLab = function (id) {
     var l = labById(id); if (!l) return;
     var name = (window.prompt ? window.prompt('Rename lab:', l.name) : l.name); if (name == null) return;
@@ -1032,9 +1120,14 @@
   // operators
   ROOT.addOperator = function () {
     var el = document.getElementById('fng-newop'); var v = el ? el.value.trim() : '';
-    if (v) { ROOT.library.operators.push(v); rerender(); }
+    if (v) { ROOT.library.operators.push({ name: v }); rerender(); }
   };
   ROOT.delOperator = function (i) { ROOT.library.operators.splice(i, 1); rerender(); };
+  // store an initials/first-3 override only when it differs from the auto value (keeps it following the name otherwise)
+  function setOverride(e, key, mode, v) { v = (v || '').trim(); var auto = applyFmt(e.name || '', mode); if (!v || sanitizeVal(v) === auto) delete e[key]; else e[key] = v; }
+  ROOT.setOperatorName = function (i, v) { var o = ROOT.library.operators[i]; if (o) o.name = v; rerender(); };
+  ROOT.setOperatorInitials = function (i, v) { var o = ROOT.library.operators[i]; if (o) setOverride(o, 'initials', 'acronym', v); rerender(); };
+  ROOT.setOperatorFirst3 = function (i, v) { var o = ROOT.library.operators[i]; if (o) setOverride(o, 'first3', 'first3', v); rerender(); };
 
   // devices (master-maintained). Name change / info edit do NOT rerender (keep cursor).
   ROOT.addDevice = function () {
@@ -1042,7 +1135,7 @@
     if (v) { ROOT.library.devices.push({ id: uid('dev'), name: v, info: {} }); rerender(); }
   };
   ROOT.delDevice = function (i) { ROOT.library.devices.splice(i, 1); rerender(); };
-  ROOT.setDeviceName = function (i, v) { var d = ROOT.library.devices[i]; if (d) d.name = v; dirty(); };
+  ROOT.setDeviceName = function (i, v) { var d = ROOT.library.devices[i]; if (d) d.name = v; rerender(); };
   ROOT.setDeviceInfo = function (i, text) {
     var d = ROOT.library.devices[i]; if (!d) return;
     var info = {};
@@ -1081,16 +1174,19 @@
   // reflect the saved/unsaved state on the Save button (greyed when nothing to save)
   function dirty() {
     var b = document.getElementById('fng-savebtn'); if (!b) return;
+    if (hasCollisions()) { b.disabled = true; b.textContent = 'Save'; b.classList.remove('pri', 'saved'); return; }
     if (isDirty()) { b.disabled = false; b.textContent = 'Save'; b.classList.add('pri'); b.classList.remove('saved'); }
     else { b.disabled = true; b.textContent = 'Saved ✓'; b.classList.remove('pri'); b.classList.add('saved'); }
   }
   ROOT.save = function () {
+    if (hasCollisions()) { toast('Resolve the duplicate identifiers (flagged with !) first.'); return; }
     saveLibrary();
     ROOT._savedSnapshot = snapshot();
     dirty();
     toast('Saved locally. Export → paste into Configure to share with the lab.');
   };
   ROOT.exportLib = function () {
+    if (hasCollisions()) { toast('Resolve the duplicate identifiers (flagged with !) first.'); return; }
     var pretty = JSON.stringify(ROOT.library, null, 2);
     download('fileNamer_templates.json', pretty);
     if (navigator.clipboard) navigator.clipboard.writeText(JSON.stringify(ROOT.library)).then(function () { toast('Downloaded + copied. Paste into Configure → templateLibrary.'); });
