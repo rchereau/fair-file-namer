@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "platforms": [
+    { "slug": "imaging", "name": "Imaging Platform" },
+    { "slug": "genomics", "name": "Genomics Platform" }
+  ]
+}

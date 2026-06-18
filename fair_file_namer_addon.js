@@ -37,6 +37,7 @@
   var LS_DOCFONT = 'fng.doc.font';               // per-machine metadata display font
   var LS_DOCSIZE = 'fng.doc.size';               // per-machine metadata display size
   var LS_HIST = 'fng.recentNames';               // per-machine recent file names
+  var LS_PLATFORMS = 'fng.platforms.cache';      // shared faculty-wide platform devices (cached)
 
   // Display options for the rendered metadata document.
   var FONTS = { sans: 'IBM Plex Sans, system-ui, -apple-system, Segoe UI, sans-serif', serif: 'Georgia, "Times New Roman", serif', mono: 'ui-monospace, Menlo, Consolas, monospace' };
@@ -46,7 +47,9 @@
   var DEPARTMENTS = [
     { code: 'NEUFO', label: 'Neurosciences Fondamentales' },
     { code: 'PATIM', label: 'Pathology & Imaging' },
-    { code: 'MIMOL', label: 'Molecular Imaging' }
+    { code: 'MIMOL', label: 'Molecular Imaging' },
+    { code: 'PHYM',  label: 'Physiologie cellulaire et métabolisme' },
+    { code: 'GEDEV', label: 'Médecine génétique et développement' }
   ];
 
   var SEG = ['#7eb8f7', '#b57bff', '#f7c948', '#f09860', '#4af0a0', '#f07080', '#72d0e8', '#c8a0ff'];
@@ -137,12 +140,15 @@
         return p.map(function (w) { return (w.match(/[A-Za-z0-9]/) || [''])[0]; }).join('').toUpperCase();
       }
       case 'first3': return sanitizeVal(s).slice(0, 3).toUpperCase();
+      case 'lastlower': { var w = s.trim().split(/\s+/).filter(Boolean); return w.length ? sanitizeVal(w[w.length - 1]).toLowerCase() : ''; }
       case 'upper':  return sanitizeVal(s).toUpperCase();
       case 'lower':  return sanitizeVal(s).toLowerCase();
       case 'full':
       default:       return sanitizeVal(s);
     }
   }
+  // normalise a path to forward slashes (readable on any OS); keep a leading // (UNC), trim trailing /
+  function normPath(p) { return String(p == null ? '' : p).trim().replace(/\\/g, '/').replace(/\/+$/, ''); }
   // ---- auto-incrementing counter (per machine, in localStorage) ----------
   function counterKey(field, ctx) {
     var k = 'fng.counter.' + field.id + '.' + ((ctx && ctx.tplId) || '');
@@ -236,15 +242,54 @@
     });
     return lib;
   }
+  // Which shared library this machine reads — lets ONE hosted app serve many labs:
+  //   ?cfg=<url>      explicit path/URL to a lab's library.json
+  //   ?lib=<key>      shorthand for ./libs/<key>.json
+  //   window.FNG_LIBRARY_URL  set in the page; else ./library.json (per-lab folder)
+  function resolveLibUrl() {
+    try {
+      var q = (typeof location !== 'undefined' && location.search) || '';
+      var c = q.match(/[?&]cfg=([^&]+)/); if (c) return decodeURIComponent(c[1]);
+      var l = q.match(/[?&]lib=([^&]+)/); if (l) return 'libs/' + decodeURIComponent(l[1]) + '.json';
+    } catch (e) {}
+    return (typeof window !== 'undefined' && window.FNG_LIBRARY_URL) || './library.json';
+  }
+  // cache per lab URL so one browser used for different labs never mixes their configs
+  function libCacheKey() {
+    if (typeof window !== 'undefined' && window.eLabSDK) return LS_KEY;
+    return LS_KEY + '::' + resolveLibUrl();
+  }
   function loadLibrary(cfg) {
     var lib = (cfg && cfg.templateLibrary) ? parseLib(cfg.templateLibrary) : null;
-    if (!lib) { try { lib = parseLib(localStorage.getItem(LS_KEY)); } catch (e) {} }
+    if (!lib) { try { lib = parseLib(localStorage.getItem(libCacheKey())); } catch (e) {} }
     if (!lib) lib = defaultLibrary();
     return normalize(lib);
   }
+  /* Background sync for the HTML-only (hosted) deployment: the page loads
+   * instantly from the cached copy, then quietly checks the shared library.json.
+   * It never blocks startup and works offline. A newer library is cached for the
+   * next launch, and applied immediately only if it won't disrupt the user. */
+  function syncSharedLibrary() {
+    if (typeof fetch !== 'function') return;
+    var base = resolveLibUrl();
+    var url = base + (base.indexOf('?') >= 0 ? '&' : '?') + 't=' + Date.now();
+    fetch(url, { cache: 'no-store' })
+      .then(function (r) { return r && r.ok ? r.text() : null; })
+      .then(function (txt) {
+        var lib = txt && parseLib(txt); if (!lib) return;
+        lib = normalize(lib);
+        var fresh = JSON.stringify(lib);
+        if (fresh === JSON.stringify(ROOT.library)) return;          // already up to date
+        try { localStorage.setItem(libCacheKey(), fresh); } catch (e) {}    // cache for next launch
+        var busy = (ROOT.ui.mode === 'manage') || (ROOT.ui.values && Object.keys(ROOT.ui.values).length > 0);
+        if (!busy) { ROOT.library = lib; ROOT._savedSnapshot = fresh; rerender(); toast('Lab templates updated.'); }
+        else { toast('Updated lab templates downloaded — they apply next time you reload.'); }
+      })
+      .catch(function () { /* offline / file:// — keep the cached copy */ });
+  }
   function saveLibrary() {
     var json = JSON.stringify(ROOT.library);
-    try { localStorage.setItem(LS_KEY, json); } catch (e) {}
+    try { localStorage.setItem(libCacheKey(), json); } catch (e) {}
     // optional direct config write (fails soft; Export→Configure is the reliable path)
     try {
       if (window.eLabSDK && eLabSDK.Plugin && typeof eLabSDK.Plugin.setConfiguration === 'function') {
@@ -252,6 +297,84 @@
       }
     } catch (e) {}
     return json;
+  }
+
+  /* ==========================================================================
+   * SHARED PLATFORM DEVICES — one repo per platform, for true per-manager isolation
+   *   index : /platforms/index.json     = { version:1, platforms:[ { slug, name } ] }   (you maintain)
+   *   each  : /plat-<slug>/platform.json = { version:1, name, devices:[ {id,name,info} ] }
+   *   Every lab MERGES all platform files into its device picker (extra tabs). A platform
+   *   manager edits ONLY their own plat-<slug> repo, opened via ?platform=<slug>&admin=1.
+   *   Served from the same Pages host as the app (app at /app/), so paths are origin-relative.
+   * ======================================================================== */
+  function plOrigin() {
+    return (typeof location !== 'undefined' && location.origin && /^https?:/.test(location.protocol)) ? location.origin : '';
+  }
+  function platformsIndexUrl() {
+    if (typeof window !== 'undefined' && window.FNG_PLATFORMS_INDEX) return window.FNG_PLATFORMS_INDEX;
+    var o = plOrigin(); return o ? o + '/platforms/index.json' : '';
+  }
+  function platformFileUrl(slug) {
+    if (typeof window !== 'undefined' && window.FNG_PLATFORM_BASE) return window.FNG_PLATFORM_BASE.replace(/\/+$/, '') + '/plat-' + slug + '/platform.json';
+    var o = plOrigin(); return o ? o + '/plat-' + slug + '/platform.json' : '';
+  }
+  function normalizeIndex(o) {
+    var arr = (o && o.platforms) ? o.platforms : (Array.isArray(o) ? o : []);
+    return (arr || []).map(function (p) {
+      if (typeof p === 'string') return { slug: p, name: p };
+      p = p || {}; return { slug: p.slug || p.id || '', name: p.name || p.slug || p.id || 'Platform' };
+    }).filter(function (p) { return p.slug; });
+  }
+  function normalizePlatformFile(o, slug, name) {
+    o = o || {};
+    return { id: slug, name: o.name || name || slug,
+      devices: (o.devices || []).map(function (d) { d = d || {}; return { id: d.id || uid('dev'), name: d.name || '', info: d.info || {} }; }) };
+  }
+  function loadPlatformsCache() {
+    try { var s = localStorage.getItem(LS_PLATFORMS); if (s) { var a = JSON.parse(s); if (Array.isArray(a)) return a; if (a && a.platforms) return a.platforms; } } catch (e) {}
+    return [];
+  }
+  // CONSUMPTION: fetch the index, then every platform file, and merge into ROOT.platforms.
+  function syncSharedPlatforms() {
+    if (typeof fetch !== 'function') return;
+    var idx = platformsIndexUrl(); if (!idx) return;
+    fetch(idx + (idx.indexOf('?') >= 0 ? '&' : '?') + 't=' + Date.now(), { cache: 'no-store' })
+      .then(function (r) { return r && r.ok ? r.text() : null; })
+      .then(function (txt) {
+        if (!txt) return null; var list; try { list = normalizeIndex(JSON.parse(txt)); } catch (e) { return null; }
+        return Promise.all(list.map(function (p) {
+          var u = platformFileUrl(p.slug); if (!u) return normalizePlatformFile({}, p.slug, p.name);
+          return fetch(u + (u.indexOf('?') >= 0 ? '&' : '?') + 't=' + Date.now(), { cache: 'no-store' })
+            .then(function (r) { return r && r.ok ? r.text() : null; })
+            .then(function (t) { var o = null; if (t) { try { o = JSON.parse(t); } catch (e) {} } return normalizePlatformFile(o || {}, p.slug, p.name); })
+            .catch(function () { return normalizePlatformFile({}, p.slug, p.name); });
+        }));
+      })
+      .then(function (arr) {
+        if (!arr) return; arr = arr.filter(Boolean);
+        var fresh = JSON.stringify(arr);
+        if (fresh === JSON.stringify(ROOT.platforms || [])) return;
+        try { localStorage.setItem(LS_PLATFORMS, fresh); } catch (e) {}
+        ROOT.platforms = arr; rerender();
+      })
+      .catch(function () { /* offline / not deployed — keep cache */ });
+  }
+  // Device groups for the picker: lab devices first, then each platform that has devices.
+  function deviceGroups() {
+    var groups = [{ id: '__lab', name: 'Lab devices', devices: (ROOT.library && ROOT.library.devices) || [] }];
+    (ROOT.platforms || []).forEach(function (p) { if (p.devices && p.devices.length) groups.push({ id: p.id, name: p.name, devices: p.devices }); });
+    return groups;
+  }
+  function findDeviceByName(name) {
+    if (!name) return null;
+    var found = null;
+    deviceGroups().forEach(function (g) { (g.devices || []).forEach(function (d) { if (!found && d.name === name) found = d; }); });
+    return found;
+  }
+  function groupOfDevice(name) {
+    var gid = '__lab';
+    deviceGroups().forEach(function (g) { (g.devices || []).forEach(function (d) { if (d.name === name) gid = g.id; }); });
+    return gid;
   }
 
   /* ==========================================================================
@@ -290,6 +413,26 @@
       + '.fng-star{flex:none;background:transparent;border:1px solid var(--bd);border-radius:6px;color:var(--dim);cursor:pointer;font-size:14px;line-height:1;padding:7px 9px;}'
       + '.fng-star:hover{border-color:var(--ac);color:var(--ac);}'
       + '.fng-star.on{color:var(--ac);border-color:var(--ac);}'
+      + '.fng-devpick{display:flex;flex-direction:column;gap:6px;}'
+      + '.fng-devtabs{display:flex;flex-wrap:wrap;gap:4px;}'
+      + '.fng-devtab{background:var(--pn);border:1px solid var(--bd);border-radius:6px;color:var(--dim);font-size:11px;padding:5px 10px;cursor:pointer;}'
+      + '.fng-devtab:hover{border-color:var(--ac);color:var(--ac);}'
+      + '.fng-devtab.on{color:var(--ac);border-color:var(--ac);background:rgba(74,240,160,.08);}'
+      + '.fng-devrow{display:flex;gap:6px;align-items:flex-start;}'
+      + '.fng-devlist{flex:1;display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-height:34px;}'
+      + '.fng-devopt{background:var(--pn);border:1px solid var(--bd);border-radius:6px;color:#eaf0fa;font-size:12px;padding:6px 11px;cursor:pointer;}'
+      + '.fng-devopt:hover{border-color:var(--ac);}'
+      + '.fng-devopt.on{border-color:var(--ac);color:var(--ac);background:rgba(74,240,160,.12);}'
+      + '.fng-devbtn{width:100%;text-align:left;padding:7px 9px;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
+      + '.fng-ph{color:#5b647d;font-style:italic;}'
+      + '.fng-devpickgrid{display:flex;gap:10px;flex-wrap:wrap;}'
+      + '.fng-pickcard{flex:1 1 200px;display:flex;flex-direction:column;gap:4px;align-items:flex-start;background:var(--pn);border:1px solid var(--bd);border-radius:8px;color:#eaf0fa;font-size:14px;padding:14px;cursor:pointer;text-align:left;}'
+      + '.fng-pickcard:hover{border-color:var(--ac);}'
+      + '.fng-pickcard .fng-muted{font-size:11px;}'
+      + '.fng-devpicklist{display:flex;flex-direction:column;gap:6px;max-height:340px;overflow:auto;margin-top:4px;}'
+      + '.fng-pickrow{text-align:left;background:var(--pn);border:1px solid var(--bd);border-radius:6px;color:#eaf0fa;font-size:13px;padding:9px 12px;cursor:pointer;}'
+      + '.fng-pickrow:hover{border-color:var(--ac);}'
+      + '.fng-pickrow.on{border-color:var(--ac);color:var(--ac);background:rgba(74,240,160,.12);}'
       + '.fng-btn{background:transparent;border:1px solid var(--bd);border-radius:6px;color:#aab4cc;font-size:12px;padding:7px 12px;cursor:pointer;}'
       + '.fng-btn:hover{border-color:var(--ac);color:var(--ac);}'
       + '.fng-btn.pri{border-color:var(--ac);color:var(--ac);}'
@@ -310,8 +453,8 @@
       + '.fng-tiles{display:flex;flex-wrap:wrap;gap:7px;min-height:38px;padding:8px;border:1px dashed var(--bd);border-radius:8px;background:rgba(255,255,255,.012);}'
       + '.fng-tile{display:inline-flex;align-items:center;gap:7px;background:var(--pn);border:1px solid var(--bd);border-radius:7px;padding:6px 9px;font-size:12px;color:#eaf0fa;cursor:grab;user-select:none;}'
       + '.fng-tile .dot{width:7px;height:7px;border-radius:2px;flex:none;}'
-      + '.fng-tile.drag{opacity:.35;}'
-      + '.fng-tile.over{border-color:var(--ac);}'
+      + '.fng-tile{transition:background .1s ease,border-color .1s ease;}'
+      + '.fng-tile.dragging{opacity:.4;border-style:dashed;border-color:var(--ac);}'
       + '.fng-tile .rm{border:none;background:none;color:var(--dim);cursor:pointer;font-size:13px;padding:0;line-height:1;}'
       + '.fng-tile .rm:hover{color:#f07080;}'
       + '.fng-avail .fng-tile{cursor:pointer;border-style:dashed;color:#aab4cc;}'
@@ -399,7 +542,7 @@
       if (ROOT.ui.values[f.id] !== undefined) return;
       if (f.source === 'device') {
         var md = machineDevice();
-        if (md && (ROOT.library.devices || []).some(function (d) { return d.name === md; })) ROOT.ui.values[f.id] = md;
+        if (md && findDeviceByName(md)) { ROOT.ui.values[f.id] = md; if (ROOT.ui.devGroup == null) ROOT.ui.devGroup = groupOfDevice(md); }
       } else {
         var av = elnAutoValueFor(f);
         if (av) ROOT.ui.values[f.id] = av;
@@ -463,15 +606,17 @@
         ctrl = '<select class="fng-sel" onchange="' + R() + '.setVal(\'' + f.id + '\',this.value)"><option value="">— select —</option>'
           + (L.operators || []).map(function (o) { var n = opName(o); return '<option value="' + esc(n) + '"' + (n === v ? ' selected' : '') + '>' + esc(n) + '</option>'; }).join('') + '</select>';
       } else if (f.source === 'device') {
-        var on = v && v === machineDevice();
-        ctrl = '<div class="fng-devwrap"><select class="fng-sel" onchange="' + R() + '.setVal(\'' + f.id + '\',this.value)"><option value="">— select —</option>'
-          + (L.devices || []).map(function (d) { return '<option value="' + esc(d.name) + '"' + (d.name === v ? ' selected' : '') + '>' + esc(d.name) + '</option>'; }).join('') + '</select>'
-          + '<button class="fng-star' + (on ? ' on' : '') + '" title="' + (on ? 'Default device on this machine — click to remove' : 'Set as this machine\'s default device') + '" onclick="' + R() + '.setMachineDevice()">★</button></div>';
+        // A single button opens a step-by-step picker (lab vs platform → device).
+        // The choice is remembered on this machine, so it's usually a one-time action.
+        ctrl = '<button type="button" class="fng-btn fng-devbtn' + (v ? ' pri' : '') + '" title="' + (v ? 'Click to choose another device' : 'Select a device') + '" onclick="' + R() + '.openDevPick(\'' + f.id + '\')">'
+          + (v ? esc(v) : 'Select device ▾') + '</button>';
       } else if (f.source === 'list') {
         ctrl = '<select class="fng-sel" onchange="' + R() + '.setVal(\'' + f.id + '\',this.value)"><option value="">— select —</option>'
           + (f.options || []).map(function (o) { return '<option value="' + esc(o) + '"' + (o === v ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join('') + '</select>';
       } else {
-        ctrl = '<input class="fng-in" value="' + esc(v) + '" autocomplete="off" spellcheck="false" oninput="' + R() + '.setVal(\'' + f.id + '\',this.value)">';
+        var dl = 'fng-dl-' + f.id, hist = fieldHistory(f.id).slice(0, 5);
+        ctrl = '<input class="fng-in" list="' + dl + '" value="' + esc(v) + '" spellcheck="false" oninput="' + R() + '.setVal(\'' + f.id + '\',this.value)">'
+          + '<datalist id="' + dl + '">' + hist.map(function (x) { return '<option value="' + esc(x) + '"></option>'; }).join('') + '</datalist>';
       }
       var lblcls = 'fng-l' + (f.required ? ' req' : '');
       var miss = f.required && !String(v).trim();
@@ -500,8 +645,69 @@
       + '<button class="fng-btn" onclick="' + R() + '.recordToSection()">Record in experiment</button>'
       + '<button class="fng-btn" onclick="' + R() + '.resetForm()">Reset</button>'
       + '</div>'
-      + recentBlock() + decodeBlock();
+      + recentBlock() + decodeBlock() + devPickModal() + missModal();
   }
+
+  /* --- step-by-step device picker (modal) --------------------------------
+   * Button → choose Lab vs Platform → (platform → its name) → device → Save.
+   * Scales to many devices (scrolling list) and the choice is remembered on
+   * this machine (LS_DEVICE), so it's typically a one-time selection. */
+  function devListHtml(list, sel) {
+    if (!list || !list.length) return '<p class="fng-muted">No devices here yet.</p>';
+    return '<div class="fng-devpicklist">' + list.map(function (d) {
+      return '<button type="button" class="fng-pickrow' + (d.name === sel ? ' on' : '') + '" data-n="' + esc(d.name) + '" onclick="' + R() + '.devPickSel(this.getAttribute(\'data-n\'))">' + esc(d.name) + '</button>';
+    }).join('') + '</div>';
+  }
+  function devPickModal() {
+    var dp = ROOT.ui.devPick; if (!dp || !dp.open) return '';
+    var title = 'Select device', body = '', back = '';
+    if (dp.step === 'source') {
+      title = 'Where is the device?';
+      body = '<div class="fng-devpickgrid">'
+        + '<button type="button" class="fng-pickcard" onclick="' + R() + '.devPickSource(\'lab\')"><b>Lab devices</b><span class="fng-muted">your lab\'s own instruments</span></button>'
+        + '<button type="button" class="fng-pickcard" onclick="' + R() + '.devPickSource(\'plat\')"><b>Platform devices</b><span class="fng-muted">shared core-facility instruments</span></button>'
+        + '</div>';
+    } else if (dp.step === 'labdev') {
+      title = 'Lab devices'; back = '<button class="fng-btn sm" onclick="' + R() + '.devPickStep(\'source\')">‹ Back</button>';
+      body = devListHtml((ROOT.library && ROOT.library.devices) || [], dp.sel);
+    } else if (dp.step === 'platlist') {
+      title = 'Platforms'; back = '<button class="fng-btn sm" onclick="' + R() + '.devPickStep(\'source\')">‹ Back</button>';
+      var plats = (ROOT.platforms || []).filter(function (p) { return p.devices && p.devices.length; });
+      body = plats.length
+        ? '<div class="fng-devpicklist">' + plats.map(function (p) { return '<button type="button" class="fng-pickrow" onclick="' + R() + '.devPickPlat(\'' + esc(p.id) + '\')">' + esc(p.name) + ' <span class="fng-muted">(' + p.devices.length + ')</span> ▸</button>'; }).join('') + '</div>'
+        : '<p class="fng-muted">No platform devices are available yet.</p>';
+    } else if (dp.step === 'platdev') {
+      var plat = (ROOT.platforms || []).filter(function (p) { return p.id === dp.platId; })[0];
+      title = plat ? plat.name : 'Platform'; back = '<button class="fng-btn sm" onclick="' + R() + '.devPickStep(\'platlist\')">‹ Platforms</button>';
+      body = devListHtml((plat && plat.devices) || [], dp.sel);
+    }
+    var canSave = !!dp.sel;
+    return '<div class="fng-modal" onclick="if(event.target===this)' + R() + '.closeDevPick()">'
+      + '<div class="fng-modal-card"><div class="fng-modal-h"><h3 style="margin:0">' + esc(title) + '</h3>'
+      + '<button class="fng-modal-x" title="Close" onclick="' + R() + '.closeDevPick()">✕</button></div>'
+      + (dp.sel ? '<p class="fng-muted">Selected: <b style="color:var(--ac)">' + esc(dp.sel) + '</b></p>' : '')
+      + body
+      + '<div class="fng-acts" style="margin-top:14px">' + back
+      + (canSave ? '<button class="fng-btn pri" onclick="' + R() + '.devPickSave()">Save &amp; close</button>'
+                 : '<button class="fng-btn" disabled title="Pick a device first">Save &amp; close</button>')
+      + '<button class="fng-btn" onclick="' + R() + '.closeDevPick()">Cancel</button></div></div></div>';
+  }
+  ROOT.openDevPick = function (fid) {
+    var cur = ROOT.ui.values[fid] || '';
+    ROOT.ui.devPick = { open: true, step: 'source', platId: null, sel: cur, fieldId: fid };
+    rerender();
+  };
+  ROOT.devPickSource = function (src) { ROOT.ui.devPick.step = (src === 'lab') ? 'labdev' : 'platlist'; rerender(); };
+  ROOT.devPickStep = function (step) { ROOT.ui.devPick.step = step; rerender(); };
+  ROOT.devPickPlat = function (pid) { ROOT.ui.devPick.platId = pid; ROOT.ui.devPick.step = 'platdev'; rerender(); };
+  ROOT.devPickSel = function (name) { ROOT.ui.devPick.sel = name; rerender(); };
+  ROOT.devPickSave = function () {
+    var dp = ROOT.ui.devPick; if (!dp || !dp.sel) return;
+    ROOT.ui.values[dp.fieldId] = dp.sel;
+    try { localStorage.setItem(LS_DEVICE, dp.sel); } catch (e) {}   // remembered on this machine
+    dp.open = false; rerender();
+  };
+  ROOT.closeDevPick = function () { if (ROOT.ui.devPick) ROOT.ui.devPick.open = false; rerender(); };
 
   // recent file names generated on this machine
   function recentBlock() {
@@ -539,19 +745,18 @@
   function usePreview() {
     var L = ROOT.library, lab = useLab(), tpl = useFileTpl(lab); if (!tpl) return '';
     var ctx = { now: nowDate(), tplId: tpl.id, lab: lab };
+    // Show every field in order. Filled fields show their value; empty ones show a
+    // ‹Field name› placeholder so the user sees exactly what's still missing.
     var segs = (tpl.fieldIds || []).map(function (id, i) {
-      var v = encodeField(fieldById(L, id), ROOT.ui.values, ctx);
-      return v ? '<span style="color:' + SEG[i % SEG.length] + '">' + esc(v) + '</span>' : '';
-    }).filter(Boolean);
+      var f = fieldById(L, id);
+      var v = encodeField(f, ROOT.ui.values, ctx);
+      if (v) return '<span style="color:' + SEG[i % SEG.length] + '">' + esc(v) + '</span>';
+      return '<span class="fng-ph">&lt;' + esc(f ? f.name : '?') + '&gt;</span>';
+    });
     var sepc = '<span class="sep">' + esc(tpl.separator || '_') + '</span>';
-    var nameHtml = segs.length ? segs.join(sepc) : '<span class="fng-muted">fill in the fields…</span>';
+    var nameHtml = segs.length ? segs.join(sepc) : '<span class="fng-muted">add fields to this template…</span>';
     var folder = defaultTpl(lab.folderTemplates);
-    var pathHtml = '';
-    if (folder) {
-      var path = buildName(folder, L, ROOT.ui.values, ctx);
-      var base = buildName(tpl, L, ROOT.ui.values, ctx);
-      pathHtml = '<div class="fng-path">' + esc((path ? path + '/' : '') + base) + '</div>';
-    }
+    var pathHtml = folder ? '<div class="fng-path">' + esc(curPath()) + '</div>' : '';
     return '<div class="fng-ex" id="fng-ex"><div class="h">File name</div>'
       + '<div class="fng-namerow"><div class="fng-name">' + nameHtml + '</div>'
       + '<button class="fng-copy" id="fng-copybtn" title="Copy file name" onclick="' + R() + '.copyName()">'
@@ -583,6 +788,13 @@
     }
   };
   ROOT.clearMachineDevice = function () { try { localStorage.removeItem(LS_DEVICE); } catch (e) {} rerender(); };
+  // hierarchical device picker: switch group (tab) / pick a device (chip)
+  ROOT.setDevGroup = function (gid) { ROOT.ui.devGroup = gid; rerender(); };
+  ROOT.pickDevice = function (fid, name) {
+    var cur = ROOT.ui.values[fid] || '';
+    ROOT.ui.values[fid] = (cur === name) ? '' : name;   // click again to deselect
+    ROOT.ui.devGroup = groupOfDevice(name); rerender();
+  };
   ROOT.setVal = function (k, v) { ROOT.ui.values[k] = v; refreshUsePreview(); refreshHeader(); };
   function refreshUsePreview() { var el = document.getElementById('fng-ex'); if (el) el.outerHTML = usePreview(); }
   // refresh only the rendered header — never the notes editor (keeps the cursor)
@@ -612,7 +824,7 @@
       var f = fieldById(L, id);
       if (f && f.source === 'device') {
         var sel = ROOT.ui.values[id] || '';
-        var d = (L.devices || []).filter(function (x) { return x.name === sel; })[0];
+        var d = findDeviceByName(sel);
         if (d && d.info && Object.keys(d.info).length) h.device = { name: d.name, info: d.info };
       }
     });
@@ -712,8 +924,10 @@
   function curPath() {
     var lab = useLab(); if (!lab) return '';
     var tpl = useFileTpl(lab), folder = defaultTpl(lab.folderTemplates);
-    var p = folder ? buildName(folder, ROOT.library, ROOT.ui.values, { now: nowDate(), tplId: tpl ? tpl.id : '', lab: lab }) : '';
-    return (p ? p + '/' : '') + curName();
+    var segs = folder ? buildName(folder, ROOT.library, ROOT.ui.values, { now: nowDate(), tplId: tpl ? tpl.id : '', lab: lab }) : '';
+    var base = (folder && folder.basePath) ? normPath(folder.basePath) : '';
+    var dir = [base, segs].filter(Boolean).join('/');
+    return (dir ? dir + '/' : '') + curName();
   }
   function sidecar() {
     var h = headerObject() || {};
@@ -721,24 +935,44 @@
     return { header: h, notes: htmlToText(ROOT.ui.notesHtml || ''), notesHtml: ROOT.ui.notesHtml || '' };
   }
   function copyText(t) { if (t && navigator.clipboard) navigator.clipboard.writeText(t); }
-  // required-field gate before committing a name
-  function missingRequired() {
+  // Every user-input field (not the auto date/counter/lab, not ELN-filled ones) must be
+  // filled before a name can be copied/exported. Returns the names still empty.
+  function missingInputs() {
     var lab = useLab(); if (!lab) return []; var tpl = useFileTpl(lab); if (!tpl) return [];
-    return inputFields(tpl, ROOT.library).filter(function (f) { return f.required && !String(ROOT.ui.values[f.id] || '').trim(); }).map(function (f) { return f.name; });
+    return inputFields(tpl, ROOT.library)
+      .filter(function (f) { return !elnAutoValueFor(f) && !String(ROOT.ui.values[f.id] || '').trim(); })
+      .map(function (f) { return f.name; });
   }
-  function guard() { var m = missingRequired(); if (m.length) { toast('Please fill required field(s): ' + m.join(', ')); return false; } return true; }
+  // Gate before copy/export: if anything's missing, pop up the list and stop.
+  function guard() {
+    var m = missingInputs();
+    if (m.length) { ROOT.ui.missList = m; ROOT.ui.missOpen = true; rerender(); return false; }
+    return true;
+  }
+  function missModal() {
+    if (!ROOT.ui.missOpen) return '';
+    var list = ROOT.ui.missList || [];
+    return '<div class="fng-modal" onclick="if(event.target===this)' + R() + '.closeMiss()">'
+      + '<div class="fng-modal-card"><div class="fng-modal-h"><h3 style="margin:0">Complete the file name</h3>'
+      + '<button class="fng-modal-x" title="Close" onclick="' + R() + '.closeMiss()">✕</button></div>'
+      + '<p class="fng-muted">Fill in the following field' + (list.length > 1 ? 's' : '') + ' before copying the file name:</p>'
+      + '<ul style="margin:6px 0 0;padding-left:20px;line-height:1.9">'
+      + list.map(function (n) { return '<li><b style="color:#f0604a">' + esc(n) + '</b></li>'; }).join('')
+      + '</ul><div class="fng-acts" style="margin-top:14px"><button class="fng-btn pri" onclick="' + R() + '.closeMiss()">OK</button></div></div></div>';
+  }
+  ROOT.closeMiss = function () { ROOT.ui.missOpen = false; rerender(); };
 
   ROOT.copyName = function () {
     if (!guard()) return;
-    copyText(curName()); pushHistory(curName());
+    copyText(curName()); pushHistory(curName()); saveFieldHistories();
     var b = document.getElementById('fng-copybtn');
     if (b) { var o = b.innerHTML; b.classList.add('ok'); b.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><polyline points="20 6 9 17 4 12"></polyline></svg>'; setTimeout(function () { b.classList.remove('ok'); b.innerHTML = o; }, 1300); }
     toast('File name copied.');
   };
   ROOT.copyPath = function () { if (!guard()) return; copyText(curPath()); toast('Full path copied.'); };
-  ROOT.downloadSidecar = function () { if (!guard()) return; var name = curName(); if (!name) return; pushHistory(name); download(name + '.json', JSON.stringify(sidecar(), null, 2), 'application/json'); };
+  ROOT.downloadSidecar = function () { if (!guard()) return; var name = curName(); if (!name) return; pushHistory(name); saveFieldHistories(); download(name + '.json', JSON.stringify(sidecar(), null, 2), 'application/json'); };
   ROOT.copyMarkdown = function () { copyText(notesMarkdown()); toast('Metadata (Markdown) copied.'); };
-  ROOT.downloadMarkdown = function () { if (!guard()) return; var name = curName(); if (!name) return; pushHistory(name); download(name + '.md', notesMarkdown(), 'text/markdown'); };
+  ROOT.downloadMarkdown = function () { if (!guard()) return; var name = curName(); if (!name) return; pushHistory(name); saveFieldHistories(); download(name + '.md', notesMarkdown(), 'text/markdown'); };
 
   // advance counters for the next file; reset clears what the user typed
   function bumpCounters() {
@@ -757,10 +991,21 @@
   }
   function recentNames() { try { return JSON.parse(localStorage.getItem(LS_HIST) || '[]') || []; } catch (e) { return []; } }
   ROOT.copyRecent = function (i) { var h = recentNames(); copyText(h[i] || ''); toast('Copied.'); };
+  // per-text-field value history (autocomplete), kept on this machine
+  function fieldHistory(id) { try { return JSON.parse(localStorage.getItem('fng.hist.' + id) || '[]') || []; } catch (e) { return []; } }
+  function pushFieldHistory(id, val) {
+    val = String(val == null ? '' : val).trim(); if (!val) return;
+    var h = fieldHistory(id).filter(function (x) { return x !== val; }); h.unshift(val);
+    try { localStorage.setItem('fng.hist.' + id, JSON.stringify(h.slice(0, 15))); } catch (e) {}
+  }
+  function saveFieldHistories() {
+    var lab = useLab(); if (!lab) return; var tpl = useFileTpl(lab); if (!tpl) return;
+    inputFields(tpl, ROOT.library).forEach(function (f) { if (f.source === 'freetext') pushFieldHistory(f.id, ROOT.ui.values[f.id]); });
+  }
   ROOT.recordToSection = function (section, expJournalID) {
     if (!guard()) return;
     var o = sidecar(), h = o.header; if (!h || !h.fileName) return;
-    pushHistory(h.fileName);
+    pushHistory(h.fileName); saveFieldHistories();
     var rows = '<tr><td style="color:#6b7592;padding-right:10px">File name</td><td><strong>' + esc(h.fileName) + '</strong></td></tr>';
     if (h.fullPath) rows += '<tr><td style="color:#6b7592">Full path</td><td>' + esc(h.fullPath) + '</td></tr>';
     rows += '<tr><td style="color:#6b7592">Lab</td><td>' + esc(h.lab) + '</td></tr>'
@@ -831,14 +1076,16 @@
           ? '<button class="fng-btn pri" id="fng-savebtn" onclick="' + R() + '.save()">Save</button>'
           : '<button class="fng-btn saved" id="fng-savebtn" disabled>Saved ✓</button>');
     var saveBar = '<div class="fng-acts">' + saveBtn
-      + (col ? '<button class="fng-btn" disabled title="Resolve duplicates first">Export library JSON</button>'
-             : '<button class="fng-btn" onclick="' + R() + '.exportLib()">Export library JSON</button>')
+      + (col ? '<button class="fng-btn" disabled title="Resolve duplicates first">Publish…</button>'
+             : '<button class="fng-btn" onclick="' + R() + '.publish()">Publish…</button>')
       + '<button class="fng-btn" onclick="' + R() + '.importLib()">Import library JSON</button>'
       + '</div>'
-      + (col ? '<p style="margin-top:6px;color:#f0604a;font-size:12px">⚠ Resolve the duplicate identifiers flagged with <b>!</b> in Manage lists &amp; fields before saving or exporting.</p>'
-             : '<p class="fng-muted" style="margin-top:6px">To publish to the whole lab: <b>Export</b>, then paste the JSON into the add-on\'s <b>Configure → templateLibrary</b> (GROUP scope).</p>');
+      + '<div class="fng-f" style="max-width:640px;margin-top:8px"><span class="fng-l">GitLab file URL — derived automatically from this page&rsquo;s address</span>'
+      + '<input class="fng-in" readonly value="' + esc(publishLink() || 'set window.FNG_PUBLISH_BASE in index.html') + '"></div>'
+      + (col ? '<p style="margin-top:6px;color:#f0604a;font-size:12px">⚠ Resolve the duplicate identifiers flagged with <b>!</b> in Manage lists &amp; fields before saving or publishing.</p>'
+             : '<p class="fng-muted" style="margin-top:6px"><b>Save</b> keeps changes on this machine. <b>Publish…</b> downloads <code>library.json</code>, copies it to the clipboard, and shows the steps to drop it into GitLab — then every machine picks it up within minutes.</p>');
 
-    return head + editor + saveBar + manageLists() + fieldDialog();
+    return head + editor + saveBar + manageLists() + fieldDialog() + publishDialog();
   }
 
   // The simple part: tiles you drag + a live example.
@@ -853,13 +1100,17 @@
       + '<select class="fng-sel" onchange="' + R() + '.setDefault(this.value)"><option value="0">no</option><option value="1"' + (tpl.default ? ' selected' : '') + '>yes</option></select></div>'
       + '</div>';
 
-    // tiles already in the template (ordered, draggable)
+    var baseRow = ROOT.build.kind === 'folder'
+      ? '<div class="fng-f" style="margin:8px 0"><span class="fng-l">Base path (NAS root) — prepended to the folder structure</span>'
+        + '<input class="fng-in" value="' + esc(tpl.basePath || '') + '" placeholder="//nasac-m2.isis.unige.ch/m-GHoltmaat/GHoltmaat/USERS/" oninput="' + R() + '.setBasePath(this.value)"></div>'
+      : '';
+
+    // tiles already in the template (ordered) — live drag-to-reorder
     var tiles = (tpl.fieldIds || []).map(function (id, i) {
       var f = fieldById(L, id); if (!f) return '';
-      return '<span class="fng-tile" draggable="true" id="fng-t-' + i + '" '
+      return '<span class="fng-tile" draggable="true" data-fid="' + esc(f.id) + '" '
         + 'ondblclick="' + R() + '.openField(\'' + f.id + '\')" '
-        + 'ondragstart="' + R() + '.dragStart(event,' + i + ')" ondragend="' + R() + '.dragEnd()" '
-        + 'ondragover="' + R() + '.dragOver(event,' + i + ')" ondrop="' + R() + '.drop(event,' + i + ')" ondragleave="' + R() + '.dragLeave(' + i + ')">'
+        + 'ondragstart="' + R() + '.tileDragStart(event)" ondragend="' + R() + '.tileDragEnd(event)">'
         + dot(i) + esc(f.name)
         + '<button class="rm" title="move left" onclick="' + R() + '.moveTile(' + i + ',-1)">◀</button>'
         + '<button class="rm" title="move right" onclick="' + R() + '.moveTile(' + i + ',1)">▶</button>'
@@ -873,9 +1124,9 @@
       return '<span class="fng-tile" onclick="' + R() + '.addTile(\'' + f.id + '\')">+ ' + esc(f.name) + '</span>';
     }).join('') || '<span class="fng-muted">all fields are in use</span>';
 
-    return nameRow
-      + '<p class="lead">Drag the tiles to set the order. <b>Double-click</b> (or ✎) a tile to edit its format. ✕ removes it; click a field below to add it.</p>'
-      + '<div class="fng-tiles" id="fng-tilebox">' + tiles + '</div>'
+    return nameRow + baseRow
+      + '<p class="lead">Drag the tiles to set the order (they shift as you drag). <b>Double-click</b> (or ✎) a tile to edit its format. ✕ removes it; click a field below to add it.</p>'
+      + '<div class="fng-tiles" id="fng-tilebox" ondragover="' + R() + '.tileDragOver(event)" ondrop="' + R() + '.tileDrop(event)">' + tiles + '</div>'
       + '<h3 style="margin-top:14px">Available fields</h3>'
       + '<div class="fng-tiles fng-avail">' + avail + '</div>'
       + buildExample(lab, tpl);
@@ -896,8 +1147,9 @@
       return v ? '<span style="color:' + SEG[i % SEG.length] + '">' + esc(v) + '</span>' : '';
     }).filter(Boolean);
     var sepc = '<span class="sep">' + esc(tpl.separator || '_') + '</span>';
+    var prefix = (ROOT.build.kind === 'folder' && tpl.basePath) ? '<span class="fng-muted">' + esc(normPath(tpl.basePath)) + '</span><span class="sep">/</span>' : '';
     return '<div class="fng-ex" id="fng-bex"><div class="h">Live example</div><div class="fng-name">'
-      + (segs.join(sepc) || '<span class="fng-muted">add fields to see the result</span>') + '</div></div>';
+      + (segs.length ? prefix + segs.join(sepc) : '<span class="fng-muted">add fields to see the result</span>') + '</div></div>';
   }
   function refreshExample() {
     var lab = buildLab(); if (!lab) return; var tpl = buildTpl(lab); if (!tpl) return;
@@ -933,7 +1185,7 @@
         + '<p class="fng-muted">Next value: <b>' + esc(pad(counterNext(f, cctx), f.pad || 2)) + '</b> · <a class="fng-x2" onclick="' + R() + '.resetCounter(\'' + id + '\')">reset counter</a>. Advances when you click <b>Next run ▸</b> in Use.</p>';
     } else {
       var sample = fieldSample(f), curf = f.format || 'full';
-      var opts = [['full', 'Full (cleaned value)'], ['acronym', 'Initials / acronym'], ['first3', 'First 3 letters'], ['upper', 'UPPERCASE'], ['lower', 'lowercase']];
+      var opts = [['full', 'Full (cleaned value)'], ['acronym', 'Initials / acronym'], ['first3', 'First 3 letters'], ['lastlower', 'Last name (lowercase)'], ['upper', 'UPPERCASE'], ['lower', 'lowercase']];
       if (f.source !== 'operator' && f.source !== 'lab') opts.splice(1, 0, ['initial', 'First initial']);
       rows += '<div class="fng-f"><span class="fng-l">File-name format</span><select class="fng-sel" onchange="' + R() + '.setFieldFormat(\'' + id + '\',this.value)">'
         + opts.map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === curf ? ' selected' : '') + '>' + o[1] + ' — “' + esc(applyFmt(sample, o[0])) + '”</option>'; }).join('') + '</select></div>';
@@ -1073,6 +1325,7 @@
   };
   ROOT.setTplName = function (v) { var t = buildTpl(buildLab()); if (t) t.name = v; dirty(); };
   ROOT.setSep = function (v) { var t = buildTpl(buildLab()); if (t) { t.separator = v || (ROOT.build.kind === 'folder' ? '/' : '_'); refreshExample(); } };
+  ROOT.setBasePath = function (v) { var t = buildTpl(buildLab()); if (t) { t.basePath = v; dirty(); refreshExample(); } };
   ROOT.setDefault = function (v) {
     var lab = buildLab(), t = buildTpl(lab); if (!t) return;
     if (v === '1') buildTpls(lab).forEach(function (x) { x.default = false; });
@@ -1082,16 +1335,38 @@
   ROOT.removeTile = function (i) { var t = buildTpl(buildLab()); if (t) { t.fieldIds.splice(i, 1); rerender(); } };
   ROOT.moveTile = function (i, dir) { var t = buildTpl(buildLab()); if (!t) return; var j = i + dir; if (j < 0 || j >= t.fieldIds.length) return; var m = t.fieldIds.splice(i, 1)[0]; t.fieldIds.splice(j, 0, m); rerender(); };
 
-  ROOT._drag = null;
-  ROOT.dragStart = function (ev, i) { ROOT._drag = i; var el = document.getElementById('fng-t-' + i); if (el) el.classList.add('drag'); try { ev.dataTransfer.effectAllowed = 'move'; } catch (e) {} };
-  ROOT.dragEnd = function () { var el = document.querySelector('.fng-tile.drag'); if (el) el.classList.remove('drag'); };
-  ROOT.dragOver = function (ev, i) { ev.preventDefault(); var el = document.getElementById('fng-t-' + i); if (el) el.classList.add('over'); };
-  ROOT.dragLeave = function (i) { var el = document.getElementById('fng-t-' + i); if (el) el.classList.remove('over'); };
-  ROOT.drop = function (ev, i) {
-    ev.preventDefault(); var from = ROOT._drag; ROOT._drag = null;
-    if (from == null || from === i) { rerender(); return; }
-    var t = buildTpl(buildLab()); if (!t) return;
-    var m = t.fieldIds.splice(from, 1)[0]; t.fieldIds.splice(i, 0, m); rerender();
+  // live drag-to-reorder: the dragged tile follows and siblings shift while held
+  ROOT.tileDragStart = function (ev) {
+    var t = ev.target && ev.target.closest ? ev.target.closest('.fng-tile') : null; if (!t) return;
+    t.classList.add('dragging');
+    try { ev.dataTransfer.effectAllowed = 'move'; ev.dataTransfer.setData('text/plain', t.getAttribute('data-fid') || ''); } catch (e) {}
+  };
+  function tileAfter(box, x, y) {
+    var els = [].slice.call(box.querySelectorAll('.fng-tile:not(.dragging)'));
+    var res = null, closest = -Infinity;
+    els.forEach(function (el) {
+      var r = el.getBoundingClientRect();
+      if (y >= r.top - 6 && y <= r.bottom + 6) {           // same visual row
+        var offset = x - (r.left + r.width / 2);
+        if (offset < 0 && offset > closest) { closest = offset; res = el; }
+      }
+    });
+    return res;   // insert before this element; null → append to end
+  }
+  ROOT.tileDragOver = function (ev) {
+    ev.preventDefault();
+    var box = document.getElementById('fng-tilebox'); if (!box) return;
+    var dragging = box.querySelector('.fng-tile.dragging'); if (!dragging) return;
+    var after = tileAfter(box, ev.clientX, ev.clientY);
+    if (after == null) box.appendChild(dragging); else box.insertBefore(dragging, after);
+  };
+  ROOT.tileDrop = function (ev) { ev.preventDefault(); };
+  ROOT.tileDragEnd = function () {
+    var box = document.getElementById('fng-tilebox'); if (!box) return;
+    var ids = [].slice.call(box.querySelectorAll('.fng-tile')).map(function (el) { return el.getAttribute('data-fid'); }).filter(Boolean);
+    var t = buildTpl(buildLab());
+    if (t && ids.length) t.fieldIds = ids;   // commit the DOM order
+    rerender();
   };
 
   // labs
@@ -1185,12 +1460,56 @@
     dirty();
     toast('Saved locally. Export → paste into Configure to share with the lab.');
   };
-  ROOT.exportLib = function () {
+  // Guided publish: download library.json, copy it, and show the GitLab drop-in steps.
+  ROOT.publish = function () {
     if (hasCollisions()) { toast('Resolve the duplicate identifiers (flagged with !) first.'); return; }
     var pretty = JSON.stringify(ROOT.library, null, 2);
-    download('fileNamer_templates.json', pretty);
-    if (navigator.clipboard) navigator.clipboard.writeText(JSON.stringify(ROOT.library)).then(function () { toast('Downloaded + copied. Paste into Configure → templateLibrary.'); });
+    download('library.json', pretty);
+    if (navigator.clipboard) { try { navigator.clipboard.writeText(pretty); } catch (e) {} }
+    ROOT.ui.publishOpen = true; rerender();
   };
+  ROOT.closePublish = function () { ROOT.ui.publishOpen = false; rerender(); };
+  ROOT.setPublishUrl = function (v) { ROOT.library.publishUrl = (v || '').trim(); dirty(); };
+  // The lab slug the page was opened with — from ?cfg=/<slug>/library.json or ?lib=<slug>.
+  // This is authoritative: it's how this very page was loaded, so it can't be stale.
+  function labSlug() {
+    var u = resolveLibUrl().replace(/^\.?\//, '');   // strip leading ./ or /
+    var m = u.match(/^([^\/?#]+)\/library\.json(?:[?#]|$)/);   // <slug>/library.json
+    if (m && m[1] !== '.') return m[1];
+    m = u.match(/^libs\/([^\/?#]+)\.json(?:[?#]|$)/);          // libs/<slug>.json
+    if (m) return m[1];
+    return '';
+  }
+  // The GitLab "edit this file" link, built from FNG_PUBLISH_BASE (the UNIGE group root,
+  // set once in index.html) + the lab slug → …/filenamer-<slug>/-/edit/main/library.json.
+  // Derived from the slug FIRST so a library.json copied from another lab (carrying a stale
+  // publishUrl) can never misdirect the master. publishUrl is used only as a fallback for
+  // non-slug contexts (eLab / a locally opened file).
+  function publishLink() {
+    var base = (typeof window !== 'undefined' && window.FNG_PUBLISH_BASE) || '';
+    var slug = labSlug();
+    if (base && slug) return base.replace(/\/+$/, '') + '/filenamer-' + slug + '/-/edit/main/library.json';
+    if (ROOT.library.publishUrl) return ROOT.library.publishUrl;
+    return '';
+  }
+  function publishDialog() {
+    if (!ROOT.ui.publishOpen) return '';
+    var url = publishLink();
+    var step1 = url
+      ? '<a class="fng-btn pri" href="' + esc(url) + '" target="_blank" rel="noopener">Open this lab\'s file in GitLab ▸</a>'
+      : '<span class="fng-muted">Set the “GitLab file URL” field (under the buttons) to get a one-click link here.</span>';
+    return '<div class="fng-modal" onclick="if(event.target===this)' + R() + '.closePublish()">'
+      + '<div class="fng-modal-card"><div class="fng-modal-h"><h3 style="margin:0">Publish to the lab</h3>'
+      + '<button class="fng-modal-x" title="Close" onclick="' + R() + '.closePublish()">✕</button></div>'
+      + '<p class="fng-muted">✓ <code>library.json</code> downloaded &nbsp;·&nbsp; ✓ contents copied to your clipboard.</p>'
+      + '<ol style="font-size:13px;line-height:1.8;padding-left:20px;margin:6px 0">'
+      + '<li>' + step1 + '</li>'
+      + '<li>In GitLab, click <b>Edit</b> on <code>library.json</code> (or <b>Upload file → Replace</b> with the downloaded one).</li>'
+      + '<li>If editing: select all (Ctrl/Cmd+A) and <b>paste</b> (Ctrl/Cmd+V) the copied JSON.</li>'
+      + '<li>Enter a short message and <b>Commit to <code>main</code></b>. Machines update within a few minutes.</li>'
+      + '</ol>'
+      + '<div class="fng-acts"><button class="fng-btn pri" onclick="' + R() + '.closePublish()">Done</button></div></div></div>';
+  }
   ROOT.importLib = function () {
     var inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.json,application/json';
     inp.onchange = function () {
@@ -1202,14 +1521,134 @@
   };
 
   /* ==========================================================================
+   * PLATFORM-ADMIN MODE  (?platform=<slug>&admin=1)
+   *   A self-contained screen for ONE platform's manager to edit their own
+   *   device list and publish it to that platform's repo (filenamer-plat-<slug>).
+   *   A manager only ever opens their own slug, so they can edit only their devices.
+   * ======================================================================== */
+  function loadPlatformEdit(slug) {
+    try { var s = localStorage.getItem('fng.platform.' + slug); if (s) return normalizePlatformFile(JSON.parse(s), slug); } catch (e) {}
+    return normalizePlatformFile({}, slug, slug);
+  }
+  function platEditSnapshot() { return JSON.stringify(ROOT.platformEdit || {}); }
+  // Refresh the editor from the hosted file without clobbering unsaved edits.
+  function syncPlatformEdit() {
+    if (typeof fetch !== 'function') return;
+    var slug = ROOT._platformSlug; var u = platformFileUrl(slug); if (!u) return;
+    fetch(u + (u.indexOf('?') >= 0 ? '&' : '?') + 't=' + Date.now(), { cache: 'no-store' })
+      .then(function (r) { return r && r.ok ? r.text() : null; })
+      .then(function (txt) {
+        if (!txt) return; var o; try { o = JSON.parse(txt); } catch (e) { return; }
+        var pf = normalizePlatformFile(o, slug), fresh = JSON.stringify(pf);
+        if (fresh === platEditSnapshot()) return;
+        try { localStorage.setItem('fng.platform.' + slug, fresh); } catch (e) {}
+        if (ROOT._platSnapshot && ROOT._platSnapshot !== platEditSnapshot()) {
+          toast('A newer version of this platform is available — reload to edit it.'); return;
+        }
+        ROOT.platformEdit = pf; ROOT._platSnapshot = fresh; rerender();
+      })
+      .catch(function () {});
+  }
+  function platformPublishLink() {
+    var base = (typeof window !== 'undefined' && window.FNG_PUBLISH_BASE) || '';
+    if (!base) return 'set window.FNG_PUBLISH_BASE in index.html';
+    return base.replace(/\/+$/, '') + '/filenamer-plat-' + (ROOT._platformSlug || '') + '/-/edit/main/platform.json';
+  }
+  function renderPlatformAdmin() {
+    if (!ROOT._isMaster) {
+      return '<h3 style="margin-top:0">Platform devices</h3>'
+        + '<p class="fng-muted">This page edits one platform\'s device list. Open it with '
+        + '<code>?platform=&lt;slug&gt;&amp;admin=1</code> to manage it.</p>';
+    }
+    var p = ROOT.platformEdit || normalizePlatformFile({}, ROOT._platformSlug, ROOT._platformSlug);
+    var dup = countMap((p.devices || []).map(function (d) { return d.name; }));
+    var devs = (p.devices || []).map(function (d, di) {
+      var infoText = Object.keys(d.info || {}).map(function (k) { return k + ': ' + d.info[k]; }).join('\n');
+      var dDup = d.name && dup[d.name] > 1;
+      return '<div class="fng-card" style="margin-top:8px">'
+        + '<div class="fng-row" style="align-items:flex-end"><div class="fng-f" style="flex:1"><span class="fng-l">Device name (used in the file name)' + (dDup ? ' <span class="fng-bang" title="Another device in this platform has this name — make it unique">!</span>' : '') + '</span>'
+        + '<input class="fng-in' + (dDup ? ' fng-dupin' : '') + '" value="' + esc(d.name) + '" onchange="' + R() + '.setPDeviceName(' + di + ',this.value)"></div>'
+        + '<button class="fng-btn sm" onclick="' + R() + '.delPDevice(' + di + ')">Remove</button></div>'
+        + '<div class="fng-f" style="margin-top:6px"><span class="fng-l">Generic info — one "Key: value" per line (added to metadata)</span>'
+        + '<textarea class="fng-ta" style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px" placeholder="Software: Aurora" oninput="' + R() + '.setPDeviceInfo(' + di + ',this.value)">' + esc(infoText) + '</textarea></div></div>';
+    }).join('') || '<span class="fng-muted">no devices yet</span>';
+
+    var isDirtyP = ROOT._platSnapshot !== platEditSnapshot();
+    var saveBtn = isDirtyP
+      ? '<button class="fng-btn pri" id="fng-psave" onclick="' + R() + '.savePlatform()">Save</button>'
+      : '<button class="fng-btn saved" id="fng-psave" disabled>Saved ✓</button>';
+    return '<div class="fng-tabs"><button class="fng-tab on">Platform devices</button></div>'
+      + '<h3 style="margin-top:0">Platform devices · <code>' + esc(ROOT._platformSlug || '') + '</code></h3>'
+      + '<p class="fng-muted">These devices appear as the <b>' + esc(p.name) + '</b> tab in <b>every</b> lab\'s device picker. You edit only this platform.</p>'
+      + '<div class="fng-f" style="max-width:480px"><span class="fng-l">Platform name (the tab label)</span>'
+      + '<input class="fng-in" value="' + esc(p.name) + '" onchange="' + R() + '.setPlatformEditName(this.value)"></div>'
+      + devs
+      + '<div class="fng-row" style="margin-top:12px"><input class="fng-in" id="fng-newpdev" placeholder="Device name e.g. Aurora-Flow"><button class="fng-btn sm" onclick="' + R() + '.addPDevice()">+ Add device</button></div>'
+      + '<div class="fng-acts" style="margin-top:14px">' + saveBtn
+      + '<button class="fng-btn" onclick="' + R() + '.publishPlatform()">Publish…</button></div>'
+      + '<div class="fng-f" style="max-width:640px;margin-top:8px"><span class="fng-l">GitLab file URL</span>'
+      + '<input class="fng-in" readonly value="' + esc(platformPublishLink()) + '"></div>'
+      + '<p class="fng-muted" style="margin-top:6px"><b>Save</b> keeps changes on this machine. <b>Publish…</b> downloads <code>platform.json</code>, copies it, and shows the GitLab steps.</p>';
+  }
+  ROOT.setPlatformEditName = function (v) { if (ROOT.platformEdit) { ROOT.platformEdit.name = v; rerender(); } };
+  ROOT.addPDevice = function () {
+    var el = document.getElementById('fng-newpdev'); var v = el ? el.value.trim() : '';
+    if (v && ROOT.platformEdit) { ROOT.platformEdit.devices.push({ id: uid('dev'), name: v, info: {} }); rerender(); }
+  };
+  ROOT.delPDevice = function (di) { if (ROOT.platformEdit) { ROOT.platformEdit.devices.splice(di, 1); rerender(); } };
+  ROOT.setPDeviceName = function (di, v) { var d = ROOT.platformEdit && ROOT.platformEdit.devices[di]; if (d) { d.name = v; rerender(); } };
+  ROOT.setPDeviceInfo = function (di, text) {   // no rerender — keep the textarea cursor
+    var d = ROOT.platformEdit && ROOT.platformEdit.devices[di]; if (!d) return;
+    var info = {};
+    (text || '').split(/\n/).forEach(function (line) { var idx = line.indexOf(':'); if (idx > 0) { var k = line.slice(0, idx).trim(); if (k) info[k] = line.slice(idx + 1).trim(); } });
+    d.info = info; dirtyP();
+  };
+  function dirtyP() {   // live-reflect unsaved state on the platform Save button (no full rerender)
+    var b = document.getElementById('fng-psave'); if (!b) return;
+    if (ROOT._platSnapshot !== platEditSnapshot()) { b.disabled = false; b.textContent = 'Save'; b.classList.add('pri'); b.classList.remove('saved'); }
+    else { b.disabled = true; b.textContent = 'Saved ✓'; b.classList.remove('pri'); b.classList.add('saved'); }
+  }
+  ROOT.savePlatform = function () {
+    try { localStorage.setItem('fng.platform.' + ROOT._platformSlug, platEditSnapshot()); } catch (e) {}
+    ROOT._platSnapshot = platEditSnapshot(); rerender();
+    toast('Saved on this machine. Publish to share with all labs.');
+  };
+  ROOT.publishPlatform = function () {
+    var p = ROOT.platformEdit || {};
+    var pretty = JSON.stringify({ version: 1, name: p.name, devices: p.devices || [] }, null, 2);
+    download('platform.json', pretty);
+    if (navigator.clipboard) { try { navigator.clipboard.writeText(pretty); } catch (e) {} }
+    try { localStorage.setItem('fng.platform.' + ROOT._platformSlug, platEditSnapshot()); } catch (e) {}
+    ROOT._platSnapshot = platEditSnapshot();
+    ROOT.ui.platPublishOpen = true; rerender();
+  };
+  ROOT.closePlatPublish = function () { ROOT.ui.platPublishOpen = false; rerender(); };
+  function platformsPublishDialog() {
+    if (!ROOT.ui.platPublishOpen) return '';
+    var url = platformPublishLink();
+    return '<div class="fng-modal" onclick="if(event.target===this)' + R() + '.closePlatPublish()">'
+      + '<div class="fng-modal-card"><div class="fng-modal-h"><h3 style="margin:0">Publish platform devices</h3>'
+      + '<button class="fng-modal-x" title="Close" onclick="' + R() + '.closePlatPublish()">✕</button></div>'
+      + '<p class="fng-muted">✓ <code>platform.json</code> downloaded &nbsp;·&nbsp; ✓ contents copied to your clipboard.</p>'
+      + '<ol style="font-size:13px;line-height:1.8;padding-left:20px;margin:6px 0">'
+      + '<li><a class="fng-btn pri" href="' + esc(url) + '" target="_blank" rel="noopener">Open platform.json in GitLab ▸</a></li>'
+      + '<li>Click <b>Edit</b> (or <b>Upload file → Replace</b>), select all and paste the copied JSON.</li>'
+      + '<li>Enter a message and <b>Commit to <code>main</code></b>. All labs pick it up within minutes.</li>'
+      + '</ol><div class="fng-acts"><button class="fng-btn pri" onclick="' + R() + '.closePlatPublish()">Done</button></div></div></div>';
+  }
+
+  /* ==========================================================================
    * SHELL
    * ======================================================================== */
   function shell() {
+    if (ROOT._platformMode) return '<div class="fng">' + css() + renderPlatformAdmin() + platformsPublishDialog() + '</div>';
     var master = ROOT._isMaster !== false;
-    var tabs = '<div class="fng-tabs">'
+    // Only show the tab bar for masters (Use + Manage). A plain user has just one
+    // screen, so there's no point showing a lone "Use" tab.
+    var tabs = master ? '<div class="fng-tabs">'
       + '<button class="fng-tab' + (ROOT.ui.mode === 'use' ? ' on' : '') + '" onclick="' + R() + '.go(\'use\')">Use</button>'
-      + (master ? '<button class="fng-tab' + (ROOT.ui.mode === 'manage' ? ' on' : '') + '" onclick="' + R() + '.go(\'manage\')">Manage</button>' : '')
-      + '</div>';
+      + '<button class="fng-tab' + (ROOT.ui.mode === 'manage' ? ' on' : '') + '" onclick="' + R() + '.go(\'manage\')">Manage</button>'
+      + '</div>' : '';
     var body = (ROOT.ui.mode === 'manage' && master) ? renderManage() : renderUse();
     return '<div class="fng">' + css() + tabs + body + '</div>';
   }
@@ -1293,6 +1732,8 @@
     if (ROOT._registered) return; ROOT._registered = true;
     var cfg = configuration || ROOT.configurationValues || {};
     ROOT.library = loadLibrary(cfg);
+    ROOT.platforms = loadPlatformsCache();   // shared platform devices (cached; refreshed below)
+    try { syncSharedPlatforms(); } catch (e) {}
     ROOT._savedSnapshot = snapshot();   // start in a clean (greyed Save) state
     // Only a master user manages templates. Default true; tighten via the
     // `allowMemberEditing` config flag or eLabSDK2.System.Group permissions.
@@ -1320,9 +1761,48 @@
     function fngBoot() {
       var host = document.getElementById('fng-host');
       if (host && !(window.eLabSDK && eLabSDK.Experiment)) {
-        ROOT._host = host; ROOT.library = loadLibrary({}); ROOT._isMaster = true;
-        ROOT._savedSnapshot = snapshot();
-        host.innerHTML = shell();
+        ROOT._host = host;
+        // master = ?admin=1 in the URL ONLY; everyone else sees only "Use".
+        // Strictly URL-driven (no localStorage opt-in) so the two distributed links are
+        // deterministic: the admin URL manages, the plain URL never does — regardless of
+        // what this browser opened before. Clear any stale flag from older versions.
+        var pmatch = location.search.match(/[?&]platform=([^&]+)/);     // per-platform editor
+        ROOT._platformMode = !!pmatch;
+        ROOT._platformSlug = pmatch ? decodeURIComponent(pmatch[1]) : '';
+        // master = ?admin=1 in the URL, OR the dedicated platform page (which implies edit mode).
+        var admin = /[?&]admin=1/.test(location.search)
+          || (ROOT._platformMode && typeof window !== 'undefined' && window.FNG_PLATFORM_ADMIN === true);
+        try { localStorage.removeItem('fng.admin'); } catch (e) {}
+        ROOT._isMaster = admin;
+        ROOT.platforms = loadPlatformsCache();                          // shared devices (instant, cached)
+        function fngRender() {                           // instant: cached copy or bundled default
+          if (ROOT._platformMode) {
+            ROOT.platformEdit = loadPlatformEdit(ROOT._platformSlug);
+            ROOT._platSnapshot = platEditSnapshot();
+            host.innerHTML = shell(); return;
+          }
+          ROOT.library = loadLibrary({});
+          ROOT._savedSnapshot = snapshot();
+          host.innerHTML = shell();
+        }
+        try {
+          fngRender();
+        } catch (e1) {
+          // A corrupted local cache (or an unexpected library shape) can throw during render.
+          // Never leave a blank page: drop this lab's cache and rebuild from the bundled
+          // default; if that still fails, show the error instead of nothing.
+          try { localStorage.removeItem(libCacheKey()); } catch (e) {}
+          try {
+            fngRender();
+          } catch (e2) {
+            host.innerHTML = '<div style="padding:16px;font-family:system-ui;line-height:1.5;color:#f0604a">'
+              + '<b>FAIR File Namer failed to start.</b><br>' + esc((e2 && e2.message) || 'Unknown error')
+              + '<br><span style="color:#9fb0cf">Reload the page. If it persists, the shared '
+              + '<code>library.json</code> may be invalid — check the latest commit.</span></div>';
+          }
+        }
+        if (ROOT._platformMode) { syncPlatformEdit(); }   // refresh just this platform's file
+        else { syncSharedLibrary(); syncSharedPlatforms(); }   // lab templates + merged platform devices
       }
     }
     // run now if the DOM is already parsed (e.g. cache-busted async load), else wait
@@ -1333,7 +1813,10 @@
   /* --- headless test exports ---------------------------------------------- */
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = { sanitizeVal: sanitizeVal, fmtDate: fmtDate, encodeField: encodeField,
-      buildName: buildName, inputFields: inputFields, defaultLibrary: defaultLibrary, normalize: normalize };
+      buildName: buildName, inputFields: inputFields, defaultLibrary: defaultLibrary, normalize: normalize,
+      normalizeIndex: normalizeIndex, normalizePlatformFile: normalizePlatformFile,
+      deviceGroups: deviceGroups, findDeviceByName: findDeviceByName, groupOfDevice: groupOfDevice,
+      _setState: function (s) { s = s || {}; if (s.library) ROOT.library = s.library; if (s.platforms) ROOT.platforms = s.platforms; } };
   }
 
 })();

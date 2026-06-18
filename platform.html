@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>FAIR File Namer — standalone</title>
+<title>FAIR File Namer — platform devices</title>
 <style>
   :root { --bg:#0d0f12; }
   * { box-sizing:border-box; }
@@ -18,9 +18,9 @@
     border-bottom:1px solid #252b3b; padding-bottom:10px; margin-bottom:16px;
   }
   .logo {
-    width:26px; height:26px; border:1.5px solid #4af0a0; border-radius:5px;
+    width:26px; height:26px; border:1.5px solid #7eb8f7; border-radius:5px;
     display:flex; align-items:center; justify-content:center;
-    font-family:monospace; font-size:13px; font-weight:600; color:#4af0a0;
+    font-family:monospace; font-size:13px; font-weight:600; color:#7eb8f7;
   }
   header h1 { font-family:monospace; font-size:14px; font-weight:500; color:#e8edf5; letter-spacing:.04em; margin:0; }
   header p  { font-size:9px; color:#6b7592; letter-spacing:.07em; text-transform:uppercase; margin:2px 0 0; }
@@ -32,35 +32,29 @@
 </head>
 <body>
   <header>
-    <div class="logo">Ψ</div>
+    <div class="logo">⚙</div>
     <div>
-      <h1>FAIR File Namer</h1>
-      <p>Lab-authored naming conventions · standalone preview</p>
+      <h1>FAIR File Namer · Platform devices</h1>
+      <p>Shared instrument manager · standalone</p>
     </div>
     <div class="vtag">v3.0</div>
   </header>
 
-  <!-- The add-on renders its full UI (Use + Manage templates) into this host
-       whenever no eLabSDK is present, i.e. when this file is opened directly. -->
+  <!-- The add-on renders ONLY the platform-device editor here, because this page
+       is opened with ?platform=<slug> and signals edit mode below. -->
   <div id="fng-host"></div>
 
   <div class="note">
-    On load this page reads the shared <code>library.json</code> next to it (operators, devices,
-    labs, templates) and caches it, so it opens instantly and works offline; the master's changes
-    are picked up on the next launch. Per-machine settings (default device, font/size, counters,
-    recent names) stay in this browser only. Open with <code>?admin=1</code> to manage and
-    <b>Publish</b> a new <code>library.json</code>.
+    This page manages one platform's acquisition devices. Open it as
+    <code>platform.html?platform=&lt;slug&gt;</code> (e.g. <code>?platform=bioimaging</code>). Edits stay on this
+    machine until you <b>Publish</b> a new <code>platform.json</code> into that platform's GitLab repo; every lab
+    then sees the devices on next launch. If no <code>?platform=…</code> is given, nothing loads.
   </div>
 
-  <!-- Fallback only. The exact "edit this lab's library" link comes from each lab's
-       library.json ("publishUrl"). This base is used only if a library has no publishUrl;
-       it points at the UNIGE governance group that holds every lab's repo. -->
+  <!-- SET ONCE: the UNIGE governance group root (used to build the Publish link). -->
   <script>window.FNG_PUBLISH_BASE = "https://gitlab.unige.ch/facmed-filenamer/";</script>
-
-  <!-- Shared platform devices (faculty-wide). By default the app reads the platform list from
-       /platforms/index.json and each platform from /plat-<slug>/platform.json on this same Pages
-       host — no setting needed. Override the hosts only if you serve them elsewhere. -->
-  <!-- <script>window.FNG_PLATFORMS_INDEX = "https://facmed-filenamer.gitlab.io/platforms/index.json";</script> -->
+  <!-- This dedicated page implies edit mode, so platform managers don't need &admin=1. -->
+  <script>window.FNG_PLATFORM_ADMIN = true;</script>
 
   <!-- Load the add-on with a cache-buster so reopening always gets the latest code. -->
   <script>document.write('<scr' + 'ipt src="./fair_file_namer_addon.js?t=' + Date.now() + '"><\/scr' + 'ipt>');</script>

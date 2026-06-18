@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "name": "Bioimaging Platform",
+  "devices": [
+    { "id": "img-sp8", "name": "SP8-Confocal", "info": { "Microscope": "Leica SP8", "Software": "LAS X", "Version": "3.7" } },
+    { "id": "img-z1", "name": "LightSheet-Z1", "info": { "Microscope": "Zeiss Lightsheet Z.1", "Software": "ZEN", "Version": "3.5" } }
+  ]
+}
