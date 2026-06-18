@@ -34,6 +34,8 @@
   };
   var LS_KEY = 'fng.library.v3';
   var LS_DEVICE = 'fng.machine.defaultDevice';   // per-machine (per-browser) default device
+  var LS_DEPT = 'fng.machine.lastDept';          // per-machine last-selected department
+  var LS_OPER = 'fng.machine.lastOperator';      // per-machine last-selected operator
   var LS_DOCFONT = 'fng.doc.font';               // per-machine metadata display font
   var LS_DOCSIZE = 'fng.doc.size';               // per-machine metadata display size
   var LS_HIST = 'fng.recentNames';               // per-machine recent file names
@@ -425,6 +427,7 @@
       + '.fng-devopt.on{border-color:var(--ac);color:var(--ac);background:rgba(74,240,160,.12);}'
       + '.fng-devbtn{width:100%;text-align:left;padding:7px 9px;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
       + '.fng-ph{color:#5b647d;font-style:italic;}'
+      + '.fng-doccopy{position:absolute;top:8px;right:8px;z-index:2;}'
       + '.fng-devpickgrid{display:flex;gap:10px;flex-wrap:wrap;}'
       + '.fng-pickcard{flex:1 1 200px;display:flex;flex-direction:column;gap:4px;align-items:flex-start;background:var(--pn);border:1px solid var(--bd);border-radius:8px;color:#eaf0fa;font-size:14px;padding:14px;cursor:pointer;text-align:left;}'
       + '.fng-pickcard:hover{border-color:var(--ac);}'
@@ -525,6 +528,8 @@
   ROOT.elnAutofill = {};
 
   function machineDevice() { try { return localStorage.getItem(LS_DEVICE) || ''; } catch (e) { return ''; } }
+  function machineDept() { try { return localStorage.getItem(LS_DEPT) || ''; } catch (e) { return ''; } }
+  function machineOperator() { try { return localStorage.getItem(LS_OPER) || ''; } catch (e) { return ''; } }
 
   // The value the ELN context provides for a field (null = user fills it manually).
   function elnAutoValueFor(f) {
@@ -540,12 +545,17 @@
   function applyDefaults(lab, tpl) {
     inputFields(tpl, ROOT.library).forEach(function (f) {
       if (ROOT.ui.values[f.id] !== undefined) return;
+      var av = elnAutoValueFor(f);
+      if (av) { ROOT.ui.values[f.id] = av; return; }   // ELN context wins when present
       if (f.source === 'device') {
         var md = machineDevice();
         if (md && findDeviceByName(md)) { ROOT.ui.values[f.id] = md; if (ROOT.ui.devGroup == null) ROOT.ui.devGroup = groupOfDevice(md); }
-      } else {
-        var av = elnAutoValueFor(f);
-        if (av) ROOT.ui.values[f.id] = av;
+      } else if (f.source === 'department') {
+        var dd = machineDept();
+        if (dd && DEPARTMENTS.some(function (x) { return x.code === dd; })) ROOT.ui.values[f.id] = dd;
+      } else if (f.source === 'operator') {
+        var oo = machineOperator();
+        if (oo && (ROOT.library.operators || []).some(function (op) { return opName(op) === oo; })) ROOT.ui.values[f.id] = oo;
       }
     });
   }
@@ -795,7 +805,15 @@
     ROOT.ui.values[fid] = (cur === name) ? '' : name;   // click again to deselect
     ROOT.ui.devGroup = groupOfDevice(name); rerender();
   };
-  ROOT.setVal = function (k, v) { ROOT.ui.values[k] = v; refreshUsePreview(); refreshHeader(); };
+  ROOT.setVal = function (k, v) {
+    ROOT.ui.values[k] = v;
+    // remember the last department / operator chosen on this machine (only non-empty)
+    if (v) { var f = fieldById(ROOT.library, k); try {
+      if (f && f.source === 'department') localStorage.setItem(LS_DEPT, v);
+      else if (f && f.source === 'operator') localStorage.setItem(LS_OPER, v);
+    } catch (e) {} }
+    refreshUsePreview(); refreshHeader();
+  };
   function refreshUsePreview() { var el = document.getElementById('fng-ex'); if (el) el.outerHTML = usePreview(); }
   // refresh only the rendered header — never the notes editor (keeps the cursor)
   function refreshHeader() { var el = document.getElementById('fng-md-header'); if (el) el.innerHTML = headerHtml(); }
@@ -882,12 +900,16 @@
       + tbtn('bold', '<b>B</b>', 'Bold') + tbtn('italic', '<i>I</i>', 'Italic') + tbtn('underline', '<u>U</u>', 'Underline')
       + tbtn('insertUnorderedList', '&bull; List', 'Bulleted list') + '</div>';
     var fam = FONTS[ROOT.ui.docFont] || FONTS.sans, sz = SIZES[ROOT.ui.docSize] || SIZES.m;
-    var doc = '<div class="fng-doc" id="fng-doc" style="font-family:' + fam + ';font-size:' + sz + '">'
+    var copyBtn = '<button class="fng-copy fng-doccopy" id="fng-md-copybtn" title="Copy metadata &amp; notes" onclick="' + R() + '.copyDoc()">'
+      + '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path></svg></button>';
+    var doc = '<div class="fng-doc" id="fng-doc" style="position:relative;font-family:' + fam + ';font-size:' + sz + '">'
+      + copyBtn
       + '<div id="fng-md-header">' + headerHtml() + '</div>'
       + '<hr class="fng-doc-hr">'
       + '<div class="fng-notes-edit" id="fng-md-notes" contenteditable="true" data-ph="Type your notes here…" '
       + 'oninput="' + R() + '.onNotesHtml(this.innerHTML)">' + (ROOT.ui.notesHtml || '') + '</div></div>';
-    return toolbar + doc;
+    var note = '<p class="lead" style="margin:8px 0 0">Recommended: use the copy button (top-right) to copy this block, then paste it into your ELN entry (e.g. eLabNext) so the file name, parameters and notes stay with the experiment.</p>';
+    return toolbar + doc + note;
   }
 
   ROOT.onNotesHtml = function (html) { ROOT.ui.notesHtml = html; };
@@ -972,6 +994,13 @@
   ROOT.copyPath = function () { if (!guard()) return; copyText(curPath()); toast('Full path copied.'); };
   ROOT.downloadSidecar = function () { if (!guard()) return; var name = curName(); if (!name) return; pushHistory(name); saveFieldHistories(); download(name + '.json', JSON.stringify(sidecar(), null, 2), 'application/json'); };
   ROOT.copyMarkdown = function () { copyText(notesMarkdown()); toast('Metadata (Markdown) copied.'); };
+  // copy the whole metadata + notes block (the icon at the doc's top-right), with a flash
+  ROOT.copyDoc = function () {
+    copyText(notesMarkdown());
+    var b = document.getElementById('fng-md-copybtn');
+    if (b) { var o = b.innerHTML; b.classList.add('ok'); b.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><polyline points="20 6 9 17 4 12"></polyline></svg>'; setTimeout(function () { b.classList.remove('ok'); b.innerHTML = o; }, 1300); }
+    toast('Metadata & notes copied.');
+  };
   ROOT.downloadMarkdown = function () { if (!guard()) return; var name = curName(); if (!name) return; pushHistory(name); saveFieldHistories(); download(name + '.md', notesMarkdown(), 'text/markdown'); };
 
   // advance counters for the next file; reset clears what the user typed
