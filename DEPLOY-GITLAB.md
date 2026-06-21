@@ -6,16 +6,18 @@ Base = your gitlab.com **group** Pages host (example below uses a group called `
 
 | Who | URL |
 |-----|-----|
-| **User — Holtmaat** | `https://facmed-filenamer.gitlab.io/app/?cfg=/holtmaat/library.json` |
-| **Master — Holtmaat** | `https://facmed-filenamer.gitlab.io/app/?cfg=/holtmaat/library.json&admin=1` |
+| **Everyone — Holtmaat** (one shared link) | `https://facmed-filenamer.gitlab.io/app/?cfg=/holtmaat/library.json` |
 | **Other labs** | replace `holtmaat` with that lab's slug; add a row per lab |
 | **Platform manager (e.g. bioimaging)** | `https://facmed-filenamer.gitlab.io/app/platform.html?platform=bioimaging` |
 
-> First query parameter uses `?`, extra ones use `&` → `…/app/?cfg=…&admin=1`.
+> **One link per lab.** Every lab member opens the same URL and can edit the library (operators, devices,
+> templates). Saving/editing is local; **committing to GitLab is a master action** (gated by GitLab repo
+> access, not by the app). A non‑master who makes changes uses **Publish…** to download `library.json` and
+> sends it to a master with a note; the master commits it. There is no longer an `&admin=1` link.
 >
-> **Shared platform devices** (microscopy/genomics platforms etc.) appear as extra tabs in **every**
-> lab's device picker. **Each platform has its own repo** so its manager edits only their own devices —
-> they open the dedicated **`platform.html?platform=<slug>`** page (a device‑only editor, no lab UI).
+> **Shared platform devices** (microscopy/genomics platforms etc.) appear as extra folders in **every**
+> lab's *Manage devices* window. **Each platform has its own repo** so its manager edits only their own
+> devices — they open the dedicated **`platform.html?platform=<slug>`** page (a device‑only editor, no lab UI).
 > See **Part 2B**.
 
 ---
@@ -196,10 +198,10 @@ Everything is on **gitlab.unige.ch** plus two tiny **gitlab.com** clicks. Exampl
 4. **(go to gitlab.com → `lemaire`)** Now that the push created `main` and the first Pages build ran:
    **Settings → Repository → Protected branches** → `main` → **Allowed to force push = On** (or Unprotect);
    and **Deploy → Pages → turn off Use unique domain**.
-5. **(go to gitlab.unige.ch)** **Manage → Members** → add the Lemaire masters as **Maintainer**.
-6. **(no GitLab)** Give them their links and add a row to the table at the top of this file:
-   - User: `https://facmed-filenamer.gitlab.io/app/?cfg=/lemaire/library.json`
-   - Master: `…&admin=1`
+5. **(go to gitlab.unige.ch)** **Manage → Members** → add the Lemaire **masters** as **Maintainer** (only they
+   commit; regular members don't need GitLab accounts).
+6. **(no GitLab)** Give the lab **one link** and add a row to the table at the top of this file:
+   - `https://facmed-filenamer.gitlab.io/app/?cfg=/lemaire/library.json`
 
 That's it — the lab is isolated to its own repo, the app is untouched.
 
@@ -271,13 +273,15 @@ you prefer.)*
 
 ## Part 3 — Day‑to‑day
 
-- **User:** opens the bookmarked URL; loads instantly from cache, works offline, gets changes on next launch. No account.
-- **Master:**
-  1. Opens the `&admin=1` URL → edits in the **Manage** UI.
-  2. **Publish…** → downloads `library.json`, copies it, shows a dialog with a one‑click **Open this lab's file
-     in GitLab** link (derived automatically from the lab slug in the page URL).
-  3. In GitLab: **Edit** → select‑all + **paste** (or **Upload → Replace**) → **Commit to `main`**.
-  4. Push mirror → gitlab.com → Pages rebuild → rigs update within minutes. The master never sees the app code.
+- **Any member:** opens the one bookmarked URL; loads instantly from cache, works offline, generates names, and
+  can edit the library (operators, devices, templates) in **Manage**. No account needed to use or edit.
+- **Editing → committing (one shared link, two roles by GitLab access):**
+  1. Anyone edits in **Manage** (or in the **Manage devices** window), then clicks **Publish…** → it downloads
+     `library.json` and copies it to the clipboard.
+  2. **Not a master?** Send that `library.json` to a lab master with a note of what changed.
+  3. **A master** (a Maintainer of the lab's GitLab repo) uses the dialog's one‑click **Open this lab's file in
+     GitLab** link → **Edit** (or **Upload → Replace**) → paste → **Commit to `main`**.
+  4. Push mirror → gitlab.com → Pages rebuild → every machine updates within minutes.
 - **Platform manager:** opens `…/app/platform.html?platform=<slug>` (a device‑only page) → edits devices →
   **Publish…** → commits `platform.json` to their own `filenamer-plat-<slug>` repo. Their devices then appear
   as that platform's tab in every lab's picker. They never see another platform, any lab's library, or the code.
@@ -300,9 +304,9 @@ Each row is a real symptom encountered during setup, with the cause and the exac
 | **A Pages URL 404s or redirects to a GitLab sign‑in page** | The Pages (or project/group) are **Private** | Group `facmed-filenamer` = **Public**; each project Settings → General → **Project visibility = Public** and **Pages = Everyone**. Set the group first, then projects. |
 | **`/app/` page is blank; `/app/fair_file_namer_addon.js` is empty — but the pipeline is green** | The **wrong content** is in the `filenamer-app` repo (e.g. a copy of a `library.json` instead of the code), so the build published the wrong files | The two repos hold different things: **`filenamer-app` = code** (`index.html` + `fair_file_namer_addon.js` + the **app** `.gitlab-ci.yml`, **no** `library.json`); **`filenamer-<lab>` = data** (`library.json` + the **lab** `.gitlab-ci.yml`, **no** code). Fix the repo's files, commit, **↻ Update now**. |
 | **Edited the UNIGE repo but gitlab.com never changed** | A push mirror only syncs on a **new commit** or a **manual trigger** | After committing on gitlab.unige.ch, click **↻ Update now** on Settings → Repository → Mirroring. If the row shows red, hover it — usually the force‑push issue above. |
-| **`https://…/app/` URL shows the JSON / `&admin=1` had no effect** | First query parameter must use `?`, not `&` | Correct form: `…/app/?cfg=/holtmaat/library.json&admin=1` — `?` first, `&` for each extra. |
+| **A multi‑parameter URL doesn't work** (e.g. `…/app/?cfg=…&platform=…`) | First query parameter must use `?`, the rest `&` | `?` first, `&` for each extra — e.g. `…/app/platform.html?platform=imaging`. The lab URL is just `…/app/?cfg=/<lab>/library.json` (no `&admin=1` anymore). |
 | **`https://facmed-filenamer.gitlab.io/<lab>` (bare) is broken** | Lab repos are **data‑only** (no `index.html`), so the project root has no page — GitLab still auto‑generates that link | Expected, ignore it. Distribute `…/app/?cfg=/<lab>/library.json`. (Confirm data is live at `…/<lab>/library.json`.) |
-| **Manage tab appears even on the plain user URL** | Older app builds stored a sticky `fng.admin=1` in the browser once `&admin=1` was ever opened | Fixed in the app: Manage is now **URL‑only** (`&admin=1` = master, no param = user) and clears the old flag. Redeploy the latest `fair_file_namer_addon.js`; verify on a **fresh/incognito** browser. |
+| **"Everyone can edit — is that safe?"** | By design: the lab URL shows **Manage** to all members (no `&admin=1`). | Editing is local only; nothing reaches the rigs until a **master commits** to GitLab (gated by repo membership). Non‑masters **Publish → send the file to a master**. So edits are safe to make; only a master can publish them. |
 | **`/app/…js` 404s and a pipeline named "Edit library.json" ran on the `app` project** | A lab repo had a **second, stray push mirror** pointing at `…/app.git`, so its `library.json` edits force‑overwrote the `app` project (deleting the code from the deploy) | A `library.json` edit must only ever build the matching **lab** project, never `app`. On the offending lab repo → Settings → Repository → Mirroring, **delete the row pointing to `…/app.git`** (keep only `…/<lab>.git`). Then **↻ Update now** on `filenamer-app` to restore the code. **Each UNIGE repo must have exactly ONE mirror, to its same‑named gitlab.com target.** |
 
 ---

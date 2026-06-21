@@ -47,11 +47,11 @@
 
   /* ----- FIXED department list (edit here once for your faculty). ---------- */
   var DEPARTMENTS = [
-    { code: 'NEUFO', label: 'Neurosciences Fondamentales' },
-    { code: 'PATIM', label: 'Pathology & Imaging' },
-    { code: 'MIMOL', label: 'Molecular Imaging' },
-    { code: 'PHYM',  label: 'Physiologie cellulaire et métabolisme' },
-    { code: 'GEDEV', label: 'Médecine génétique et développement' }
+    { code: 'NEUFO', label: 'Basic Neurosciences' },
+    { code: 'PATIM', label: 'Pathology & Immunology' },
+    { code: 'MIMOL', label: 'Microbiology and Molecular Medicine' },
+    { code: 'PHYM',  label: 'Cell Physiology & Metabolism' },
+    { code: 'GEDEV', label: 'Genetic Medicine and Development' }
   ];
 
   var SEG = ['#7eb8f7', '#b57bff', '#f7c948', '#f09860', '#4af0a0', '#f07080', '#72d0e8', '#c8a0ff'];
@@ -428,6 +428,23 @@
       + '.fng-devbtn{width:100%;text-align:left;padding:7px 9px;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
       + '.fng-ph{color:#5b647d;font-style:italic;}'
       + '.fng-doccopy{position:absolute;top:8px;right:8px;z-index:2;}'
+      + '.fng-modal-card.fng-dmcard{width:96vw;max-width:1320px;}'
+      + '.fng-warn{background:rgba(247,201,72,.08);border:1px solid #6b5a1f;border-left:3px solid #f7c948;border-radius:6px;color:#e7d9a8;font-size:12.5px;line-height:1.55;padding:9px 12px;margin:0 0 16px;}'
+      + '.fng-warn b{color:#f7c948;}'
+      + '.fng-dmbody{display:flex;gap:12px;align-items:flex-start;flex-wrap:nowrap;}'
+      + '.fng-dmleft{flex:0 0 180px;border:1px solid var(--bd);border-radius:8px;padding:8px;max-height:62vh;overflow:auto;}'
+      + '.fng-dmmid{flex:1 1 0;min-width:0;max-height:62vh;overflow:auto;}'
+      + '.fng-dmright{flex:1 1 0;min-width:0;max-height:62vh;overflow:auto;}'
+      + '.fng-tree{display:flex;flex-direction:column;gap:2px;}'
+      + '.fng-treefolder{text-align:left;background:transparent;border:none;color:#cdd5e3;font-size:13px;font-weight:600;padding:6px 8px;cursor:pointer;border-radius:6px;}'
+      + '.fng-treefolder.sub{font-weight:500;font-size:12px;color:#aab4cc;}'
+      + '.fng-treefolder:hover{background:var(--pn);}'
+      + '.fng-treekids{display:flex;flex-direction:column;gap:2px;margin-left:10px;border-left:1px solid var(--bd);padding-left:6px;}'
+      + '.fng-treeitem{text-align:left;background:transparent;border:none;color:#aab4cc;font-size:12px;padding:5px 8px;cursor:pointer;border-radius:6px;}'
+      + '.fng-treeitem:hover{background:var(--pn);color:#eaf0fa;}'
+      + '.fng-treeitem.on{background:rgba(74,240,160,.12);color:var(--ac);}'
+      + '.fng-treeadd{text-align:left;background:transparent;border:none;color:var(--dim);font-size:11px;padding:5px 8px;cursor:pointer;}'
+      + '.fng-treeadd:hover{color:var(--ac);}'
       + '.fng-devpickgrid{display:flex;gap:10px;flex-wrap:wrap;}'
       + '.fng-pickcard{flex:1 1 200px;display:flex;flex-direction:column;gap:4px;align-items:flex-start;background:var(--pn);border:1px solid var(--bd);border-radius:8px;color:#eaf0fa;font-size:14px;padding:14px;cursor:pointer;text-align:left;}'
       + '.fng-pickcard:hover{border-color:var(--ac);}'
@@ -551,8 +568,8 @@
         var md = machineDevice();
         if (md && findDeviceByName(md)) { ROOT.ui.values[f.id] = md; if (ROOT.ui.devGroup == null) ROOT.ui.devGroup = groupOfDevice(md); }
       } else if (f.source === 'department') {
-        var dd = machineDept();
-        if (dd && DEPARTMENTS.some(function (x) { return x.code === dd; })) ROOT.ui.values[f.id] = dd;
+        if (lab && lab.dept) ROOT.ui.values[f.id] = lab.dept;   // bound to the selected lab
+        else { var dd = machineDept(); if (dd && DEPARTMENTS.some(function (x) { return x.code === dd; })) ROOT.ui.values[f.id] = dd; }
       } else if (f.source === 'operator') {
         var oo = machineOperator();
         if (oo && (ROOT.library.operators || []).some(function (op) { return opName(op) === oo; })) ROOT.ui.values[f.id] = oo;
@@ -610,16 +627,20 @@
       }
       var ctrl, extra = '';
       if (f.source === 'department') {
+        if (lab && lab.dept) {   // bound to the lab → shown locked
+          var dlab = DEPARTMENTS.filter(function (d) { return d.code === lab.dept; })[0];
+          return '<div class="fng-f fng-narrow"><span class="fng-l">' + esc(f.name) + ' <span class="fng-auto">auto · lab</span></span>'
+            + '<div class="fng-ro">' + esc(lab.dept) + (dlab ? ' — ' + esc(dlab.label) : '') + '</div></div>';
+        }
         ctrl = '<select class="fng-sel" onchange="' + R() + '.setVal(\'' + f.id + '\',this.value)"><option value="">— select —</option>'
           + DEPARTMENTS.map(function (d) { return '<option value="' + esc(d.code) + '"' + (d.code === v ? ' selected' : '') + '>' + esc(d.code) + ' — ' + esc(d.label) + '</option>'; }).join('') + '</select>';
       } else if (f.source === 'operator') {
         ctrl = '<select class="fng-sel" onchange="' + R() + '.setVal(\'' + f.id + '\',this.value)"><option value="">— select —</option>'
           + (L.operators || []).map(function (o) { var n = opName(o); return '<option value="' + esc(n) + '"' + (n === v ? ' selected' : '') + '>' + esc(n) + '</option>'; }).join('') + '</select>';
       } else if (f.source === 'device') {
-        // A single button opens a step-by-step picker (lab vs platform → device).
-        // The choice is remembered on this machine, so it's usually a one-time action.
-        ctrl = '<button type="button" class="fng-btn fng-devbtn' + (v ? ' pri' : '') + '" title="' + (v ? 'Click to choose another device' : 'Select a device') + '" onclick="' + R() + '.openDevPick(\'' + f.id + '\')">'
-          + (v ? esc(v) : 'Select device ▾') + '</button>';
+        // Opens the Manage devices window to browse / select / edit / configure devices.
+        ctrl = '<button type="button" class="fng-btn fng-devbtn' + (v ? ' pri' : '') + '" title="Open the device manager" onclick="' + R() + '.openDevManager()">'
+          + (v ? esc(v) : 'Manage devices ▾') + '</button>';
       } else if (f.source === 'list') {
         ctrl = '<select class="fng-sel" onchange="' + R() + '.setVal(\'' + f.id + '\',this.value)"><option value="">— select —</option>'
           + (f.options || []).map(function (o) { return '<option value="' + esc(o) + '"' + (o === v ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join('') + '</select>';
@@ -655,69 +676,145 @@
       + '<button class="fng-btn" onclick="' + R() + '.recordToSection()">Record in experiment</button>'
       + '<button class="fng-btn" onclick="' + R() + '.resetForm()">Reset</button>'
       + '</div>'
-      + recentBlock() + decodeBlock() + devPickModal() + missModal();
+      + recentBlock() + decodeBlock() + missModal();
   }
 
-  /* --- step-by-step device picker (modal) --------------------------------
-   * Button → choose Lab vs Platform → (platform → its name) → device → Save.
-   * Scales to many devices (scrolling list) and the choice is remembered on
-   * this machine (LS_DEVICE), so it's typically a one-time selection. */
-  function devListHtml(list, sel) {
-    if (!list || !list.length) return '<p class="fng-muted">No devices here yet.</p>';
-    return '<div class="fng-devpicklist">' + list.map(function (d) {
-      return '<button type="button" class="fng-pickrow' + (d.name === sel ? ' on' : '') + '" data-n="' + esc(d.name) + '" onclick="' + R() + '.devPickSel(this.getAttribute(\'data-n\'))">' + esc(d.name) + '</button>';
-    }).join('') + '</div>';
+  /* --- Manage devices window (file-explorer) -----------------------------
+   * Left: a tree with two folders — Lab devices and Platform devices (→ each
+   * platform → its devices). Right: the selected device's description (editable
+   * for lab devices, read-only for platform devices), a "Use for file name"
+   * action, and the user's local configs for that (operator + device). */
+  function labDeviceById(id) { return ((ROOT.library && ROOT.library.devices) || []).filter(function (x) { return x.id === id; })[0]; }
+  function persistLib() { try { saveLibrary(); } catch (e) {} dirty(); }
+
+  function devmgrConfigPanel() {
+    var dev = pickedDeviceName(); if (!dev) return '';
+    var op = currentOperator();
+    if (!op) return '<div class="fng-card" style="margin-top:10px"><h3 style="margin-top:0">My configurations</h3>'
+      + '<p class="fng-muted">Select your <b>operator</b> on the main screen to create configurations for this device (saved on this machine).</p></div>';
+    var list = odConfigs(op, dev), actId = activeConfigId(op, dev);
+    var active = list.filter(function (c) { return c.id === actId; })[0];
+    var sel = '<select class="fng-sel" onchange="' + R() + '.selectConfig(this.value)"><option value="">— none —</option>'
+      + list.map(function (c) { return '<option value="' + esc(c.id) + '"' + (c.id === actId ? ' selected' : '') + '>' + esc(c.name) + '</option>'; }).join('') + '</select>';
+    var editor = active
+      ? '<div class="fng-f" style="margin-top:8px"><span class="fng-l">Settings — one "Key: value" per line (saved on this machine; added to the metadata when this device is in use)</span>'
+        + '<textarea class="fng-ta" style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px" oninput="' + R() + '.editConfig(this.value)">' + esc(active.text || '') + '</textarea></div>'
+      : '<p class="fng-muted" style="margin-top:6px">No configuration selected — create one with <b>New</b>.</p>';
+    return '<div class="fng-card" style="margin-top:10px"><h3 style="margin-top:0">My configurations <span class="fng-muted" style="text-transform:none;letter-spacing:0">· ' + esc(op) + ' · this machine</span></h3>'
+      + '<div class="fng-row" style="align-items:flex-end"><div class="fng-f" style="flex:1;max-width:280px"><span class="fng-l">Saved configurations</span>' + sel + '</div>'
+      + '<button class="fng-btn sm" onclick="' + R() + '.newConfig()">+ New</button>'
+      + (active ? '<button class="fng-btn sm" onclick="' + R() + '.renameConfig()">Rename</button><button class="fng-btn sm" onclick="' + R() + '.deleteConfig()">Delete</button>' : '')
+      + '</div>' + editor + '</div>';
   }
-  function devPickModal() {
-    var dp = ROOT.ui.devPick; if (!dp || !dp.open) return '';
-    var title = 'Select device', body = '', back = '';
-    if (dp.step === 'source') {
-      title = 'Where is the device?';
-      body = '<div class="fng-devpickgrid">'
-        + '<button type="button" class="fng-pickcard" onclick="' + R() + '.devPickSource(\'lab\')"><b>Lab devices</b><span class="fng-muted">your lab\'s own instruments</span></button>'
-        + '<button type="button" class="fng-pickcard" onclick="' + R() + '.devPickSource(\'plat\')"><b>Platform devices</b><span class="fng-muted">shared core-facility instruments</span></button>'
-        + '</div>';
-    } else if (dp.step === 'labdev') {
-      title = 'Lab devices'; back = '<button class="fng-btn sm" onclick="' + R() + '.devPickStep(\'source\')">‹ Back</button>';
-      body = devListHtml((ROOT.library && ROOT.library.devices) || [], dp.sel);
-    } else if (dp.step === 'platlist') {
-      title = 'Platforms'; back = '<button class="fng-btn sm" onclick="' + R() + '.devPickStep(\'source\')">‹ Back</button>';
-      var plats = (ROOT.platforms || []).filter(function (p) { return p.devices && p.devices.length; });
-      body = plats.length
-        ? '<div class="fng-devpicklist">' + plats.map(function (p) { return '<button type="button" class="fng-pickrow" onclick="' + R() + '.devPickPlat(\'' + esc(p.id) + '\')">' + esc(p.name) + ' <span class="fng-muted">(' + p.devices.length + ')</span> ▸</button>'; }).join('') + '</div>'
-        : '<p class="fng-muted">No platform devices are available yet.</p>';
-    } else if (dp.step === 'platdev') {
-      var plat = (ROOT.platforms || []).filter(function (p) { return p.id === dp.platId; })[0];
-      title = plat ? plat.name : 'Platform'; back = '<button class="fng-btn sm" onclick="' + R() + '.devPickStep(\'platlist\')">‹ Platforms</button>';
-      body = devListHtml((plat && plat.devices) || [], dp.sel);
+  // MIDDLE panel: the device description (editable for lab, read-only for platform).
+  function devmgrMiddle() {
+    var dm = ROOT.ui.devmgr, p = dm && dm.pick;
+    if (!p) return '<div class="fng-dmmid"><p class="fng-muted">Select a device on the left to view or edit it.</p></div>';
+    var inUse = (p.name === currentDeviceName());
+    var useBtn = inUse
+      ? '<button class="fng-btn saved" disabled title="This is the default device for this machine">Default device ✓</button>'
+      : '<button class="fng-btn pri" onclick="' + R() + '.devmgrUse()">Set as default device for this machine</button>';
+    var head = '<div class="fng-row" style="justify-content:space-between;align-items:center;gap:8px"><h3 style="margin:0">' + esc(p.name) + '</h3>' + useBtn + '</div>';
+    var desc;
+    if (p.scope === 'lab') {
+      var d = labDeviceById(p.id) || { name: p.name, info: {} };
+      var infoText = Object.keys(d.info || {}).map(function (k) { return k + ': ' + d.info[k]; }).join('\n');
+      desc = '<div class="fng-card" style="margin-top:10px"><h3 style="margin-top:0">Description <span class="fng-muted" style="text-transform:none;letter-spacing:0">· shared library · editable</span></h3>'
+        + '<div class="fng-f"><span class="fng-l">Device name (used in the file name)</span><input class="fng-in" value="' + esc(d.name) + '" onchange="' + R() + '.devmgrSetLabName(\'' + p.id + '\',this.value)"></div>'
+        + '<div class="fng-f" style="margin-top:6px"><span class="fng-l">Generic info — one "Key: value" per line (added to metadata)</span>'
+        + '<textarea class="fng-ta" style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;min-height:120px" oninput="' + R() + '.devmgrSetLabInfo(\'' + p.id + '\',this.value)">' + esc(infoText) + '</textarea></div>'
+        + '<div class="fng-row" style="margin-top:8px;align-items:center"><button class="fng-btn sm" onclick="' + R() + '.devmgrDelLabDevice(\'' + p.id + '\')">Remove device</button>'
+        + '<span class="fng-muted">Edits are kept on this machine; use <b>Publish changes</b> in Manage to send them to a master.</span></div></div>';
+    } else {
+      var pl = (ROOT.platforms || []).filter(function (x) { return x.id === p.platId; })[0];
+      var pd = pl && (pl.devices || []).filter(function (x) { return x.id === p.id; })[0];
+      var rows = (pd && pd.info) ? Object.keys(pd.info).map(function (k) { return '<tr><td>' + esc(k) + '</td><td>' + esc(pd.info[k]) + '</td></tr>'; }).join('') : '';
+      desc = '<div class="fng-card" style="margin-top:10px"><h3 style="margin-top:0">Description <span class="fng-muted" style="text-transform:none;letter-spacing:0">· ' + esc(pl ? pl.name : '') + ' · read-only</span></h3>'
+        + (rows ? '<table class="fng-doc-t"><tbody>' + rows + '</tbody></table>' : '<p class="fng-muted">No details provided.</p>')
+        + '<p class="fng-muted" style="margin-top:6px">Platform devices are maintained by the platform manager and can\'t be edited here.</p></div>';
     }
-    var canSave = !!dp.sel;
-    return '<div class="fng-modal" onclick="if(event.target===this)' + R() + '.closeDevPick()">'
-      + '<div class="fng-modal-card"><div class="fng-modal-h"><h3 style="margin:0">' + esc(title) + '</h3>'
-      + '<button class="fng-modal-x" title="Close" onclick="' + R() + '.closeDevPick()">✕</button></div>'
-      + (dp.sel ? '<p class="fng-muted">Selected: <b style="color:var(--ac)">' + esc(dp.sel) + '</b></p>' : '')
-      + body
-      + '<div class="fng-acts" style="margin-top:14px">' + back
-      + (canSave ? '<button class="fng-btn pri" onclick="' + R() + '.devPickSave()">Save &amp; close</button>'
-                 : '<button class="fng-btn" disabled title="Pick a device first">Save &amp; close</button>')
-      + '<button class="fng-btn" onclick="' + R() + '.closeDevPick()">Cancel</button></div></div></div>';
+    return '<div class="fng-dmmid">' + head + desc + '</div>';
   }
-  ROOT.openDevPick = function (fid) {
-    var cur = ROOT.ui.values[fid] || '';
-    ROOT.ui.devPick = { open: true, step: 'source', platId: null, sel: cur, fieldId: fid };
+  // RIGHT panel: the user's local configs for the selected device.
+  function devmgrRight() {
+    var p = ROOT.ui.devmgr && ROOT.ui.devmgr.pick;
+    return '<div class="fng-dmright">' + (p ? devmgrConfigPanel() : '') + '</div>';
+  }
+  function devmgrTree() {
+    var dm = ROOT.ui.devmgr, pick = dm.pick || {};
+    var labDevs = (ROOT.library && ROOT.library.devices) || [];
+    var labKids = dm.openLab ? '<div class="fng-treekids">' + (labDevs.length ? labDevs.map(function (d) {
+      return '<button type="button" class="fng-treeitem' + (pick.scope === 'lab' && pick.id === d.id ? ' on' : '') + '" onclick="' + R() + '.devmgrPickLab(\'' + d.id + '\')">' + esc(d.name) + '</button>';
+    }).join('') : '<span class="fng-muted" style="padding:4px 8px">no devices yet</span>')
+      + '<button type="button" class="fng-treeadd" onclick="' + R() + '.devmgrAddLab()">+ add device</button></div>' : '';
+    var plats = (ROOT.platforms || []);
+    var platKids = dm.openPlat ? '<div class="fng-treekids">' + (plats.length ? plats.map(function (p) {
+      var devKids = dm.openPlatId === p.id ? '<div class="fng-treekids">' + ((p.devices || []).length ? (p.devices || []).map(function (d) {
+        return '<button type="button" class="fng-treeitem' + (pick.scope === 'plat' && pick.platId === p.id && pick.id === d.id ? ' on' : '') + '" onclick="' + R() + '.devmgrPickPlat(\'' + p.id + '\',\'' + d.id + '\')">' + esc(d.name) + '</button>';
+      }).join('') : '<span class="fng-muted" style="padding:4px 8px">no devices</span>') + '</div>' : '';
+      return '<button type="button" class="fng-treefolder sub' + (dm.openPlatId === p.id ? ' open' : '') + '" onclick="' + R() + '.devmgrTogglePlat(\'' + p.id + '\')">' + (dm.openPlatId === p.id ? '▾ ' : '▸ ') + esc(p.name) + '</button>' + devKids;
+    }).join('') : '<span class="fng-muted" style="padding:4px 8px">no platforms yet</span>') + '</div>' : '';
+    return '<div class="fng-tree">'
+      + '<button type="button" class="fng-treefolder' + (dm.openLab ? ' open' : '') + '" onclick="' + R() + '.devmgrToggleLab()">' + (dm.openLab ? '▾ ' : '▸ ') + 'Lab devices</button>' + labKids
+      + '<button type="button" class="fng-treefolder' + (dm.openPlat ? ' open' : '') + '" onclick="' + R() + '.devmgrTogglePlatRoot()">' + (dm.openPlat ? '▾ ' : '▸ ') + 'Platform devices</button>' + platKids
+      + '</div>';
+  }
+  function renderDevManager() {
+    var dm = ROOT.ui.devmgr; if (!dm || !dm.open) return '';
+    return '<div class="fng-modal" onclick="if(event.target===this)' + R() + '.closeDevManager()">'
+      + '<div class="fng-modal-card fng-dmcard"><div class="fng-modal-h"><h3 style="margin:0">Manage devices</h3>'
+      + '<button class="fng-modal-x" title="Close" onclick="' + R() + '.closeDevManager()">✕</button></div>'
+      + '<div class="fng-dmbody"><div class="fng-dmleft">' + devmgrTree() + '</div>' + devmgrMiddle() + devmgrRight() + '</div>'
+      + '<div class="fng-acts" style="margin-top:12px"><button class="fng-btn pri" onclick="' + R() + '.closeDevManager()">Done</button></div></div></div>';
+  }
+  ROOT.openDevManager = function () {
+    var dm = ROOT.ui.devmgr = ROOT.ui.devmgr || {};
+    dm.open = true;
+    // Default view: show the device currently in use (and its configs); if nothing is
+    // selected in Use, collapse everything.
+    var cur = currentDeviceName();
+    dm.openLab = false; dm.openPlat = false; dm.openPlatId = null; dm.pick = null;
+    if (cur) {
+      var ld = (ROOT.library.devices || []).filter(function (x) { return x.name === cur; })[0];
+      if (ld) { dm.openLab = true; dm.pick = { scope: 'lab', id: ld.id, name: ld.name }; }
+      else {
+        (ROOT.platforms || []).forEach(function (p) { (p.devices || []).forEach(function (d) {
+          if (!dm.pick && d.name === cur) { dm.openPlat = true; dm.openPlatId = p.id; dm.pick = { scope: 'plat', platId: p.id, id: d.id, name: d.name }; }
+        }); });
+      }
+    }
     rerender();
   };
-  ROOT.devPickSource = function (src) { ROOT.ui.devPick.step = (src === 'lab') ? 'labdev' : 'platlist'; rerender(); };
-  ROOT.devPickStep = function (step) { ROOT.ui.devPick.step = step; rerender(); };
-  ROOT.devPickPlat = function (pid) { ROOT.ui.devPick.platId = pid; ROOT.ui.devPick.step = 'platdev'; rerender(); };
-  ROOT.devPickSel = function (name) { ROOT.ui.devPick.sel = name; rerender(); };
-  ROOT.devPickSave = function () {
-    var dp = ROOT.ui.devPick; if (!dp || !dp.sel) return;
-    ROOT.ui.values[dp.fieldId] = dp.sel;
-    try { localStorage.setItem(LS_DEVICE, dp.sel); } catch (e) {}   // remembered on this machine
-    dp.open = false; rerender();
+  ROOT.closeDevManager = function () { if (ROOT.ui.devmgr) ROOT.ui.devmgr.open = false; rerender(); };
+  ROOT.devmgrToggleLab = function () { ROOT.ui.devmgr.openLab = !ROOT.ui.devmgr.openLab; rerender(); };
+  ROOT.devmgrTogglePlatRoot = function () { ROOT.ui.devmgr.openPlat = !ROOT.ui.devmgr.openPlat; rerender(); };
+  ROOT.devmgrTogglePlat = function (pid) { ROOT.ui.devmgr.openPlatId = (ROOT.ui.devmgr.openPlatId === pid ? null : pid); rerender(); };
+  ROOT.devmgrPickLab = function (id) { var d = labDeviceById(id); if (!d) return; ROOT.ui.devmgr.pick = { scope: 'lab', id: id, name: d.name }; rerender(); };
+  ROOT.devmgrPickPlat = function (pid, id) { var p = (ROOT.platforms || []).filter(function (x) { return x.id === pid; })[0]; var d = p && (p.devices || []).filter(function (x) { return x.id === id; })[0]; if (!d) return; ROOT.ui.devmgr.pick = { scope: 'plat', platId: pid, id: id, name: d.name }; rerender(); };
+  ROOT.devmgrUse = function () {
+    var p = ROOT.ui.devmgr && ROOT.ui.devmgr.pick; if (!p) return;
+    var lab = useLab(), tpl = lab && useFileTpl(lab), fid = tpl && deviceFieldId(tpl);
+    if (fid) ROOT.ui.values[fid] = p.name;
+    try { localStorage.setItem(LS_DEVICE, p.name); } catch (e) {}
+    rerender();
   };
-  ROOT.closeDevPick = function () { if (ROOT.ui.devPick) ROOT.ui.devPick.open = false; rerender(); };
+  ROOT.devmgrAddLab = function () {
+    var name = (typeof window !== 'undefined' && window.prompt) ? window.prompt('New lab device name:', '') : '';
+    if (name === null) return; name = (name || '').trim(); if (!name) return;
+    // New device starts from the setting template so the description has a clear shape.
+    var d = { id: uid('dev'), name: name, info: parseSettings(CONFIG_TEMPLATE) };
+    (ROOT.library.devices = ROOT.library.devices || []).push(d);
+    ROOT.ui.devmgr.openLab = true; ROOT.ui.devmgr.pick = { scope: 'lab', id: d.id, name: name };
+    persistLib(); rerender();
+  };
+  ROOT.devmgrSetLabName = function (id, v) { var d = labDeviceById(id); if (!d) return; d.name = v; if (ROOT.ui.devmgr.pick && ROOT.ui.devmgr.pick.id === id) ROOT.ui.devmgr.pick.name = v; persistLib(); rerender(); };
+  ROOT.devmgrSetLabInfo = function (id, text) { var d = labDeviceById(id); if (!d) return; d.info = parseSettings(text); persistLib(); };   // no rerender — keep cursor
+  ROOT.devmgrDelLabDevice = function (id) {
+    if (typeof window !== 'undefined' && window.confirm && !window.confirm('Remove this device from the lab library?')) return;
+    ROOT.library.devices = (ROOT.library.devices || []).filter(function (x) { return x.id !== id; });
+    if (ROOT.ui.devmgr.pick && ROOT.ui.devmgr.pick.id === id) ROOT.ui.devmgr.pick = null;
+    persistLib(); rerender();
+  };
 
   // recent file names generated on this machine
   function recentBlock() {
@@ -807,16 +904,80 @@
   };
   ROOT.setVal = function (k, v) {
     ROOT.ui.values[k] = v;
+    var f = fieldById(ROOT.library, k);
     // remember the last department / operator chosen on this machine (only non-empty)
-    if (v) { var f = fieldById(ROOT.library, k); try {
-      if (f && f.source === 'department') localStorage.setItem(LS_DEPT, v);
-      else if (f && f.source === 'operator') localStorage.setItem(LS_OPER, v);
+    if (v && f) { try {
+      if (f.source === 'department') localStorage.setItem(LS_DEPT, v);
+      else if (f.source === 'operator') localStorage.setItem(LS_OPER, v);
     } catch (e) {} }
+    if (f && f.source === 'operator') { rerender(); return; }   // reload that operator's configs
     refreshUsePreview(); refreshHeader();
   };
   function refreshUsePreview() { var el = document.getElementById('fng-ex'); if (el) el.outerHTML = usePreview(); }
   // refresh only the rendered header — never the notes editor (keeps the cursor)
   function refreshHeader() { var el = document.getElementById('fng-md-header'); if (el) el.innerHTML = headerHtml(); }
+
+  /* --- experiment configurations, scoped to (operator + device), local -----
+   * Each (operator, device) pair can hold several named configs (presets) of
+   * free "Key: value" settings, stored in localStorage. They're edited in the
+   * Manage devices window for the OPENED device; the active config of the
+   * currently SELECTED (file-name) device is folded into the metadata + sidecar. */
+  var CONFIG_TEMPLATE = 'Setting1 : XXX\nSetting2 : XXX';
+  function parseSettings(text) {
+    var o = {};
+    (text || '').split(/\n/).forEach(function (line) { var i = line.indexOf(':'); if (i > 0) { var k = line.slice(0, i).trim(); if (k) o[k] = line.slice(i + 1).trim(); } });
+    return o;
+  }
+  function loadAllConfigs() { try { return JSON.parse(localStorage.getItem('fng.configs') || '{}') || {}; } catch (e) { return {}; } }
+  function saveAllConfigs(m) { try { localStorage.setItem('fng.configs', JSON.stringify(m)); } catch (e) {} }
+  function cfgKey(op, dev) { return (op || '').trim() + ' :: ' + (dev || '').trim(); }
+  function odConfigs(op, dev) { var m = loadAllConfigs(); return (op && dev && m[cfgKey(op, dev)]) ? m[cfgKey(op, dev)] : []; }
+  function activeConfigId(op, dev) { try { var a = JSON.parse(localStorage.getItem('fng.configActive') || '{}'); return (op && dev) ? (a[cfgKey(op, dev)] || '') : ''; } catch (e) { return ''; } }
+  function setActiveConfigId(op, dev, id) { try { var a = JSON.parse(localStorage.getItem('fng.configActive') || '{}'); a[cfgKey(op, dev)] = id; localStorage.setItem('fng.configActive', JSON.stringify(a)); } catch (e) {} }
+  function currentOperator() {
+    var lab = useLab(), tpl = lab && useFileTpl(lab); if (!tpl) return '';
+    var id = null; (tpl.fieldIds || []).forEach(function (fid) { var f = fieldById(ROOT.library, fid); if (f && f.source === 'operator') id = fid; });
+    return id ? (ROOT.ui.values[id] || '') : '';
+  }
+  function currentDeviceName() {
+    var lab = useLab(), tpl = lab && useFileTpl(lab); if (!tpl) return '';
+    var id = deviceFieldId(tpl); return id ? (ROOT.ui.values[id] || '') : '';
+  }
+  function pickedDeviceName() { var p = ROOT.ui.devmgr && ROOT.ui.devmgr.pick; return p ? p.name : ''; }
+  // active config used in the metadata = for the OPERATOR + the SELECTED file-name device
+  function activeConfig() {
+    var op = currentOperator(), dev = currentDeviceName(); if (!op || !dev) return null;
+    return odConfigs(op, dev).filter(function (c) { return c.id === activeConfigId(op, dev); })[0] || null;
+  }
+  // config handlers act on (operator + the device OPENED in the Manage devices window)
+  ROOT.selectConfig = function (id) { var op = currentOperator(), dev = pickedDeviceName(); if (!op || !dev) return; setActiveConfigId(op, dev, id); rerender(); };
+  ROOT.newConfig = function () {
+    var op = currentOperator(); if (!op) { toast('Select your operator on the main screen first.'); return; }
+    var dev = pickedDeviceName(); if (!dev) return;
+    var def = 'Config ' + (odConfigs(op, dev).length + 1);
+    var name = (typeof window !== 'undefined' && window.prompt) ? window.prompt('Name this configuration:', def) : def;
+    if (name === null) return; name = (name || '').trim() || def;
+    var m = loadAllConfigs(), k = cfgKey(op, dev); m[k] = m[k] || [];
+    var c = { id: uid('cfg'), name: name, text: CONFIG_TEMPLATE };
+    m[k].push(c); saveAllConfigs(m); setActiveConfigId(op, dev, c.id); rerender();
+  };
+  ROOT.editConfig = function (text) {   // no rerender — keep the textarea cursor
+    var op = currentOperator(), dev = pickedDeviceName(); if (!op || !dev) return;
+    var m = loadAllConfigs(), k = cfgKey(op, dev), c = (m[k] || []).filter(function (x) { return x.id === activeConfigId(op, dev); })[0];
+    if (!c) return; c.text = text; saveAllConfigs(m); refreshHeader();
+  };
+  ROOT.renameConfig = function () {
+    var op = currentOperator(), dev = pickedDeviceName(); if (!op || !dev) return;
+    var m = loadAllConfigs(), k = cfgKey(op, dev), c = (m[k] || []).filter(function (x) { return x.id === activeConfigId(op, dev); })[0]; if (!c) return;
+    var n = (typeof window !== 'undefined' && window.prompt) ? window.prompt('Rename configuration:', c.name) : c.name;
+    if (n === null) return; c.name = (n || '').trim() || c.name; saveAllConfigs(m); rerender();
+  };
+  ROOT.deleteConfig = function () {
+    var op = currentOperator(), dev = pickedDeviceName(); if (!op || !dev) return;
+    if (typeof window !== 'undefined' && window.confirm && !window.confirm('Delete this configuration?')) return;
+    var m = loadAllConfigs(), k = cfgKey(op, dev); m[k] = (m[k] || []).filter(function (x) { return x.id !== activeConfigId(op, dev); });
+    saveAllConfigs(m); setActiveConfigId(op, dev, ''); rerender();
+  };
 
   /* --- live metadata header shown inside the notes window --------------- */
   var NOTE_MARK = '## Notes';   // the Markdown heading that divides header from user notes
@@ -837,6 +998,11 @@
     var sepc = tpl.separator || '_';
     var pattern = (tpl.fieldIds || []).map(function (id) { var ff = fieldById(L, id); return ff ? ff.name : id; }).join(sepc);
     var h = { fileName: curName(), fullPath: folder ? curPath() : '', lab: lab.name, template: tpl.name, separator: sepc, pattern: pattern, fields: fields };
+    // Department is bound to the lab — always recorded in the metadata, even if it
+    // isn't part of the naming template.
+    var depCode = (lab && lab.dept) ? lab.dept : '';
+    if (!depCode) (tpl.fieldIds || []).forEach(function (id) { var ff = fieldById(L, id); if (ff && ff.source === 'department') depCode = ROOT.ui.values[id] || depCode; });
+    if (depCode) { var dlh = DEPARTMENTS.filter(function (d) { return d.code === depCode; })[0]; h.department = dlh ? (depCode + ' — ' + dlh.label) : depCode; }
     // attach the selected device's generic info (software, version, …)
     (tpl.fieldIds || []).forEach(function (id) {
       var f = fieldById(L, id);
@@ -846,6 +1012,9 @@
         if (d && d.info && Object.keys(d.info).length) h.device = { name: d.name, info: d.info };
       }
     });
+    // attach the operator's active experiment configuration (local to this machine)
+    var cfg = activeConfig();
+    if (cfg) { var cs = parseSettings(cfg.text); if (Object.keys(cs).length) h.config = { name: cfg.name, settings: cs }; }
     return h;
   }
   // The metadata header as Markdown — renders nicely in any Markdown viewer / ELN.
@@ -856,6 +1025,7 @@
     md.push('**File name:** `' + (h.fileName || '(empty)') + '`  ');
     if (h.fullPath && h.fullPath !== h.fileName) md.push('**Full path:** `' + h.fullPath + '`  ');
     md.push('**Lab:** ' + h.lab + '  ');
+    if (h.department) md.push('**Department:** ' + h.department + '  ');
     md.push('**Template:** ' + h.template + '  ');
     md.push('**Generated:** ' + fmtDate(new Date(), 'YYYY-MM-DD') + ' ' + fmtDate(new Date(), 'HH:MM'));
     md.push('', '| Field | Value |', '| --- | --- |');
@@ -863,6 +1033,10 @@
     if (h.device) {
       md.push('', '**Device — ' + h.device.name + '**', '', '| Property | Value |', '| --- | --- |');
       Object.keys(h.device.info).forEach(function (k) { md.push('| ' + k + ' | ' + h.device.info[k] + ' |'); });
+    }
+    if (h.config) {
+      md.push('', '**Configuration — ' + h.config.name + '** (this machine)', '', '| Setting | Value |', '| --- | --- |');
+      Object.keys(h.config.settings).forEach(function (k) { md.push('| ' + k + ' | ' + h.config.settings[k] + ' |'); });
     }
     return md.join('\n');
   }
@@ -874,7 +1048,7 @@
     var html = '<h3 class="fng-doc-h">File metadata</h3>'
       + '<p><b>File name:</b> <code>' + esc(h.fileName || '(empty)') + '</code><br>';
     if (h.fullPath && h.fullPath !== h.fileName) html += '<b>Full path:</b> <code>' + esc(h.fullPath) + '</code><br>';
-    html += '<b>Lab:</b> ' + esc(h.lab) + '<br><b>Template:</b> ' + esc(h.template)
+    html += '<b>Lab:</b> ' + esc(h.lab) + (h.department ? '<br><b>Department:</b> ' + esc(h.department) : '') + '<br><b>Template:</b> ' + esc(h.template)
       + '<br><b>Generated:</b> ' + fmtDate(new Date(), 'YYYY-MM-DD') + ' ' + fmtDate(new Date(), 'HH:MM') + '</p>'
       + '<table class="fng-doc-t"><thead><tr><th>Field</th><th>Value</th></tr></thead><tbody>';
     Object.keys(h.fields).forEach(function (k) { html += '<tr><td>' + esc(k) + '</td><td>' + esc(h.fields[k] || '—') + '</td></tr>'; });
@@ -882,6 +1056,11 @@
     if (h.device) {
       html += '<p style="margin-top:10px"><b>Device — ' + esc(h.device.name) + '</b></p><table class="fng-doc-t"><tbody>';
       Object.keys(h.device.info).forEach(function (k) { html += '<tr><td>' + esc(k) + '</td><td>' + esc(h.device.info[k]) + '</td></tr>'; });
+      html += '</tbody></table>';
+    }
+    if (h.config) {
+      html += '<p style="margin-top:10px"><b>Configuration — ' + esc(h.config.name) + '</b> <span style="color:#6b7592">(this machine)</span></p><table class="fng-doc-t"><tbody>';
+      Object.keys(h.config.settings).forEach(function (k) { html += '<tr><td>' + esc(k) + '</td><td>' + esc(h.config.settings[k]) + '</td></tr>'; });
       html += '</tbody></table>';
     }
     return html;
@@ -1099,22 +1278,20 @@
     var editor = tpl ? tileEditor(lab, tpl) : '<p class="fng-muted" style="margin-top:12px">Create a template to start.</p>';
 
     var col = hasCollisions();
-    var saveBtn = col
-      ? '<button class="fng-btn" id="fng-savebtn" disabled title="Resolve the duplicates flagged with ! first">Save</button>'
-      : (isDirty()
-          ? '<button class="fng-btn pri" id="fng-savebtn" onclick="' + R() + '.save()">Save</button>'
-          : '<button class="fng-btn saved" id="fng-savebtn" disabled>Saved ✓</button>');
-    var saveBar = '<div class="fng-acts">' + saveBtn
-      + (col ? '<button class="fng-btn" disabled title="Resolve duplicates first">Publish…</button>'
-             : '<button class="fng-btn" onclick="' + R() + '.publish()">Publish…</button>')
+    // Edits auto-save on this machine (no Save button needed). Publishing shares them with the lab.
+    var saveBar = '<div class="fng-acts">'
+      + (col ? '<button class="fng-btn" disabled title="Resolve duplicates first">Publish changes</button>'
+             : '<button class="fng-btn pri" onclick="' + R() + '.publish()">Publish changes</button>')
       + '<button class="fng-btn" onclick="' + R() + '.importLib()">Import library JSON</button>'
       + '</div>'
       + '<div class="fng-f" style="max-width:640px;margin-top:8px"><span class="fng-l">GitLab file URL — derived automatically from this page&rsquo;s address</span>'
       + '<input class="fng-in" readonly value="' + esc(publishLink() || 'set window.FNG_PUBLISH_BASE in index.html') + '"></div>'
-      + (col ? '<p style="margin-top:6px;color:#f0604a;font-size:12px">⚠ Resolve the duplicate identifiers flagged with <b>!</b> in Manage lists &amp; fields before saving or publishing.</p>'
-             : '<p class="fng-muted" style="margin-top:6px"><b>Save</b> keeps changes on this machine. <b>Publish…</b> downloads <code>library.json</code>, copies it to the clipboard, and shows the steps to drop it into GitLab — then every machine picks it up within minutes.</p>');
+      + (col ? '<p style="margin-top:6px;color:#f0604a;font-size:12px">⚠ Resolve the duplicate identifiers flagged with <b>!</b> below before publishing.</p>'
+             : '<p class="fng-muted" style="margin-top:6px">Your edits are kept on this machine automatically. <b>Publish changes</b> downloads <code>library.json</code> and copies it — send it to a master to commit, or commit it yourself if you have GitLab access.</p>');
 
-    return head + editor + saveBar + manageLists() + fieldDialog() + publishDialog();
+    var warn = '<div class="fng-warn">⚠ Anyone can make changes for your lab here, but changes only take effect once a '
+      + '<b>master user</b> in your lab publishes them to the lab repository. Click <b>Publish changes</b> for step‑by‑step instructions.</div>';
+    return warn + head + editor + saveBar + manageLists() + fieldDialog() + publishDialog();
   }
 
   // The simple part: tiles you drag + a live example.
@@ -1254,7 +1431,12 @@
     }
     // Full name | Initials | First 3 table shared by operators and labs; flags any
     // column whose value matches another row, and lets the manager edit it.
-    function abbrTable(list, keyOf, fns) {
+    function deptCell(l) {
+      return '<td><select class="fng-sel" style="min-width:160px" onchange="' + R() + '.setLabDept(\'' + l.id + '\',this.value)"><option value="">— none —</option>'
+        + DEPARTMENTS.map(function (d) { return '<option value="' + esc(d.code) + '"' + (l.dept === d.code ? ' selected' : '') + '>' + esc(d.code) + ' — ' + esc(d.label) + '</option>'; }).join('')
+        + '</select></td>';
+    }
+    function abbrTable(list, keyOf, fns, extraCell) {
       var fullV = list.map(function (e) { return applyFmt(opName(e), 'full'); });
       var iniV = list.map(abbrIni), f3V = list.map(abbrF3);
       var fD = countMap(fullV), iD = countMap(iniV), tD = countMap(f3V), any = false;
@@ -1267,18 +1449,19 @@
         return '<tr>' + cellInput(R() + '.' + fns.name + '(' + k + ',this.value)', opName(e), fb, 150)
           + cellInput(R() + '.' + fns.ini + '(' + k + ',this.value)', iniDisp, ib, 80)
           + cellInput(R() + '.' + fns.f3 + '(' + k + ',this.value)', f3Disp, tb, 80)
+          + (extraCell ? extraCell(e) : '')
           + '<td><button class="fng-btn sm" title="remove" onclick="' + R() + '.' + fns.del + '(' + k + ')">✕</button></td></tr>';
       }).join('');
       return { rows: rows, any: any };
     }
-    function abbrTableHtml(t, emptyMsg, kind, head) {
+    function abbrTableHtml(t, emptyMsg, kind, head, extraHead) {
       return t.rows
-        ? '<table class="fng-doc-t"><thead><tr><th>' + head + '</th><th>Initials</th><th>First 3</th><th></th></tr></thead><tbody>' + t.rows + '</tbody></table>'
+        ? '<table class="fng-doc-t"><thead><tr><th>' + head + '</th><th>Initials</th><th>First 3</th>' + (extraHead ? '<th>' + extraHead + '</th>' : '') + '<th></th></tr></thead><tbody>' + t.rows + '</tbody></table>'
           + (t.any ? '<p class="fng-muted" style="margin-top:6px">Fields flagged <span class="fng-bang">!</span> match another ' + kind + ' — edit them to make each unique.</p>' : '')
         : '<span class="fng-muted">' + emptyMsg + '</span>';
     }
     var ops = abbrTableHtml(abbrTable(opList, function (e, i) { return '' + i; }, { name: 'setOperatorName', ini: 'setOperatorInitials', f3: 'setOperatorFirst3', del: 'delOperator' }), 'no operators yet', 'operator', 'Full name');
-    var labsTable = abbrTableHtml(abbrTable(labs(), function (l) { return '\'' + l.id + '\''; }, { name: 'setLabName', ini: 'setLabInitials', f3: 'setLabFirst3', del: 'delLab' }), 'no labs yet', 'lab', 'Lab name');
+    var labsTable = abbrTableHtml(abbrTable(labs(), function (l) { return '\'' + l.id + '\''; }, { name: 'setLabName', ini: 'setLabInitials', f3: 'setLabFirst3', del: 'delLab' }, deptCell), 'no labs yet', 'lab', 'Lab name', 'Department');
     var devDup = countMap((L.devices || []).map(function (d) { return d.name; }));
 
     var devs = (L.devices || []).map(function (d, i) {
@@ -1307,7 +1490,7 @@
         ? '<div class="fng-f"><span class="fng-l">Date format</span><select class="fng-sel" onchange="' + R() + '.setNF(\'format\',this.value)">' + ['YYYYMMDD', 'YYYY-MM-DD', 'YYMMDD', 'YYYYMM', 'YYYY'].map(function (x) { return '<option' + (nf.format === x ? ' selected' : '') + '>' + x + '</option>'; }).join('') + '</select></div>'
         : '';
 
-    return '<details class="fng-adv"' + (ROOT.ui.manageOpen ? ' open' : '') + ' ontoggle="' + R() + '.setManageOpen(this.open)"><summary>Manage lists &amp; fields</summary>'
+    return '<h3 style="margin-top:22px">Lists &amp; fields</h3>'
       + '<div class="fng-card"><h3 style="margin-top:0">Labs</h3>'
       + labsTable
       + '<div class="fng-row" style="margin-top:8px"><button class="fng-btn sm" onclick="' + R() + '.addLab()">+ Add lab</button></div></div>'
@@ -1317,9 +1500,8 @@
       + '<div class="fng-row" style="margin-top:8px"><input class="fng-in" id="fng-newop" placeholder="Full name"><button class="fng-btn sm" onclick="' + R() + '.addOperator()">+ Add operator</button></div></div>'
 
       + '<div class="fng-card"><h3 style="margin-top:0">Acquisition devices</h3>'
-      + '<p class="fng-muted">Each device\'s generic info (software, version, …) is written into the metadata whenever that device is selected.</p>'
-      + devs
-      + '<div class="fng-row" style="margin-top:10px"><input class="fng-in" id="fng-newdev" placeholder="Device name e.g. 2P-B"><button class="fng-btn sm" onclick="' + R() + '.addDevice()">+ Add device</button></div></div>'
+      + '<p class="fng-muted">Lab devices and the shared platform devices are managed in a dedicated window — browse, edit lab devices, and keep your own local configs.</p>'
+      + '<div class="fng-row" style="margin-top:6px"><button class="fng-btn pri" onclick="' + R() + '.openDevManager()">Manage devices ▾</button></div></div>'
 
       + '<div class="fng-card"><h3 style="margin-top:0">Departments <span class="fng-muted">(fixed)</span></h3>'
       + '<div class="fng-mini">' + DEPARTMENTS.map(function (d) { return '<span class="fng-chiprm" style="padding-right:11px">' + esc(d.code) + ' — ' + esc(d.label) + '</span>'; }).join('') + '</div></div>'
@@ -1406,6 +1588,7 @@
     labs().push(l); ROOT.build.labId = l.id; ROOT.build.tplId = null; rerender();
   };
   ROOT.setLabName = function (id, v) { var l = labById(id); if (l) l.name = v; rerender(); };
+  ROOT.setLabDept = function (id, code) { var l = labById(id); if (l) { l.dept = code; rerender(); } };
   ROOT.setLabInitials = function (id, v) { var l = labById(id); if (l) setOverride(l, 'initials', 'acronym', v); rerender(); };
   ROOT.setLabFirst3 = function (id, v) { var l = labById(id); if (l) setOverride(l, 'first3', 'first3', v); rerender(); };
   ROOT.renameLab = function (id) {
@@ -1475,12 +1658,11 @@
   // save / export / import
   function snapshot() { try { return JSON.stringify(ROOT.library); } catch (e) { return ''; } }
   function isDirty() { return snapshot() !== ROOT._savedSnapshot; }
-  // reflect the saved/unsaved state on the Save button (greyed when nothing to save)
+  // No Save button anymore — edits auto-persist on this machine. Called by the
+  // cursor-preserving editors (field name/format, base path, device info, …) that
+  // mutate without a full rerender, so their changes are still saved immediately.
   function dirty() {
-    var b = document.getElementById('fng-savebtn'); if (!b) return;
-    if (hasCollisions()) { b.disabled = true; b.textContent = 'Save'; b.classList.remove('pri', 'saved'); return; }
-    if (isDirty()) { b.disabled = false; b.textContent = 'Save'; b.classList.add('pri'); b.classList.remove('saved'); }
-    else { b.disabled = true; b.textContent = 'Saved ✓'; b.classList.remove('pri'); b.classList.add('saved'); }
+    if (!ROOT._platformMode && ROOT.library) { try { localStorage.setItem(libCacheKey(), JSON.stringify(ROOT.library)); } catch (e) {} }
   }
   ROOT.save = function () {
     if (hasCollisions()) { toast('Resolve the duplicate identifiers (flagged with !) first.'); return; }
@@ -1531,6 +1713,9 @@
       + '<div class="fng-modal-card"><div class="fng-modal-h"><h3 style="margin:0">Publish to the lab</h3>'
       + '<button class="fng-modal-x" title="Close" onclick="' + R() + '.closePublish()">✕</button></div>'
       + '<p class="fng-muted">✓ <code>library.json</code> downloaded &nbsp;·&nbsp; ✓ contents copied to your clipboard.</p>'
+      + '<p style="font-size:13px;margin:4px 0"><b>If you are not a master user:</b> send the downloaded <code>library.json</code> '
+      + 'to your lab master and tell them what you changed. A master commits it (only masters have GitLab access).</p>'
+      + '<p style="font-size:13px;margin:10px 0 4px"><b>If you are a master user</b>, commit it now:</p>'
       + '<ol style="font-size:13px;line-height:1.8;padding-left:20px;margin:6px 0">'
       + '<li>' + step1 + '</li>'
       + '<li>In GitLab, click <b>Edit</b> on <code>library.json</code> (or <b>Upload file → Replace</b> with the downloaded one).</li>'
@@ -1602,10 +1787,6 @@
         + '<textarea class="fng-ta" style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px" placeholder="Software: Aurora" oninput="' + R() + '.setPDeviceInfo(' + di + ',this.value)">' + esc(infoText) + '</textarea></div></div>';
     }).join('') || '<span class="fng-muted">no devices yet</span>';
 
-    var isDirtyP = ROOT._platSnapshot !== platEditSnapshot();
-    var saveBtn = isDirtyP
-      ? '<button class="fng-btn pri" id="fng-psave" onclick="' + R() + '.savePlatform()">Save</button>'
-      : '<button class="fng-btn saved" id="fng-psave" disabled>Saved ✓</button>';
     return '<div class="fng-tabs"><button class="fng-tab on">Platform devices</button></div>'
       + '<h3 style="margin-top:0">Platform devices · <code>' + esc(ROOT._platformSlug || '') + '</code></h3>'
       + '<p class="fng-muted">These devices appear as the <b>' + esc(p.name) + '</b> tab in <b>every</b> lab\'s device picker. You edit only this platform.</p>'
@@ -1613,11 +1794,10 @@
       + '<input class="fng-in" value="' + esc(p.name) + '" onchange="' + R() + '.setPlatformEditName(this.value)"></div>'
       + devs
       + '<div class="fng-row" style="margin-top:12px"><input class="fng-in" id="fng-newpdev" placeholder="Device name e.g. Aurora-Flow"><button class="fng-btn sm" onclick="' + R() + '.addPDevice()">+ Add device</button></div>'
-      + '<div class="fng-acts" style="margin-top:14px">' + saveBtn
-      + '<button class="fng-btn" onclick="' + R() + '.publishPlatform()">Publish…</button></div>'
+      + '<div class="fng-acts" style="margin-top:14px"><button class="fng-btn pri" onclick="' + R() + '.publishPlatform()">Publish changes</button></div>'
       + '<div class="fng-f" style="max-width:640px;margin-top:8px"><span class="fng-l">GitLab file URL</span>'
       + '<input class="fng-in" readonly value="' + esc(platformPublishLink()) + '"></div>'
-      + '<p class="fng-muted" style="margin-top:6px"><b>Save</b> keeps changes on this machine. <b>Publish…</b> downloads <code>platform.json</code>, copies it, and shows the GitLab steps.</p>';
+      + '<p class="fng-muted" style="margin-top:6px">Your edits are kept on this machine automatically. <b>Publish changes</b> downloads <code>platform.json</code> and copies it — commit it in GitLab to share with all labs.</p>';
   }
   ROOT.setPlatformEditName = function (v) { if (ROOT.platformEdit) { ROOT.platformEdit.name = v; rerender(); } };
   ROOT.addPDevice = function () {
@@ -1632,10 +1812,8 @@
     (text || '').split(/\n/).forEach(function (line) { var idx = line.indexOf(':'); if (idx > 0) { var k = line.slice(0, idx).trim(); if (k) info[k] = line.slice(idx + 1).trim(); } });
     d.info = info; dirtyP();
   };
-  function dirtyP() {   // live-reflect unsaved state on the platform Save button (no full rerender)
-    var b = document.getElementById('fng-psave'); if (!b) return;
-    if (ROOT._platSnapshot !== platEditSnapshot()) { b.disabled = false; b.textContent = 'Save'; b.classList.add('pri'); b.classList.remove('saved'); }
-    else { b.disabled = true; b.textContent = 'Saved ✓'; b.classList.remove('pri'); b.classList.add('saved'); }
+  function dirtyP() {   // autosave the platform edit on this machine (no Save button); keeps cursor
+    if (ROOT.platformEdit) { try { localStorage.setItem('fng.platform.' + ROOT._platformSlug, platEditSnapshot()); } catch (e) {} }
   }
   ROOT.savePlatform = function () {
     try { localStorage.setItem('fng.platform.' + ROOT._platformSlug, platEditSnapshot()); } catch (e) {}
@@ -1679,11 +1857,14 @@
       + '<button class="fng-tab' + (ROOT.ui.mode === 'manage' ? ' on' : '') + '" onclick="' + R() + '.go(\'manage\')">Manage</button>'
       + '</div>' : '';
     var body = (ROOT.ui.mode === 'manage' && master) ? renderManage() : renderUse();
-    return '<div class="fng">' + css() + tabs + body + '</div>';
+    return '<div class="fng">' + css() + tabs + body + renderDevManager() + '</div>';
   }
   ROOT.go = function (m) { ROOT.ui.mode = m; rerender(); };
 
   function rerender() {
+    // Auto-persist on this machine so edits are never lost (no Save button).
+    if (!ROOT._platformMode && ROOT.library) { try { localStorage.setItem(libCacheKey(), JSON.stringify(ROOT.library)); } catch (e) {} }
+    if (ROOT._platformMode && ROOT.platformEdit) { try { localStorage.setItem('fng.platform.' + ROOT._platformSlug, JSON.stringify(ROOT.platformEdit)); } catch (e) {} }
     var host = ROOT._host || document.getElementById('fng-host');
     if (host) { host.innerHTML = shell(); return; }
     var sd = ROOT._sectionData;
@@ -1764,13 +1945,8 @@
     ROOT.platforms = loadPlatformsCache();   // shared platform devices (cached; refreshed below)
     try { syncSharedPlatforms(); } catch (e) {}
     ROOT._savedSnapshot = snapshot();   // start in a clean (greyed Save) state
-    // Only a master user manages templates. Default true; tighten via the
-    // `allowMemberEditing` config flag or eLabSDK2.System.Group permissions.
-    // Who may manage templates. TODO(ELN): replace the final fallback with a real
-    // eLab group-admin / permission check once the sandbox is available. For now,
-    // honor the config flag; default to true so the add-on is usable before that
-    // wiring exists (tighten to `false` once the permission source is connected).
-    ROOT._isMaster = (cfg.allowMemberEditing === true) || !!(addonContext && addonContext.isMaster) || true;
+    // Everyone can edit the library (one shared link); committing is gated by GitLab access.
+    ROOT._isMaster = true;
     registerSection();
   };
 
@@ -1791,18 +1967,15 @@
       var host = document.getElementById('fng-host');
       if (host && !(window.eLabSDK && eLabSDK.Experiment)) {
         ROOT._host = host;
-        // master = ?admin=1 in the URL ONLY; everyone else sees only "Use".
-        // Strictly URL-driven (no localStorage opt-in) so the two distributed links are
-        // deterministic: the admin URL manages, the plain URL never does — regardless of
-        // what this browser opened before. Clear any stale flag from older versions.
         var pmatch = location.search.match(/[?&]platform=([^&]+)/);     // per-platform editor
         ROOT._platformMode = !!pmatch;
         ROOT._platformSlug = pmatch ? decodeURIComponent(pmatch[1]) : '';
-        // master = ?admin=1 in the URL, OR the dedicated platform page (which implies edit mode).
-        var admin = /[?&]admin=1/.test(location.search)
-          || (ROOT._platformMode && typeof window !== 'undefined' && window.FNG_PLATFORM_ADMIN === true);
         try { localStorage.removeItem('fng.admin'); } catch (e) {}
-        ROOT._isMaster = admin;
+        // Lab app: EVERYONE can edit the library (one shared link). Committing to GitLab is
+        // gated by repo access, not the app. The platform editor still gates on its own flag.
+        ROOT._isMaster = ROOT._platformMode
+          ? (/[?&]admin=1/.test(location.search) || (typeof window !== 'undefined' && window.FNG_PLATFORM_ADMIN === true))
+          : true;
         ROOT.platforms = loadPlatformsCache();                          // shared devices (instant, cached)
         function fngRender() {                           // instant: cached copy or bundled default
           if (ROOT._platformMode) {
