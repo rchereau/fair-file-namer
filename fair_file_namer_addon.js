@@ -428,7 +428,7 @@
       + '.fng-devbtn{width:100%;text-align:left;padding:7px 9px;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
       + '.fng-ph{color:#5b647d;font-style:italic;}'
       + '.fng-doccopy{position:absolute;top:8px;right:8px;z-index:2;}'
-      + '.fng-modal-card.fng-dmcard{width:96vw;max-width:1320px;}'
+      + '.fng-modal-card.fng-dmcard{width:92vw;max-width:880px;}'
       + '.fng-warn{background:rgba(247,201,72,.08);border:1px solid #6b5a1f;border-left:3px solid #f7c948;border-radius:6px;color:#e7d9a8;font-size:12.5px;line-height:1.55;padding:9px 12px;margin:0 0 16px;}'
       + '.fng-warn b{color:#f7c948;}'
       + '.fng-dmbody{display:flex;gap:12px;align-items:flex-start;flex-wrap:nowrap;}'
@@ -638,9 +638,13 @@
         ctrl = '<select class="fng-sel" onchange="' + R() + '.setVal(\'' + f.id + '\',this.value)"><option value="">— select —</option>'
           + (L.operators || []).map(function (o) { var n = opName(o); return '<option value="' + esc(n) + '"' + (n === v ? ' selected' : '') + '>' + esc(n) + '</option>'; }).join('') + '</select>';
       } else if (f.source === 'device') {
-        // Opens the Manage devices window to browse / select / edit / configure devices.
-        ctrl = '<button type="button" class="fng-btn fng-devbtn' + (v ? ' pri' : '') + '" title="Open the device manager" onclick="' + R() + '.openDevManager()">'
-          + (v ? esc(v) : 'Manage devices ▾') + '</button>';
+        // Opens a read-only device browser to choose a device; the gear opens the
+        // user's own configurations for the chosen operator + device.
+        ctrl = '<div class="fng-devwrap">'
+          + '<button type="button" class="fng-btn fng-devbtn' + (v ? ' pri' : '') + '" style="flex:1" title="Browse and choose a device" onclick="' + R() + '.openDevManager()">'
+          + (v ? esc(v) : 'Choose device ▾') + '</button>'
+          + '<button type="button" class="fng-btn fng-star" title="User configurations for this operator + device" onclick="' + R() + '.openConfigMgr()">⚙</button>'
+          + '</div>';
       } else if (f.source === 'list') {
         ctrl = '<select class="fng-sel" onchange="' + R() + '.setVal(\'' + f.id + '\',this.value)"><option value="">— select —</option>'
           + (f.options || []).map(function (o) { return '<option value="' + esc(o) + '"' + (o === v ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join('') + '</select>';
@@ -718,13 +722,20 @@
     var desc;
     if (p.scope === 'lab') {
       var d = labDeviceById(p.id) || { name: p.name, info: {} };
-      var infoText = Object.keys(d.info || {}).map(function (k) { return k + ': ' + d.info[k]; }).join('\n');
-      desc = '<div class="fng-card" style="margin-top:10px"><h3 style="margin-top:0">Description <span class="fng-muted" style="text-transform:none;letter-spacing:0">· shared library · editable</span></h3>'
-        + '<div class="fng-f"><span class="fng-l">Device name (used in the file name)</span><input class="fng-in" value="' + esc(d.name) + '" onchange="' + R() + '.devmgrSetLabName(\'' + p.id + '\',this.value)"></div>'
-        + '<div class="fng-f" style="margin-top:6px"><span class="fng-l">Generic info — one "Key: value" per line (added to metadata)</span>'
-        + '<textarea class="fng-ta" style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;min-height:120px" oninput="' + R() + '.devmgrSetLabInfo(\'' + p.id + '\',this.value)">' + esc(infoText) + '</textarea></div>'
-        + '<div class="fng-row" style="margin-top:8px;align-items:center"><button class="fng-btn sm" onclick="' + R() + '.devmgrDelLabDevice(\'' + p.id + '\')">Remove device</button>'
-        + '<span class="fng-muted">Edits are kept on this machine; use <b>Publish changes</b> in Manage to send them to a master.</span></div></div>';
+      if (!dm.edit) {
+        var roRows = Object.keys(d.info || {}).map(function (k) { return '<tr><td>' + esc(k) + '</td><td>' + esc(d.info[k]) + '</td></tr>'; }).join('');
+        desc = '<div class="fng-card" style="margin-top:10px"><h3 style="margin-top:0">Description <span class="fng-muted" style="text-transform:none;letter-spacing:0">· lab device · read-only</span></h3>'
+          + (roRows ? '<table class="fng-doc-t"><tbody>' + roRows + '</tbody></table>' : '<p class="fng-muted">No details provided.</p>')
+          + '<p class="fng-muted" style="margin-top:6px">Lab devices are maintained by a master in the <b>Manage</b> tab.</p></div>';
+      } else {
+        var infoText = Object.keys(d.info || {}).map(function (k) { return k + ': ' + d.info[k]; }).join('\n');
+        desc = '<div class="fng-card" style="margin-top:10px"><h3 style="margin-top:0">Description <span class="fng-muted" style="text-transform:none;letter-spacing:0">· shared library · editable</span></h3>'
+          + '<div class="fng-f"><span class="fng-l">Device name (used in the file name)</span><input class="fng-in" value="' + esc(d.name) + '" onchange="' + R() + '.devmgrSetLabName(\'' + p.id + '\',this.value)"></div>'
+          + '<div class="fng-f" style="margin-top:6px"><span class="fng-l">Generic info — one "Key: value" per line (added to metadata)</span>'
+          + '<textarea class="fng-ta" style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;min-height:120px" oninput="' + R() + '.devmgrSetLabInfo(\'' + p.id + '\',this.value)">' + esc(infoText) + '</textarea></div>'
+          + '<div class="fng-row" style="margin-top:8px;align-items:center"><button class="fng-btn sm" onclick="' + R() + '.devmgrDelLabDevice(\'' + p.id + '\')">Remove device</button>'
+          + '<span class="fng-muted">Edits are kept on this machine; use <b>Publish changes</b> in Manage to send them to a master.</span></div></div>';
+      }
     } else {
       var pl = (ROOT.platforms || []).filter(function (x) { return x.id === p.platId; })[0];
       var pd = pl && (pl.devices || []).filter(function (x) { return x.id === p.id; })[0];
@@ -746,7 +757,7 @@
     var labKids = dm.openLab ? '<div class="fng-treekids">' + (labDevs.length ? labDevs.map(function (d) {
       return '<button type="button" class="fng-treeitem' + (pick.scope === 'lab' && pick.id === d.id ? ' on' : '') + '" onclick="' + R() + '.devmgrPickLab(\'' + d.id + '\')">' + esc(d.name) + '</button>';
     }).join('') : '<span class="fng-muted" style="padding:4px 8px">no devices yet</span>')
-      + '<button type="button" class="fng-treeadd" onclick="' + R() + '.devmgrAddLab()">+ add device</button></div>' : '';
+      + (dm.edit ? '<button type="button" class="fng-treeadd" onclick="' + R() + '.devmgrAddLab()">+ add device</button>' : '') + '</div>' : '';
     var plats = (ROOT.platforms || []);
     var platKids = dm.openPlat ? '<div class="fng-treekids">' + (plats.length ? plats.map(function (p) {
       var devKids = dm.openPlatId === p.id ? '<div class="fng-treekids">' + ((p.devices || []).length ? (p.devices || []).map(function (d) {
@@ -764,12 +775,13 @@
     return '<div class="fng-modal" onclick="if(event.target===this)' + R() + '.closeDevManager()">'
       + '<div class="fng-modal-card fng-dmcard"><div class="fng-modal-h"><h3 style="margin:0">Manage devices</h3>'
       + '<button class="fng-modal-x" title="Close" onclick="' + R() + '.closeDevManager()">✕</button></div>'
-      + '<div class="fng-dmbody"><div class="fng-dmleft">' + devmgrTree() + '</div>' + devmgrMiddle() + devmgrRight() + '</div>'
+      + '<div class="fng-dmbody"><div class="fng-dmleft">' + devmgrTree() + '</div>' + devmgrMiddle() + '</div>'
       + '<div class="fng-acts" style="margin-top:12px"><button class="fng-btn pri" onclick="' + R() + '.closeDevManager()">Done</button></div></div></div>';
   }
-  ROOT.openDevManager = function () {
+  ROOT.openDevManager = function (edit) {
     var dm = ROOT.ui.devmgr = ROOT.ui.devmgr || {};
     dm.open = true;
+    dm.edit = !!edit;   // Use tab = read-only browser; Manage tab = full editor
     // Default view: show the device currently in use (and its configs); if nothing is
     // selected in Use, collapse everything.
     var cur = currentDeviceName();
@@ -786,6 +798,40 @@
     rerender();
   };
   ROOT.closeDevManager = function () { if (ROOT.ui.devmgr) ROOT.ui.devmgr.open = false; rerender(); };
+
+  /* --- User configuration window (#3) -------------------------------------
+   * Shows ONLY the configurations for the current operator + the device chosen
+   * for the file name. Configs are created/edited here and stay on this machine. */
+  ROOT.openConfigMgr = function () { ROOT.ui.cfgOpen = true; rerender(); };
+  ROOT.closeConfigMgr = function () { ROOT.ui.cfgOpen = false; rerender(); };
+  function renderConfigManager() {
+    if (!ROOT.ui.cfgOpen) return '';
+    var op = currentOperator(), dev = currentDeviceName(), body;
+    if (!dev) {
+      body = '<p class="fng-muted">Choose a <b>device</b> first (the device button), then add configurations for it here.</p>';
+    } else if (!op) {
+      body = '<p class="fng-muted">Select your <b>operator</b> on the main screen first — configurations are saved per operator + device, on this machine.</p>';
+    } else {
+      var list = odConfigs(op, dev), actId = activeConfigId(op, dev);
+      var active = list.filter(function (c) { return c.id === actId; })[0];
+      var sel = '<select class="fng-sel" onchange="' + R() + '.selectConfig(this.value)"><option value="">— none —</option>'
+        + list.map(function (c) { return '<option value="' + esc(c.id) + '"' + (c.id === actId ? ' selected' : '') + '>' + esc(c.name) + '</option>'; }).join('') + '</select>';
+      var editor = active
+        ? '<div class="fng-f" style="margin-top:8px"><span class="fng-l">Settings — one "Key: value" per line (saved on this machine; added to the metadata when this device is in use)</span>'
+          + '<textarea class="fng-ta" style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;min-height:120px" oninput="' + R() + '.editConfig(this.value)">' + esc(active.text || '') + '</textarea></div>'
+        : '<p class="fng-muted" style="margin-top:6px">No configuration selected — create one with <b>New</b>.</p>';
+      body = '<p class="fng-muted" style="margin-top:0">Operator <b>' + esc(op) + '</b> · device <b>' + esc(dev) + '</b> · this machine.</p>'
+        + '<div class="fng-row" style="align-items:flex-end"><div class="fng-f" style="flex:1;max-width:280px"><span class="fng-l">Saved configurations</span>' + sel + '</div>'
+        + '<button class="fng-btn sm" onclick="' + R() + '.newConfig()">+ New</button>'
+        + (active ? '<button class="fng-btn sm" onclick="' + R() + '.renameConfig()">Rename</button><button class="fng-btn sm" onclick="' + R() + '.deleteConfig()">Delete</button>' : '')
+        + '</div>' + editor;
+    }
+    return '<div class="fng-modal" onclick="if(event.target===this)' + R() + '.closeConfigMgr()">'
+      + '<div class="fng-modal-card"><div class="fng-modal-h"><h3 style="margin:0">User configuration</h3>'
+      + '<button class="fng-modal-x" title="Close" onclick="' + R() + '.closeConfigMgr()">✕</button></div>'
+      + body
+      + '<div class="fng-acts"><button class="fng-btn pri" onclick="' + R() + '.closeConfigMgr()">Done</button></div></div></div>';
+  }
   ROOT.devmgrToggleLab = function () { ROOT.ui.devmgr.openLab = !ROOT.ui.devmgr.openLab; rerender(); };
   ROOT.devmgrTogglePlatRoot = function () { ROOT.ui.devmgr.openPlat = !ROOT.ui.devmgr.openPlat; rerender(); };
   ROOT.devmgrTogglePlat = function (pid) { ROOT.ui.devmgr.openPlatId = (ROOT.ui.devmgr.openPlatId === pid ? null : pid); rerender(); };
@@ -949,11 +995,11 @@
     var op = currentOperator(), dev = currentDeviceName(); if (!op || !dev) return null;
     return odConfigs(op, dev).filter(function (c) { return c.id === activeConfigId(op, dev); })[0] || null;
   }
-  // config handlers act on (operator + the device OPENED in the Manage devices window)
-  ROOT.selectConfig = function (id) { var op = currentOperator(), dev = pickedDeviceName(); if (!op || !dev) return; setActiveConfigId(op, dev, id); rerender(); };
+  // config handlers act on (current operator + the device chosen for the file name)
+  ROOT.selectConfig = function (id) { var op = currentOperator(), dev = currentDeviceName(); if (!op || !dev) return; setActiveConfigId(op, dev, id); rerender(); };
   ROOT.newConfig = function () {
     var op = currentOperator(); if (!op) { toast('Select your operator on the main screen first.'); return; }
-    var dev = pickedDeviceName(); if (!dev) return;
+    var dev = currentDeviceName(); if (!dev) { toast('Choose a device first.'); return; }
     var def = 'Config ' + (odConfigs(op, dev).length + 1);
     var name = (typeof window !== 'undefined' && window.prompt) ? window.prompt('Name this configuration:', def) : def;
     if (name === null) return; name = (name || '').trim() || def;
@@ -962,18 +1008,18 @@
     m[k].push(c); saveAllConfigs(m); setActiveConfigId(op, dev, c.id); rerender();
   };
   ROOT.editConfig = function (text) {   // no rerender — keep the textarea cursor
-    var op = currentOperator(), dev = pickedDeviceName(); if (!op || !dev) return;
+    var op = currentOperator(), dev = currentDeviceName(); if (!op || !dev) return;
     var m = loadAllConfigs(), k = cfgKey(op, dev), c = (m[k] || []).filter(function (x) { return x.id === activeConfigId(op, dev); })[0];
     if (!c) return; c.text = text; saveAllConfigs(m); refreshHeader();
   };
   ROOT.renameConfig = function () {
-    var op = currentOperator(), dev = pickedDeviceName(); if (!op || !dev) return;
+    var op = currentOperator(), dev = currentDeviceName(); if (!op || !dev) return;
     var m = loadAllConfigs(), k = cfgKey(op, dev), c = (m[k] || []).filter(function (x) { return x.id === activeConfigId(op, dev); })[0]; if (!c) return;
     var n = (typeof window !== 'undefined' && window.prompt) ? window.prompt('Rename configuration:', c.name) : c.name;
     if (n === null) return; c.name = (n || '').trim() || c.name; saveAllConfigs(m); rerender();
   };
   ROOT.deleteConfig = function () {
-    var op = currentOperator(), dev = pickedDeviceName(); if (!op || !dev) return;
+    var op = currentOperator(), dev = currentDeviceName(); if (!op || !dev) return;
     if (typeof window !== 'undefined' && window.confirm && !window.confirm('Delete this configuration?')) return;
     var m = loadAllConfigs(), k = cfgKey(op, dev); m[k] = (m[k] || []).filter(function (x) { return x.id !== activeConfigId(op, dev); });
     saveAllConfigs(m); setActiveConfigId(op, dev, ''); rerender();
@@ -1003,6 +1049,11 @@
     var depCode = (lab && lab.dept) ? lab.dept : '';
     if (!depCode) (tpl.fieldIds || []).forEach(function (id) { var ff = fieldById(L, id); if (ff && ff.source === 'department') depCode = ROOT.ui.values[id] || depCode; });
     if (depCode) { var dlh = DEPARTMENTS.filter(function (d) { return d.code === depCode; })[0]; h.department = dlh ? (depCode + ' — ' + dlh.label) : depCode; }
+    // operator's email — kept in the metadata for contact, never put in the file name
+    (tpl.fieldIds || []).forEach(function (id) {
+      var ef = fieldById(L, id);
+      if (ef && ef.source === 'operator') { var op = operatorByName(ROOT.ui.values[id] || ''); if (op && op.email) h.operatorEmail = op.email; }
+    });
     // attach the selected device's generic info (software, version, …)
     (tpl.fieldIds || []).forEach(function (id) {
       var f = fieldById(L, id);
@@ -1011,6 +1062,11 @@
         var d = findDeviceByName(sel);
         if (d && d.info && Object.keys(d.info).length) h.device = { name: d.name, info: d.info };
       }
+    });
+    // operator email (from the managed operator list) — always recorded in metadata
+    (tpl.fieldIds || []).forEach(function (id) {
+      var f = fieldById(L, id);
+      if (f && f.source === 'operator') { var op = operatorByName(ROOT.ui.values[id] || ''); if (op && op.email) h.operatorEmail = op.email; }
     });
     // attach the operator's active experiment configuration (local to this machine)
     var cfg = activeConfig();
@@ -1026,6 +1082,7 @@
     if (h.fullPath && h.fullPath !== h.fileName) md.push('**Full path:** `' + h.fullPath + '`  ');
     md.push('**Lab:** ' + h.lab + '  ');
     if (h.department) md.push('**Department:** ' + h.department + '  ');
+    if (h.operatorEmail) md.push('**Operator email:** ' + h.operatorEmail + '  ');
     md.push('**Template:** ' + h.template + '  ');
     md.push('**Generated:** ' + fmtDate(new Date(), 'YYYY-MM-DD') + ' ' + fmtDate(new Date(), 'HH:MM'));
     md.push('', '| Field | Value |', '| --- | --- |');
@@ -1048,7 +1105,7 @@
     var html = '<h3 class="fng-doc-h">File metadata</h3>'
       + '<p><b>File name:</b> <code>' + esc(h.fileName || '(empty)') + '</code><br>';
     if (h.fullPath && h.fullPath !== h.fileName) html += '<b>Full path:</b> <code>' + esc(h.fullPath) + '</code><br>';
-    html += '<b>Lab:</b> ' + esc(h.lab) + (h.department ? '<br><b>Department:</b> ' + esc(h.department) : '') + '<br><b>Template:</b> ' + esc(h.template)
+    html += '<b>Lab:</b> ' + esc(h.lab) + (h.department ? '<br><b>Department:</b> ' + esc(h.department) : '') + (h.operatorEmail ? '<br><b>Operator email:</b> ' + esc(h.operatorEmail) : '') + '<br><b>Template:</b> ' + esc(h.template)
       + '<br><b>Generated:</b> ' + fmtDate(new Date(), 'YYYY-MM-DD') + ' ' + fmtDate(new Date(), 'HH:MM') + '</p>'
       + '<table class="fng-doc-t"><thead><tr><th>Field</th><th>Value</th></tr></thead><tbody>';
     Object.keys(h.fields).forEach(function (k) { html += '<tr><td>' + esc(k) + '</td><td>' + esc(h.fields[k] || '—') + '</td></tr>'; });
@@ -1136,6 +1193,76 @@
     return { header: h, notes: htmlToText(ROOT.ui.notesHtml || ''), notesHtml: ROOT.ui.notesHtml || '' };
   }
   function copyText(t) { if (t && navigator.clipboard) navigator.clipboard.writeText(t); }
+
+  /* --- rich clipboard: paste a FORMATTED block into the ELN ----------------
+   * The ELN (eLabNext) editor is rich-text/HTML: pasting Markdown shows the raw
+   * "## ** |" marks. So we put real HTML on the clipboard (rendered headings +
+   * tables + the notes), with the Markdown as the plain-text fallback. The
+   * HTML tables are themselves machine-readable (Field/Value rows parse cleanly);
+   * we also embed the full sidecar JSON as an HTML comment + data-attribute as a
+   * best-effort machine record (whether it survives depends on the ELN's
+   * sanitiser — the downloaded .json sidecar is the guaranteed canonical form). */
+  function clipTable(pairs, c1, c2) {
+    var TS = 'border-collapse:collapse;margin:4px 0;', CS = 'border:1px solid #999;padding:4px 9px;text-align:left;';
+    var rows = pairs.map(function (p) { return '<tr><td style="' + CS + '">' + esc(p[0]) + '</td><td style="' + CS + '">' + esc(p[1] == null || p[1] === '' ? '—' : p[1]) + '</td></tr>'; }).join('');
+    return '<table style="' + TS + '"><thead><tr><th style="' + CS + '">' + esc(c1) + '</th><th style="' + CS + '">' + esc(c2) + '</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  }
+  // Self-contained HTML (no app CSS classes — those don't exist in the ELN).
+  function clipboardHtml() {
+    var h = headerObject(); if (!h) return '';
+    var html = '<h3 style="margin:0 0 6px">File metadata</h3>'
+      + '<p style="margin:0 0 8px"><strong>File name:</strong> <code>' + esc(h.fileName || '(empty)') + '</code><br>';
+    if (h.fullPath && h.fullPath !== h.fileName) html += '<strong>Full path:</strong> <code>' + esc(h.fullPath) + '</code><br>';
+    html += '<strong>Lab:</strong> ' + esc(h.lab);
+    if (h.department) html += '<br><strong>Department:</strong> ' + esc(h.department);
+    if (h.operatorEmail) html += '<br><strong>Operator email:</strong> ' + esc(h.operatorEmail);
+    html += '<br><strong>Template:</strong> ' + esc(h.template)
+      + '<br><strong>Generated:</strong> ' + fmtDate(new Date(), 'YYYY-MM-DD') + ' ' + fmtDate(new Date(), 'HH:MM') + '</p>';
+    html += clipTable(Object.keys(h.fields).map(function (k) { return [k, h.fields[k]]; }), 'Field', 'Value');
+    if (h.device) html += '<p style="margin:10px 0 4px"><strong>Device — ' + esc(h.device.name) + '</strong></p>'
+      + clipTable(Object.keys(h.device.info).map(function (k) { return [k, h.device.info[k]]; }), 'Property', 'Value');
+    if (h.config) html += '<p style="margin:10px 0 4px"><strong>Configuration — ' + esc(h.config.name) + '</strong> (this machine)</p>'
+      + clipTable(Object.keys(h.config.settings).map(function (k) { return [k, h.config.settings[k]]; }), 'Setting', 'Value');
+    html += '<hr><h3 style="margin:0 0 6px">Notes</h3>' + (ROOT.ui.notesHtml || '<p></p>');
+    return html;
+  }
+  // Wrap the visible HTML with an embedded machine-readable copy (best-effort).
+  function clipboardPayload() {
+    var inner = clipboardHtml();
+    var json = JSON.stringify(sidecar());
+    var html = '<div data-fng-metadata="' + esc(json) + '">' + inner + '</div>'
+      + '<!--FNG-METADATA ' + json.replace(/--/g, '\u2013\u2013') + ' FNG-METADATA-->';
+    return { html: html, text: notesMarkdown() };
+  }
+  // Put both text/html and text/plain on the clipboard; fall back gracefully.
+  function writeRichClipboard(html, text, done) {
+    if (navigator.clipboard && window.ClipboardItem) {
+      try {
+        navigator.clipboard.write([new ClipboardItem({
+          'text/html': new Blob([html], { type: 'text/html' }),
+          'text/plain': new Blob([text], { type: 'text/plain' })
+        })]).then(function () { if (done) done(true); }, function () { legacyCopyHtml(html, text, done); });
+        return;
+      } catch (e) {}
+    }
+    legacyCopyHtml(html, text, done);
+  }
+  function legacyCopyHtml(html, text, done) {
+    try {
+      var holder = document.createElement('div');
+      holder.contentEditable = 'true';
+      holder.style.cssText = 'position:fixed;left:-9999px;top:0;';
+      holder.innerHTML = html;
+      document.body.appendChild(holder);
+      var range = document.createRange(); range.selectNodeContents(holder);
+      var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+      var ok = false; try { ok = document.execCommand('copy'); } catch (e) {}
+      sel.removeAllRanges(); document.body.removeChild(holder);
+      if (ok) { if (done) done(true); return; }
+    } catch (e) {}
+    try { if (navigator.clipboard) navigator.clipboard.writeText(text); } catch (e) {}
+    if (done) done(false);
+  }
   // Every user-input field (not the auto date/counter/lab, not ELN-filled ones) must be
   // filled before a name can be copied/exported. Returns the names still empty.
   function missingInputs() {
@@ -1173,12 +1300,13 @@
   ROOT.copyPath = function () { if (!guard()) return; copyText(curPath()); toast('Full path copied.'); };
   ROOT.downloadSidecar = function () { if (!guard()) return; var name = curName(); if (!name) return; pushHistory(name); saveFieldHistories(); download(name + '.json', JSON.stringify(sidecar(), null, 2), 'application/json'); };
   ROOT.copyMarkdown = function () { copyText(notesMarkdown()); toast('Metadata (Markdown) copied.'); };
-  // copy the whole metadata + notes block (the icon at the doc's top-right), with a flash
+  // copy the whole metadata + notes block (the icon at the doc's top-right) as
+  // FORMATTED HTML so it pastes nicely into the ELN, with a flash.
   ROOT.copyDoc = function () {
-    copyText(notesMarkdown());
+    var p = clipboardPayload();
     var b = document.getElementById('fng-md-copybtn');
     if (b) { var o = b.innerHTML; b.classList.add('ok'); b.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><polyline points="20 6 9 17 4 12"></polyline></svg>'; setTimeout(function () { b.classList.remove('ok'); b.innerHTML = o; }, 1300); }
-    toast('Metadata & notes copied.');
+    writeRichClipboard(p.html, p.text, function () { toast('Metadata & notes copied (formatted for the ELN).'); });
   };
   ROOT.downloadMarkdown = function () { if (!guard()) return; var name = curName(); if (!name) return; pushHistory(name); saveFieldHistories(); download(name + '.md', notesMarkdown(), 'text/markdown'); };
 
@@ -1335,6 +1463,7 @@
       + '<div class="fng-tiles" id="fng-tilebox" ondragover="' + R() + '.tileDragOver(event)" ondrop="' + R() + '.tileDrop(event)">' + tiles + '</div>'
       + '<h3 style="margin-top:14px">Available fields</h3>'
       + '<div class="fng-tiles fng-avail">' + avail + '</div>'
+      + customFieldsCard()
       + buildExample(lab, tpl);
   }
 
@@ -1436,6 +1565,9 @@
         + DEPARTMENTS.map(function (d) { return '<option value="' + esc(d.code) + '"' + (l.dept === d.code ? ' selected' : '') + '>' + esc(d.code) + ' — ' + esc(d.label) + '</option>'; }).join('')
         + '</select></td>';
     }
+    function emailCell(e, i) {
+      return '<td><input class="fng-in" type="email" style="width:190px" placeholder="name@unige.ch" value="' + esc(e.email || '') + '" onchange="' + R() + '.setOperatorEmail(' + i + ',this.value)"></td>';
+    }
     function abbrTable(list, keyOf, fns, extraCell) {
       var fullV = list.map(function (e) { return applyFmt(opName(e), 'full'); });
       var iniV = list.map(abbrIni), f3V = list.map(abbrF3);
@@ -1449,7 +1581,7 @@
         return '<tr>' + cellInput(R() + '.' + fns.name + '(' + k + ',this.value)', opName(e), fb, 150)
           + cellInput(R() + '.' + fns.ini + '(' + k + ',this.value)', iniDisp, ib, 80)
           + cellInput(R() + '.' + fns.f3 + '(' + k + ',this.value)', f3Disp, tb, 80)
-          + (extraCell ? extraCell(e) : '')
+          + (extraCell ? extraCell(e, i) : '')
           + '<td><button class="fng-btn sm" title="remove" onclick="' + R() + '.' + fns.del + '(' + k + ')">✕</button></td></tr>';
       }).join('');
       return { rows: rows, any: any };
@@ -1460,7 +1592,7 @@
           + (t.any ? '<p class="fng-muted" style="margin-top:6px">Fields flagged <span class="fng-bang">!</span> match another ' + kind + ' — edit them to make each unique.</p>' : '')
         : '<span class="fng-muted">' + emptyMsg + '</span>';
     }
-    var ops = abbrTableHtml(abbrTable(opList, function (e, i) { return '' + i; }, { name: 'setOperatorName', ini: 'setOperatorInitials', f3: 'setOperatorFirst3', del: 'delOperator' }), 'no operators yet', 'operator', 'Full name');
+    var ops = abbrTableHtml(abbrTable(opList, function (e, i) { return '' + i; }, { name: 'setOperatorName', ini: 'setOperatorInitials', f3: 'setOperatorFirst3', del: 'delOperator' }, emailCell), 'no operators yet', 'operator', 'Full name', 'Email');
     var labsTable = abbrTableHtml(abbrTable(labs(), function (l) { return '\'' + l.id + '\''; }, { name: 'setLabName', ini: 'setLabInitials', f3: 'setLabFirst3', del: 'delLab' }, deptCell), 'no labs yet', 'lab', 'Lab name', 'Department');
     var devDup = countMap((L.devices || []).map(function (d) { return d.name; }));
 
@@ -1475,22 +1607,11 @@
         + '<textarea class="fng-ta" style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px" placeholder="Software: ScanImage" oninput="' + R() + '.setDeviceInfo(' + i + ',this.value)">' + esc(infoText) + '</textarea></div></div>';
     }).join('') || '<span class="fng-muted">no devices yet</span>';
 
-    var customs = L.fields.filter(function (f) { return !f.builtin; });
-    var customList = customs.map(function (f) {
-      var meta = f.source === 'list' ? 'list: ' + (f.options || []).join(', ') : f.source === 'date' ? 'date ' + f.format : f.source === 'counter' ? 'counter' : 'free text';
-      return '<span class="fng-chiprm">' + esc(f.name) + ' <span class="fng-muted">(' + esc(meta) + ')</span><button onclick="' + R() + '.delField(\'' + f.id + '\')">✕</button></span>';
-    }).join('') || '<span class="fng-muted">no custom fields</span>';
-
-    var nf = ROOT.newField;
-    var typeSel = '<select class="fng-sel" onchange="' + R() + '.setNF(\'type\',this.value)">'
-      + ['freetext', 'list', 'date', 'counter'].map(function (t) { return '<option value="' + t + '"' + (nf.type === t ? ' selected' : '') + '>' + (t === 'freetext' ? 'free text' : t) + '</option>'; }).join('') + '</select>';
-    var extra = nf.type === 'list'
-      ? '<div class="fng-f" style="flex:1"><span class="fng-l">Options (comma-separated)</span><input class="fng-in" value="' + esc(nf.optionsCsv) + '" placeholder="A, B, C" oninput="' + R() + '.setNF(\'optionsCsv\',this.value)"></div>'
-      : nf.type === 'date'
-        ? '<div class="fng-f"><span class="fng-l">Date format</span><select class="fng-sel" onchange="' + R() + '.setNF(\'format\',this.value)">' + ['YYYYMMDD', 'YYYY-MM-DD', 'YYMMDD', 'YYYYMM', 'YYYY'].map(function (x) { return '<option' + (nf.format === x ? ' selected' : '') + '>' + x + '</option>'; }).join('') + '</select></div>'
-        : '';
-
     return '<h3 style="margin-top:22px">Lists &amp; fields</h3>'
+      + '<div class="fng-card"><h3 style="margin-top:0">Acquisition devices</h3>'
+      + '<p class="fng-muted">Lab devices and the shared platform devices are managed in a dedicated window — browse and edit lab devices.</p>'
+      + '<div class="fng-row" style="margin-top:6px"><button class="fng-btn pri" onclick="' + R() + '.openDevManager(true)">Manage devices ▾</button></div></div>'
+
       + '<div class="fng-card"><h3 style="margin-top:0">Labs</h3>'
       + labsTable
       + '<div class="fng-row" style="margin-top:8px"><button class="fng-btn sm" onclick="' + R() + '.addLab()">+ Add lab</button></div></div>'
@@ -1499,21 +1620,34 @@
       + ops
       + '<div class="fng-row" style="margin-top:8px"><input class="fng-in" id="fng-newop" placeholder="Full name"><button class="fng-btn sm" onclick="' + R() + '.addOperator()">+ Add operator</button></div></div>'
 
-      + '<div class="fng-card"><h3 style="margin-top:0">Acquisition devices</h3>'
-      + '<p class="fng-muted">Lab devices and the shared platform devices are managed in a dedicated window — browse, edit lab devices, and keep your own local configs.</p>'
-      + '<div class="fng-row" style="margin-top:6px"><button class="fng-btn pri" onclick="' + R() + '.openDevManager()">Manage devices ▾</button></div></div>'
-
       + '<div class="fng-card"><h3 style="margin-top:0">Departments <span class="fng-muted">(fixed)</span></h3>'
-      + '<div class="fng-mini">' + DEPARTMENTS.map(function (d) { return '<span class="fng-chiprm" style="padding-right:11px">' + esc(d.code) + ' — ' + esc(d.label) + '</span>'; }).join('') + '</div></div>'
+      + '<div class="fng-mini">' + DEPARTMENTS.map(function (d) { return '<span class="fng-chiprm" style="padding-right:11px">' + esc(d.code) + ' — ' + esc(d.label) + '</span>'; }).join('') + '</div></div>';
+  }
 
-      + '<div class="fng-card"><h3 style="margin-top:0">Custom fields</h3>'
+  // Custom-field management card — shown in the template editor, just below the
+  // "Available fields" palette (so a new field appears in the palette right above).
+  function customFieldsCard() {
+    var L = ROOT.library;
+    var customs = L.fields.filter(function (f) { return !f.builtin; });
+    var customList = customs.map(function (f) {
+      var meta = f.source === 'list' ? 'list: ' + (f.options || []).join(', ') : f.source === 'date' ? 'date ' + f.format : f.source === 'counter' ? 'counter' : 'free text';
+      return '<span class="fng-chiprm">' + esc(f.name) + ' <span class="fng-muted">(' + esc(meta) + ')</span><button onclick="' + R() + '.delField(\'' + f.id + '\')">✕</button></span>';
+    }).join('') || '<span class="fng-muted">no custom fields</span>';
+    var nf = ROOT.newField;
+    var typeSel = '<select class="fng-sel" onchange="' + R() + '.setNF(\'type\',this.value)">'
+      + ['freetext', 'list', 'date', 'counter'].map(function (t) { return '<option value="' + t + '"' + (nf.type === t ? ' selected' : '') + '>' + (t === 'freetext' ? 'free text' : t) + '</option>'; }).join('') + '</select>';
+    var extra = nf.type === 'list'
+      ? '<div class="fng-f" style="flex:1"><span class="fng-l">Options (comma-separated)</span><input class="fng-in" value="' + esc(nf.optionsCsv) + '" placeholder="A, B, C" oninput="' + R() + '.setNF(\'optionsCsv\',this.value)"></div>'
+      : nf.type === 'date'
+        ? '<div class="fng-f"><span class="fng-l">Date format</span><select class="fng-sel" onchange="' + R() + '.setNF(\'format\',this.value)">' + ['YYYYMMDD', 'YYYY-MM-DD', 'YYMMDD', 'YYYYMM', 'YYYY'].map(function (x) { return '<option' + (nf.format === x ? ' selected' : '') + '>' + x + '</option>'; }).join('') + '</select></div>'
+        : '';
+    return '<div class="fng-card" style="margin-top:8px"><h3 style="margin-top:0">Custom fields</h3>'
       + '<div class="fng-mini">' + customList + '</div>'
       + '<div class="fng-row" style="margin-top:10px;align-items:flex-end">'
       + '<div class="fng-f"><span class="fng-l">Field name</span><input class="fng-in" value="' + esc(nf.name) + '" placeholder="e.g. Stain" oninput="' + R() + '.setNF(\'name\',this.value)"></div>'
       + '<div class="fng-f"><span class="fng-l">Type</span>' + typeSel + '</div>'
       + extra
-      + '<button class="fng-btn sm pri" onclick="' + R() + '.addField()">+ Add field</button></div></div>'
-      + '</details>';
+      + '<button class="fng-btn sm pri" onclick="' + R() + '.addField()">+ Add custom field</button></div></div>';
   }
 
   /* --- manage mutations --- */
@@ -1615,6 +1749,7 @@
   ROOT.setOperatorName = function (i, v) { var o = ROOT.library.operators[i]; if (o) o.name = v; rerender(); };
   ROOT.setOperatorInitials = function (i, v) { var o = ROOT.library.operators[i]; if (o) setOverride(o, 'initials', 'acronym', v); rerender(); };
   ROOT.setOperatorFirst3 = function (i, v) { var o = ROOT.library.operators[i]; if (o) setOverride(o, 'first3', 'first3', v); rerender(); };
+  ROOT.setOperatorEmail = function (i, v) { var o = ROOT.library.operators[i]; if (o) o.email = (v || '').trim(); dirty(); };   // no rerender (keep focus)
 
   // devices (master-maintained). Name change / info edit do NOT rerender (keep cursor).
   ROOT.addDevice = function () {
@@ -1768,43 +1903,69 @@
     if (!base) return 'set window.FNG_PUBLISH_BASE in index.html';
     return base.replace(/\/+$/, '') + '/filenamer-plat-' + (ROOT._platformSlug || '') + '/-/edit/main/platform.json';
   }
+  function platTree() {
+    var p = ROOT.platformEdit || { devices: [] };
+    var pickId = ROOT.ui.platPick;
+    var dup = countMap((p.devices || []).map(function (d) { return d.name; }));
+    var items = (p.devices || []).length ? (p.devices || []).map(function (d) {
+      var bad = d.name && dup[d.name] > 1;
+      return '<button type="button" class="fng-treeitem' + (d.id === pickId ? ' on' : '') + '" onclick="' + R() + '.platPick(\'' + d.id + '\')">' + esc(d.name || '(unnamed)') + (bad ? ' <span class="fng-bang" title="Duplicate name">!</span>' : '') + '</button>';
+    }).join('') : '<span class="fng-muted" style="padding:4px 8px">no devices yet</span>';
+    return '<div class="fng-tree">'
+      + '<div class="fng-treefolder open" style="cursor:default">▾ ' + esc(p.name || ROOT._platformSlug || 'Platform') + ' devices</div>'
+      + '<div class="fng-treekids">' + items
+      + '<button type="button" class="fng-treeadd" onclick="' + R() + '.addPDevice()">+ add device</button></div>'
+      + '</div>';
+  }
+  function platMiddle() {
+    var p = ROOT.platformEdit || { devices: [] };
+    var d = (p.devices || []).filter(function (x) { return x.id === ROOT.ui.platPick; })[0];
+    if (!d) return '<div class="fng-dmmid"><p class="fng-muted">Select a device on the left, or add one, to edit its name and description.</p></div>';
+    var di = (p.devices || []).indexOf(d);
+    var dup = countMap((p.devices || []).map(function (x) { return x.name; }));
+    var dDup = d.name && dup[d.name] > 1;
+    var infoText = Object.keys(d.info || {}).map(function (k) { return k + ': ' + d.info[k]; }).join('\n');
+    var head = '<div class="fng-row" style="justify-content:space-between;align-items:center;gap:8px"><h3 style="margin:0">' + esc(d.name || '(unnamed)') + '</h3>'
+      + '<button class="fng-btn sm" onclick="' + R() + '.delPDevice(' + di + ')">Remove device</button></div>';
+    var desc = '<div class="fng-card" style="margin-top:10px"><h3 style="margin-top:0">Description <span class="fng-muted" style="text-transform:none;letter-spacing:0">· this platform · editable</span></h3>'
+      + '<div class="fng-f"><span class="fng-l">Device name (used in the file name)' + (dDup ? ' <span class="fng-bang" title="Another device in this platform has this name — make it unique">!</span>' : '') + '</span>'
+      + '<input class="fng-in' + (dDup ? ' fng-dupin' : '') + '" value="' + esc(d.name) + '" onchange="' + R() + '.setPDeviceName(' + di + ',this.value)"></div>'
+      + '<div class="fng-f" style="margin-top:6px"><span class="fng-l">Generic info — one "Key: value" per line (added to metadata)</span>'
+      + '<textarea class="fng-ta" style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;min-height:120px" placeholder="Software: Aurora" oninput="' + R() + '.setPDeviceInfo(' + di + ',this.value)">' + esc(infoText) + '</textarea></div></div>';
+    return '<div class="fng-dmmid">' + head + desc + '</div>';
+  }
   function renderPlatformAdmin() {
     if (!ROOT._isMaster) {
       return '<h3 style="margin-top:0">Platform devices</h3>'
-        + '<p class="fng-muted">This page edits one platform\'s device list. Open it with '
-        + '<code>?platform=&lt;slug&gt;&amp;admin=1</code> to manage it.</p>';
+        + '<p class="fng-muted">This page edits one platform\'s device list. Open it from the platform link your administrator gave you (<code>platform.html?platform=&lt;slug&gt;</code>).</p>';
     }
     var p = ROOT.platformEdit || normalizePlatformFile({}, ROOT._platformSlug, ROOT._platformSlug);
-    var dup = countMap((p.devices || []).map(function (d) { return d.name; }));
-    var devs = (p.devices || []).map(function (d, di) {
-      var infoText = Object.keys(d.info || {}).map(function (k) { return k + ': ' + d.info[k]; }).join('\n');
-      var dDup = d.name && dup[d.name] > 1;
-      return '<div class="fng-card" style="margin-top:8px">'
-        + '<div class="fng-row" style="align-items:flex-end"><div class="fng-f" style="flex:1"><span class="fng-l">Device name (used in the file name)' + (dDup ? ' <span class="fng-bang" title="Another device in this platform has this name — make it unique">!</span>' : '') + '</span>'
-        + '<input class="fng-in' + (dDup ? ' fng-dupin' : '') + '" value="' + esc(d.name) + '" onchange="' + R() + '.setPDeviceName(' + di + ',this.value)"></div>'
-        + '<button class="fng-btn sm" onclick="' + R() + '.delPDevice(' + di + ')">Remove</button></div>'
-        + '<div class="fng-f" style="margin-top:6px"><span class="fng-l">Generic info — one "Key: value" per line (added to metadata)</span>'
-        + '<textarea class="fng-ta" style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px" placeholder="Software: Aurora" oninput="' + R() + '.setPDeviceInfo(' + di + ',this.value)">' + esc(infoText) + '</textarea></div></div>';
-    }).join('') || '<span class="fng-muted">no devices yet</span>';
-
     return '<div class="fng-tabs"><button class="fng-tab on">Platform devices</button></div>'
       + '<h3 style="margin-top:0">Platform devices · <code>' + esc(ROOT._platformSlug || '') + '</code></h3>'
       + '<p class="fng-muted">These devices appear as the <b>' + esc(p.name) + '</b> tab in <b>every</b> lab\'s device picker. You edit only this platform.</p>'
       + '<div class="fng-f" style="max-width:480px"><span class="fng-l">Platform name (the tab label)</span>'
       + '<input class="fng-in" value="' + esc(p.name) + '" onchange="' + R() + '.setPlatformEditName(this.value)"></div>'
-      + devs
-      + '<div class="fng-row" style="margin-top:12px"><input class="fng-in" id="fng-newpdev" placeholder="Device name e.g. Aurora-Flow"><button class="fng-btn sm" onclick="' + R() + '.addPDevice()">+ Add device</button></div>'
+      + '<div class="fng-dmbody" style="margin-top:12px"><div class="fng-dmleft">' + platTree() + '</div>' + platMiddle() + '</div>'
       + '<div class="fng-acts" style="margin-top:14px"><button class="fng-btn pri" onclick="' + R() + '.publishPlatform()">Publish changes</button></div>'
       + '<div class="fng-f" style="max-width:640px;margin-top:8px"><span class="fng-l">GitLab file URL</span>'
       + '<input class="fng-in" readonly value="' + esc(platformPublishLink()) + '"></div>'
       + '<p class="fng-muted" style="margin-top:6px">Your edits are kept on this machine automatically. <b>Publish changes</b> downloads <code>platform.json</code> and copies it — commit it in GitLab to share with all labs.</p>';
   }
+  ROOT.platPick = function (id) { ROOT.ui.platPick = id; rerender(); };
   ROOT.setPlatformEditName = function (v) { if (ROOT.platformEdit) { ROOT.platformEdit.name = v; rerender(); } };
   ROOT.addPDevice = function () {
-    var el = document.getElementById('fng-newpdev'); var v = el ? el.value.trim() : '';
-    if (v && ROOT.platformEdit) { ROOT.platformEdit.devices.push({ id: uid('dev'), name: v, info: {} }); rerender(); }
+    if (!ROOT.platformEdit) return;
+    var name = (typeof window !== 'undefined' && window.prompt) ? window.prompt('New device name:', '') : '';
+    if (name === null) return; name = (name || '').trim(); if (!name) return;
+    var d = { id: uid('dev'), name: name, info: {} };
+    ROOT.platformEdit.devices.push(d); ROOT.ui.platPick = d.id; dirtyP(); rerender();
   };
-  ROOT.delPDevice = function (di) { if (ROOT.platformEdit) { ROOT.platformEdit.devices.splice(di, 1); rerender(); } };
+  ROOT.delPDevice = function (di) {
+    if (!ROOT.platformEdit) return;
+    var d = ROOT.platformEdit.devices[di];
+    if (d && d.id === ROOT.ui.platPick) ROOT.ui.platPick = null;
+    ROOT.platformEdit.devices.splice(di, 1); dirtyP(); rerender();
+  };
   ROOT.setPDeviceName = function (di, v) { var d = ROOT.platformEdit && ROOT.platformEdit.devices[di]; if (d) { d.name = v; rerender(); } };
   ROOT.setPDeviceInfo = function (di, text) {   // no rerender — keep the textarea cursor
     var d = ROOT.platformEdit && ROOT.platformEdit.devices[di]; if (!d) return;
@@ -1857,7 +2018,7 @@
       + '<button class="fng-tab' + (ROOT.ui.mode === 'manage' ? ' on' : '') + '" onclick="' + R() + '.go(\'manage\')">Manage</button>'
       + '</div>' : '';
     var body = (ROOT.ui.mode === 'manage' && master) ? renderManage() : renderUse();
-    return '<div class="fng">' + css() + tabs + body + renderDevManager() + '</div>';
+    return '<div class="fng">' + css() + tabs + body + renderDevManager() + renderConfigManager() + '</div>';
   }
   ROOT.go = function (m) { ROOT.ui.mode = m; rerender(); };
 
