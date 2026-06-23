@@ -40,10 +40,6 @@
   var LS_DOCSIZE = 'fng.doc.size';               // per-machine metadata display size
   var LS_HIST = 'fng.recentNames';               // per-machine recent file names
   var LS_PLATFORMS = 'fng.platforms.cache';      // shared faculty-wide platform devices (cached)
-  var LS_STORAGE = 'fng.machine.storageStatus';  // per-machine raw-data storage status
-  var LS_STORAGE_DATE = 'fng.machine.storageDate';
-  var LS_SHOWPATH = 'fng.machine.showLiteralPath'; // opt-in: record unverified absolute path
-  var LS_ANALYTICS = 'fng.analytics.queue';      // buffered usage-event pings (flushed to endpoint)
 
   // Display options for the rendered metadata document.
   var FONTS = { sans: 'IBM Plex Sans, system-ui, -apple-system, Segoe UI, sans-serif', serif: 'Georgia, "Times New Roman", serif', mono: 'ui-monospace, Menlo, Consolas, monospace' };
@@ -1283,155 +1279,6 @@
     return { header: h, notes: htmlToText(ROOT.ui.notesHtml || ''), notesHtml: ROOT.ui.notesHtml || '' };
   }
   function copyText(t) { if (t && navigator.clipboard) navigator.clipboard.writeText(t); }
-
-  /* --- usage analytics (event ping) ---------------------------------------
-   * Opt-in and fire-and-forget: active ONLY when window.FNG_ANALYTICS_URL is
-   * set (in index.html). Each export sends ONE minimal event to a private
-   * endpoint (Google Apps Script -> Sheet): no file names and no field values,
-   * only lab + operator names, the action, and a few coarse facets. Events are
-   * buffered in localStorage and flushed, so a failed POST is retried later. */
-  var ANALYTICS_EV_V = 1;
-  function analyticsCfg() {
-    if (typeof window === 'undefined' || !window.FNG_ANALYTICS_URL) return null;
-    return { url: window.FNG_ANALYTICS_URL, key: window.FNG_ANALYTICS_KEY || '' };
-  }
-  function fieldValueBySource(src) {
-    var fs = (ROOT.library && ROOT.library.fields) || [];
-    for (var i = 0; i < fs.length; i++) { if (fs[i].source === src) { var v = ROOT.ui.values[fs[i].id]; if (v) return v; } }
-    return '';
-  }
-  function currentDeviceScope() {
-    var nm = fieldValueBySource('device'); if (!nm) return '';
-    return groupOfDevice(nm) === '__lab' ? 'lab' : 'platform';
-  }
-  // Pseudonymise the operator: a stable short token instead of the plaintext name,
-  // so the datastore never holds raw names. cyrb53 is a fast non-cryptographic hash —
-  // this is data-minimisation, not strong anonymity (someone holding both the data and
-  // the operator roster could re-derive it), but raw names never leave the browser.
-  var OP_SALT = 'fng-op-v1';   // change this to rotate every operator token
-  function cyrb53(str, seed) {
-    seed = seed || 0;
-    var h1 = 0xdeadbeef ^ seed, h2 = 0x41c6ce57 ^ seed;
-    for (var i = 0, ch; i < str.length; i++) { ch = str.charCodeAt(i); h1 = Math.imul(h1 ^ ch, 2654435761); h2 = Math.imul(h2 ^ ch, 1597334677); }
-    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
-    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
-    return 4294967296 * (2097151 & h2) + (h1 >>> 0);
-  }
-  function hashOperator(name) {
-    name = String(name || '').trim().toLowerCase();
-    return name ? 'op-' + cyrb53(OP_SALT + '|' + name).toString(36) : '';
-  }
-  // The event payload — deliberately minimal. The lab NAME is included; the operator is
-  // a stable HASH (never the raw name); never any file name or field value.
-  function buildAnalyticsEvent(action) {
-    var lab = useLab(); if (!lab) return null;
-    var tpl = useFileTpl(lab);
-    return { v: ANALYTICS_EV_V, ts: new Date().toISOString(), action: action,
-      labId: lab.id || '', lab: lab.name || '', dept: lab.dept || '',
-      operator: hashOperator(fieldValueBySource('operator')),
-      deviceScope: currentDeviceScope(),
-      template: (tpl && tpl.name) || '',
-      storage: storageStatusVal() };
-  }
-  function aQueue() { try { return JSON.parse(localStorage.getItem(LS_ANALYTICS) || '[]'); } catch (e) { return []; } }
-  function aQueueSet(a) { try { localStorage.setItem(LS_ANALYTICS, JSON.stringify(a.slice(-500))); } catch (e) {} }
-  var _aLastSig = '', _aLastAt = 0;
-  function logEvent(action) {
-    if (!analyticsCfg()) return;
-    try {
-      var ev = buildAnalyticsEvent(action); if (!ev) return;
-      var sig = action + '|' + ev.labId + '|' + ev.operator + '|' + ev.template;
-      var now = Date.now();
-      if (sig === _aLastSig && (now - _aLastAt) < 3000) return;   // drop rapid duplicate clicks
-      _aLastSig = sig; _aLastAt = now;
-      var q = aQueue(); q.push(ev); aQueueSet(q); flushAnalytics();
-    } catch (e) {}
-  }
-  function flushAnalytics() {
-    var cfg = analyticsCfg(); if (!cfg) return;
-    var q = aQueue(); if (!q.length) return;
-    var batch = q.slice(0, 50);
-    var body = JSON.stringify({ key: cfg.key, events: batch });
-    try {
-      fetch(cfg.url, { method: 'POST', mode: 'no-cors', keepalive: true,
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: body })
-        .then(function () { aQueueSet(aQueue().slice(batch.length)); })  // assume delivered (opaque response)
-        .catch(function () {});                                          // network failure: keep queued, retry next time
-    } catch (e) {}
-  }
-
-  /* --- rich clipboard: paste a FORMATTED block into the ELN ----------------
-   * The ELN (eLabNext) editor is rich-text/HTML: pasting Markdown shows the raw
-   * "## ** |" marks. So we put real HTML on the clipboard (rendered headings +
-   * tables + the notes), with the Markdown as the plain-text fallback. The
-   * HTML tables are themselves machine-readable (Field/Value rows parse cleanly);
-   * we also embed the full sidecar JSON as an HTML comment + data-attribute as a
-   * best-effort machine record (whether it survives depends on the ELN's
-   * sanitiser — the downloaded .json sidecar is the guaranteed canonical form). */
-  function clipTable(pairs, c1, c2) {
-    var TS = 'border-collapse:collapse;margin:4px 0;', CS = 'border:1px solid #999;padding:4px 9px;text-align:left;';
-    var rows = pairs.map(function (p) { return '<tr><td style="' + CS + '">' + esc(p[0]) + '</td><td style="' + CS + '">' + esc(p[1] == null || p[1] === '' ? '—' : p[1]) + '</td></tr>'; }).join('');
-    return '<table style="' + TS + '"><thead><tr><th style="' + CS + '">' + esc(c1) + '</th><th style="' + CS + '">' + esc(c2) + '</th></tr></thead><tbody>' + rows + '</tbody></table>';
-  }
-  // Self-contained HTML (no app CSS classes — those don't exist in the ELN).
-  function clipboardHtml() {
-    var h = headerObject(); if (!h) return '';
-    var html = '<h3 style="margin:0 0 6px">File metadata</h3>'
-      + '<p style="margin:0 0 8px"><strong>File name:</strong> <code>' + esc(h.fileName || '(empty)') + '</code><br>';
-    if (h.relPath && h.relPath !== h.fileName) html += '<strong>Relative path:</strong> <code>' + esc(h.relPath) + '</code><br>';
-    if (h.archiveTarget) html += '<strong>Intended archive (NAS):</strong> <code>' + esc(h.archiveTarget) + '</code> (planned target \u2014 not verified)<br>';
-    if (h.storage) html += '<strong>Storage status:</strong> ' + esc(h.storage.status) + (h.storage.date ? ' (as of ' + esc(h.storage.date) + ')' : '') + '<br>';
-    if (h.literalPath) html += '<strong>Full path (as entered \u2014 not verified):</strong> <code>' + esc(h.literalPath) + '</code><br>';
-    html += '<strong>Lab:</strong> ' + esc(h.lab);
-    if (h.department) html += '<br><strong>Department:</strong> ' + esc(h.department);
-    if (h.operatorEmail) html += '<br><strong>Operator email:</strong> ' + esc(h.operatorEmail);
-    html += '<br><strong>Template:</strong> ' + esc(h.template)
-      + '<br><strong>Generated:</strong> ' + fmtDate(new Date(), 'YYYY-MM-DD') + ' ' + fmtDate(new Date(), 'HH:MM') + '</p>';
-    html += clipTable(Object.keys(h.fields).map(function (k) { return [k, h.fields[k]]; }), 'Field', 'Value');
-    if (h.device) html += '<p style="margin:10px 0 4px"><strong>Device — ' + esc(h.device.name) + '</strong></p>'
-      + clipTable(Object.keys(h.device.info).map(function (k) { return [k, h.device.info[k]]; }), 'Property', 'Value');
-    if (h.config) html += '<p style="margin:10px 0 4px"><strong>Configuration — ' + esc(h.config.name) + '</strong> (this machine)</p>'
-      + clipTable(Object.keys(h.config.settings).map(function (k) { return [k, h.config.settings[k]]; }), 'Setting', 'Value');
-    if (notesNonEmpty()) html += '<hr><h3 style="margin:0 0 6px">Notes</h3>' + ROOT.ui.notesHtml;
-    return html;
-  }
-  // Wrap the visible HTML with an embedded machine-readable copy (best-effort).
-  function clipboardPayload() {
-    var inner = clipboardHtml();
-    var json = JSON.stringify(sidecar());
-    var html = '<div data-fng-metadata="' + esc(json) + '">' + inner + '</div>'
-      + '<!--FNG-METADATA ' + json.replace(/--/g, '\u2013\u2013') + ' FNG-METADATA-->';
-    return { html: html, text: notesMarkdown() };
-  }
-  // Put both text/html and text/plain on the clipboard; fall back gracefully.
-  function writeRichClipboard(html, text, done) {
-    if (navigator.clipboard && window.ClipboardItem) {
-      try {
-        navigator.clipboard.write([new ClipboardItem({
-          'text/html': new Blob([html], { type: 'text/html' }),
-          'text/plain': new Blob([text], { type: 'text/plain' })
-        })]).then(function () { if (done) done(true); }, function () { legacyCopyHtml(html, text, done); });
-        return;
-      } catch (e) {}
-    }
-    legacyCopyHtml(html, text, done);
-  }
-  function legacyCopyHtml(html, text, done) {
-    try {
-      var holder = document.createElement('div');
-      holder.contentEditable = 'true';
-      holder.style.cssText = 'position:fixed;left:-9999px;top:0;';
-      holder.innerHTML = html;
-      document.body.appendChild(holder);
-      var range = document.createRange(); range.selectNodeContents(holder);
-      var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
-      var ok = false; try { ok = document.execCommand('copy'); } catch (e) {}
-      sel.removeAllRanges(); document.body.removeChild(holder);
-      if (ok) { if (done) done(true); return; }
-    } catch (e) {}
-    try { if (navigator.clipboard) navigator.clipboard.writeText(text); } catch (e) {}
-    if (done) done(false);
-  }
   // Every user-input field (not the auto date/counter/lab, not ELN-filled ones) must be
   // filled before a name can be copied/exported. Returns the names still empty.
   function missingInputs() {
@@ -1466,13 +1313,13 @@
     if (b) { var o = b.innerHTML; b.classList.add('ok'); b.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><polyline points="20 6 9 17 4 12"></polyline></svg>'; setTimeout(function () { b.classList.remove('ok'); b.innerHTML = o; }, 1300); }
     toast('File name copied.');
   };
-  ROOT.copyPath = function () { if (!guard()) return; var lit = showLiteralPath(); copyText(lit ? curPath() : relPath()); toast(lit ? 'Full path copied (not verified).' : 'Relative path copied.'); };
-  ROOT.downloadSidecar = function () { if (!guard()) return; var name = curName(); if (!name) return; pushHistory(name); saveFieldHistories(); download(name + '.json', JSON.stringify(sidecar(), null, 2), 'application/json'); logEvent('sidecar'); };
+  ROOT.copyPath = function () { if (!guard()) return; copyText(curPath()); toast('Full path copied.'); };
+  ROOT.downloadSidecar = function () { if (!guard()) return; var name = curName(); if (!name) return; pushHistory(name); saveFieldHistories(); download(name + '.json', JSON.stringify(sidecar(), null, 2), 'application/json'); };
   ROOT.copyMarkdown = function () { copyText(notesMarkdown()); toast('Metadata (Markdown) copied.'); };
   // copy the whole metadata + notes block (the icon at the doc's top-right) as
   // FORMATTED HTML so it pastes nicely into the ELN, with a flash.
   ROOT.copyDoc = function () {
-    var p = clipboardPayload(); logEvent('eln');
+    copyText(notesMarkdown());
     var b = document.getElementById('fng-md-copybtn');
     if (b) { var o = b.innerHTML; b.classList.add('ok'); b.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><polyline points="20 6 9 17 4 12"></polyline></svg>'; setTimeout(function () { b.classList.remove('ok'); b.innerHTML = o; }, 1300); }
     writeRichClipboard(p.html, p.text, function () { toast('Metadata & notes copied (formatted for the ELN).'); });
@@ -2385,8 +2232,7 @@
       buildName: buildName, inputFields: inputFields, defaultLibrary: defaultLibrary, normalize: normalize,
       normalizeIndex: normalizeIndex, normalizePlatformFile: normalizePlatformFile,
       deviceGroups: deviceGroups, findDeviceByName: findDeviceByName, groupOfDevice: groupOfDevice,
-      headerObject: headerObject, sidecar: sidecar, relPath: relPath, folderSubtree: folderSubtree, archiveRoot: archiveRoot, curName: curName, curPath: curPath, storageStatus: storageStatus, looksLocalRoot: looksLocalRoot, showLiteralPath: showLiteralPath, locationBlock: locationBlock, headerMarkdown: headerMarkdown, ideUrl: ideUrl, cmpName: cmpName, notesMarkdown: notesMarkdown, clipboardHtml: clipboardHtml, notesNonEmpty: notesNonEmpty, buildAnalyticsEvent: buildAnalyticsEvent,
-      _setState: function (s) { s = s || {}; if (s.library) ROOT.library = s.library; if (s.platforms) ROOT.platforms = s.platforms; if (s.ui) ROOT.ui = s.ui; } };
+      _setState: function (s) { s = s || {}; if (s.library) ROOT.library = s.library; if (s.platforms) ROOT.platforms = s.platforms; } };
   }
 
 })();
