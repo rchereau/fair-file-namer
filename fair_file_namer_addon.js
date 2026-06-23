@@ -40,6 +40,9 @@
   var LS_DOCSIZE = 'fng.doc.size';               // per-machine metadata display size
   var LS_HIST = 'fng.recentNames';               // per-machine recent file names
   var LS_PLATFORMS = 'fng.platforms.cache';      // shared faculty-wide platform devices (cached)
+  var LS_STORAGE = 'fng.machine.storageStatus';  // per-machine raw-data storage status
+  var LS_STORAGE_DATE = 'fng.machine.storageDate';
+  var LS_SHOWPATH = 'fng.machine.showLiteralPath'; // opt-in: record unverified absolute path
 
   // Display options for the rendered metadata document.
   var FONTS = { sans: 'IBM Plex Sans, system-ui, -apple-system, Segoe UI, sans-serif', serif: 'Georgia, "Times New Roman", serif', mono: 'ui-monospace, Menlo, Consolas, monospace' };
@@ -186,6 +189,9 @@
     return applyFmt(values[field.id], field.format);
   }
   function fieldById(lib, id) { return (lib.fields || []).filter(function (f) { return f.id === id; })[0]; }
+  // Case-insensitive, natural (numeric-aware) name compare for alphabetical display
+  // ordering of operators and devices, e.g. "Rig2" before "Rig10".
+  function cmpName(a, b) { return String(a == null ? '' : a).localeCompare(String(b == null ? '' : b), undefined, { sensitivity: 'base', numeric: true }); }
   function operatorByName(name) { var ops = (ROOT.library && ROOT.library.operators) || []; for (var i = 0; i < ops.length; i++) { if (opName(ops[i]) === name) return ops[i]; } return null; }
   function countMap(arr) { var m = {}; (arr || []).forEach(function (v) { v = String(v == null ? '' : v); if (v) m[v] = (m[v] || 0) + 1; }); return m; }
   function anyDup(arr) { var m = countMap(arr); for (var k in m) { if (m[k] > 1) return true; } return false; }
@@ -283,7 +289,10 @@
         var fresh = JSON.stringify(lib);
         if (fresh === JSON.stringify(ROOT.library)) return;          // already up to date
         try { localStorage.setItem(libCacheKey(), fresh); } catch (e) {}    // cache for next launch
-        var busy = (ROOT.ui.mode === 'manage') || (ROOT.ui.values && Object.keys(ROOT.ui.values).length > 0);
+        // "Busy" = the user is actually working (editing in Manage, or has touched a field).
+        // Auto-filled defaults (machine device, last operator) do NOT count, so a freshly
+        // opened or re-shown page always takes the newest library without a second reload.
+        var busy = (ROOT.ui.mode === 'manage') || !!ROOT.ui.touched;
         if (!busy) { ROOT.library = lib; ROOT._savedSnapshot = fresh; rerender(); toast('Lab templates updated.'); }
         else { toast('Updated lab templates downloaded — they apply next time you reload.'); }
       })
@@ -584,7 +593,7 @@
     if (p.length === 3) return new Date(+p[0], +p[1] - 1, +p[2], d.getHours(), d.getMinutes(), d.getSeconds());
     return new Date();
   }
-  ROOT.setDateOverride = function (v) { ROOT.ui.dateOverride = v || ''; refreshUsePreview(); refreshHeader(); };
+  ROOT.setDateOverride = function (v) { ROOT.ui.touched = true; ROOT.ui.dateOverride = v || ''; refreshUsePreview(); refreshHeader(); };
 
   function labs() { return ROOT.library.labs; }
   function labById(id) { return labs().filter(function (l) { return l.id === id; })[0]; }
@@ -636,7 +645,7 @@
           + DEPARTMENTS.map(function (d) { return '<option value="' + esc(d.code) + '"' + (d.code === v ? ' selected' : '') + '>' + esc(d.code) + ' — ' + esc(d.label) + '</option>'; }).join('') + '</select>';
       } else if (f.source === 'operator') {
         ctrl = '<select class="fng-sel" onchange="' + R() + '.setVal(\'' + f.id + '\',this.value)"><option value="">— select —</option>'
-          + (L.operators || []).map(function (o) { var n = opName(o); return '<option value="' + esc(n) + '"' + (n === v ? ' selected' : '') + '>' + esc(n) + '</option>'; }).join('') + '</select>';
+          + (L.operators || []).slice().sort(function (a, b) { return cmpName(opName(a), opName(b)); }).map(function (o) { var n = opName(o); return '<option value="' + esc(n) + '"' + (n === v ? ' selected' : '') + '>' + esc(n) + '</option>'; }).join('') + '</select>';
       } else if (f.source === 'device') {
         // Opens a read-only device browser to choose a device; the gear opens the
         // user's own configurations for the chosen operator + device.
@@ -673,7 +682,7 @@
       + renderMetaDoc()
       + '<div class="fng-acts">'
       + (hasCounter ? '<button class="fng-btn pri" onclick="' + R() + '.nextRun()">Next run ▸</button>' : '')
-      + '<button class="fng-btn" onclick="' + R() + '.copyPath()">Copy full path</button>'
+      + '<button class="fng-btn" onclick="' + R() + '.copyPath()">Copy path</button>'
       + '<button class="fng-btn" onclick="' + R() + '.copyMarkdown()">Copy metadata (Markdown)</button>'
       + '<button class="fng-btn" onclick="' + R() + '.downloadMarkdown()">Download .md</button>'
       + '<button class="fng-btn" onclick="' + R() + '.downloadSidecar()">Download .json</button>'
@@ -753,14 +762,14 @@
   }
   function devmgrTree() {
     var dm = ROOT.ui.devmgr, pick = dm.pick || {};
-    var labDevs = (ROOT.library && ROOT.library.devices) || [];
+    var labDevs = ((ROOT.library && ROOT.library.devices) || []).slice().sort(function (a, b) { return cmpName(a.name, b.name); });
     var labKids = dm.openLab ? '<div class="fng-treekids">' + (labDevs.length ? labDevs.map(function (d) {
       return '<button type="button" class="fng-treeitem' + (pick.scope === 'lab' && pick.id === d.id ? ' on' : '') + '" onclick="' + R() + '.devmgrPickLab(\'' + d.id + '\')">' + esc(d.name) + '</button>';
     }).join('') : '<span class="fng-muted" style="padding:4px 8px">no devices yet</span>')
       + (dm.edit ? '<button type="button" class="fng-treeadd" onclick="' + R() + '.devmgrAddLab()">+ add device</button>' : '') + '</div>' : '';
     var plats = (ROOT.platforms || []);
     var platKids = dm.openPlat ? '<div class="fng-treekids">' + (plats.length ? plats.map(function (p) {
-      var devKids = dm.openPlatId === p.id ? '<div class="fng-treekids">' + ((p.devices || []).length ? (p.devices || []).map(function (d) {
+      var devKids = dm.openPlatId === p.id ? '<div class="fng-treekids">' + ((p.devices || []).length ? (p.devices || []).slice().sort(function (a, b) { return cmpName(a.name, b.name); }).map(function (d) {
         return '<button type="button" class="fng-treeitem' + (pick.scope === 'plat' && pick.platId === p.id && pick.id === d.id ? ' on' : '') + '" onclick="' + R() + '.devmgrPickPlat(\'' + p.id + '\',\'' + d.id + '\')">' + esc(d.name) + '</button>';
       }).join('') : '<span class="fng-muted" style="padding:4px 8px">no devices</span>') + '</div>' : '';
       return '<button type="button" class="fng-treefolder sub' + (dm.openPlatId === p.id ? ' open' : '') + '" onclick="' + R() + '.devmgrTogglePlat(\'' + p.id + '\')">' + (dm.openPlatId === p.id ? '▾ ' : '▸ ') + esc(p.name) + '</button>' + devKids;
@@ -839,6 +848,7 @@
   ROOT.devmgrPickPlat = function (pid, id) { var p = (ROOT.platforms || []).filter(function (x) { return x.id === pid; })[0]; var d = p && (p.devices || []).filter(function (x) { return x.id === id; })[0]; if (!d) return; ROOT.ui.devmgr.pick = { scope: 'plat', platId: pid, id: id, name: d.name }; rerender(); };
   ROOT.devmgrUse = function () {
     var p = ROOT.ui.devmgr && ROOT.ui.devmgr.pick; if (!p) return;
+    ROOT.ui.touched = true;
     var lab = useLab(), tpl = lab && useFileTpl(lab), fid = tpl && deviceFieldId(tpl);
     if (fid) ROOT.ui.values[fid] = p.name;
     try { localStorage.setItem(LS_DEVICE, p.name); } catch (e) {}
@@ -909,7 +919,7 @@
     var sepc = '<span class="sep">' + esc(tpl.separator || '_') + '</span>';
     var nameHtml = segs.length ? segs.join(sepc) : '<span class="fng-muted">add fields to this template…</span>';
     var folder = defaultTpl(lab.folderTemplates);
-    var pathHtml = folder ? '<div class="fng-path">' + esc(curPath()) + '</div>' : '';
+    var pathHtml = locationBlock(folder);
     return '<div class="fng-ex" id="fng-ex"><div class="h">File name</div>'
       + '<div class="fng-namerow"><div class="fng-name">' + nameHtml + '</div>'
       + '<button class="fng-copy" id="fng-copybtn" title="Copy file name" onclick="' + R() + '.copyName()">'
@@ -949,6 +959,7 @@
     ROOT.ui.devGroup = groupOfDevice(name); rerender();
   };
   ROOT.setVal = function (k, v) {
+    ROOT.ui.touched = true;   // a real user edit — don't let a background sync overwrite mid-task
     ROOT.ui.values[k] = v;
     var f = fieldById(ROOT.library, k);
     // remember the last department / operator chosen on this machine (only non-empty)
@@ -1043,7 +1054,14 @@
     var folder = defaultTpl(lab.folderTemplates);
     var sepc = tpl.separator || '_';
     var pattern = (tpl.fieldIds || []).map(function (id) { var ff = fieldById(L, id); return ff ? ff.name : id; }).join(sepc);
-    var h = { fileName: curName(), fullPath: folder ? curPath() : '', lab: lab.name, template: tpl.name, separator: sepc, pattern: pattern, fields: fields };
+    var h = { fileName: curName(), lab: lab.name, template: tpl.name, separator: sepc, pattern: pattern, fields: fields };
+    // location & storage: the name is the durable identifier; paths are mutable
+    var _subtree = folder ? buildName(folder, L, ROOT.ui.values, ctx) : '';
+    if (_subtree) h.relPath = _subtree + '/' + (h.fileName || '');          // relative, location-independent
+    var _root = (folder && folder.basePath) ? normPath(folder.basePath) : '';
+    if (_root) h.archiveTarget = _root;                                      // intended NAS destination (planned, not verified)
+    h.storage = storageStatus();                                             // controlled: Local / Transferred / Both
+    if (showLiteralPath()) { var _lit = [_root, _subtree].filter(Boolean).join('/'); h.literalPath = (_lit ? _lit + '/' : '') + (h.fileName || ''); }
     // Department is bound to the lab — always recorded in the metadata, even if it
     // isn't part of the naming template.
     var depCode = (lab && lab.dept) ? lab.dept : '';
@@ -1079,7 +1097,10 @@
     var md = [];
     md.push('## File metadata', '');
     md.push('**File name:** `' + (h.fileName || '(empty)') + '`  ');
-    if (h.fullPath && h.fullPath !== h.fileName) md.push('**Full path:** `' + h.fullPath + '`  ');
+    if (h.relPath && h.relPath !== h.fileName) md.push('**Relative path:** `' + h.relPath + '`  ');
+    if (h.archiveTarget) md.push('**Intended archive (NAS):** `' + h.archiveTarget + '` _(planned target \u2014 not verified)_  ');
+    if (h.storage) md.push('**Storage status:** ' + h.storage.status + (h.storage.date ? ' (as of ' + h.storage.date + ')' : '') + '  ');
+    if (h.literalPath) md.push('**Full path (as entered \u2014 not verified):** `' + h.literalPath + '`  ');
     md.push('**Lab:** ' + h.lab + '  ');
     if (h.department) md.push('**Department:** ' + h.department + '  ');
     if (h.operatorEmail) md.push('**Operator email:** ' + h.operatorEmail + '  ');
@@ -1104,7 +1125,10 @@
     var h = headerObject(); if (!h) return '';
     var html = '<h3 class="fng-doc-h">File metadata</h3>'
       + '<p><b>File name:</b> <code>' + esc(h.fileName || '(empty)') + '</code><br>';
-    if (h.fullPath && h.fullPath !== h.fileName) html += '<b>Full path:</b> <code>' + esc(h.fullPath) + '</code><br>';
+    if (h.relPath && h.relPath !== h.fileName) html += '<b>Relative path:</b> <code>' + esc(h.relPath) + '</code><br>';
+    if (h.archiveTarget) html += '<b>Intended archive (NAS):</b> <code>' + esc(h.archiveTarget) + '</code> <span style="color:#6b7592">(planned target \u2014 not verified)</span><br>';
+    if (h.storage) html += '<b>Storage status:</b> ' + esc(h.storage.status) + (h.storage.date ? ' <span style="color:#6b7592">(as of ' + esc(h.storage.date) + ')</span>' : '') + '<br>';
+    if (h.literalPath) html += '<b>Full path:</b> <code>' + esc(h.literalPath) + '</code> <span style="color:#f0a860">(as entered \u2014 not verified)</span><br>';
     html += '<b>Lab:</b> ' + esc(h.lab) + (h.department ? '<br><b>Department:</b> ' + esc(h.department) : '') + (h.operatorEmail ? '<br><b>Operator email:</b> ' + esc(h.operatorEmail) : '') + '<br><b>Template:</b> ' + esc(h.template)
       + '<br><b>Generated:</b> ' + fmtDate(new Date(), 'YYYY-MM-DD') + ' ' + fmtDate(new Date(), 'HH:MM') + '</p>'
       + '<table class="fng-doc-t"><thead><tr><th>Field</th><th>Value</th></tr></thead><tbody>';
@@ -1179,6 +1203,64 @@
   function notesMarkdown() { return headerMarkdown() + '\n\n---\n\n' + NOTE_MARK + '\n\n' + htmlToMd(ROOT.ui.notesHtml || ''); }
 
   function curName() { var lab = useLab(); var tpl = lab && useFileTpl(lab); return tpl ? buildName(tpl, ROOT.library, ROOT.ui.values, { now: nowDate(), tplId: tpl.id, lab: lab }) : ''; }
+
+  /* --- location & storage helpers -----------------------------------------
+   * The file NAME is the durable identifier (intrinsic, travels with the file).
+   * A folder PATH is mutable and environment-specific, so we split it into a
+   * location-independent convention subtree (recorded) and an absolute root /
+   * intended NAS target (recorded only as a planned, unverified destination).
+   * The full literal path is opt-in and always labelled "not verified". */
+  function folderSubtree() {
+    var lab = useLab(); if (!lab) return '';
+    var folder = defaultTpl(lab.folderTemplates); if (!folder) return '';
+    var tpl = useFileTpl(lab);
+    return buildName(folder, ROOT.library, ROOT.ui.values, { now: nowDate(), tplId: tpl ? tpl.id : '', lab: lab });
+  }
+  function archiveRoot() { var lab = useLab(); if (!lab) return ''; var folder = defaultTpl(lab.folderTemplates); return (folder && folder.basePath) ? normPath(folder.basePath) : ''; }
+  function relPath() { var sub = folderSubtree(), n = curName(); return sub ? (sub + '/' + n) : n; }
+
+  var STORAGE_OPTS = ['Local (acquisition PC)', 'Transferred to NASAC', 'Both (local + NASAC)'];
+  function storageStatusVal() { try { return localStorage.getItem(LS_STORAGE) || STORAGE_OPTS[0]; } catch (e) { return STORAGE_OPTS[0]; } }
+  function storageStatusDate() { try { return localStorage.getItem(LS_STORAGE_DATE) || ''; } catch (e) { return ''; } }
+  function storageStatus() { return { status: storageStatusVal(), date: storageStatusDate() || fmtDate(new Date(), 'YYYY-MM-DD') }; }
+  function showLiteralPath() { try { return localStorage.getItem(LS_SHOWPATH) === '1'; } catch (e) { return false; } }
+  // a root that looks like a local disk rather than a NAS share (//server/share)
+  function looksLocalRoot(p) { p = normPath(p); return /^[A-Za-z]:\//.test(p) || /^\/(Users|home|mnt|media|tmp|var|Desktop|Documents)\b/i.test(p); }
+
+  ROOT.setStorageStatus = function (v) { try { localStorage.setItem(LS_STORAGE, v); } catch (e) {} refreshUsePreview(); refreshHeader(); };
+  ROOT.setStorageDate = function (v) { try { if (v) localStorage.setItem(LS_STORAGE_DATE, v); else localStorage.removeItem(LS_STORAGE_DATE); } catch (e) {} refreshHeader(); };
+  ROOT.toggleLiteralPath = function (on) { try { localStorage.setItem(LS_SHOWPATH, on ? '1' : '0'); } catch (e) {} refreshUsePreview(); refreshHeader(); };
+
+  // The block shown under the file name in the Use tab: relative path, intended
+  // archive (with a local-vs-NAS nudge), the controlled storage status, and the
+  // opt-in (unverified) absolute path.
+  function locationBlock(folder) {
+    var html = '';
+    if (folder) {
+      html += '<div class="fng-path" title="Relative path \u2014 travels with the file, independent of where it is stored">' + esc(relPath()) + '</div>';
+      var root = archiveRoot();
+      if (root) {
+        html += '<div class="fng-muted" style="font-size:11px;margin-top:3px">Intended archive (NAS): <code>' + esc(root) + '</code> \u2014 planned target, not verified</div>';
+        if (looksLocalRoot(root)) html += '<div style="font-size:11px;margin-top:2px;color:#f0a860">\u26a0 This looks like a local drive. Good practice is to archive raw data on NASAC (a //server/share path).</div>';
+      }
+    }
+    var cur = storageStatusVal();
+    html += '<div class="fng-row" style="margin-top:8px;align-items:flex-end">'
+      + '<div class="fng-f"><span class="fng-l">Raw-data storage</span>'
+      + '<select class="fng-sel" onchange="' + R() + '.setStorageStatus(this.value)">'
+      + STORAGE_OPTS.map(function (o) { return '<option value="' + esc(o) + '"' + (o === cur ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join('')
+      + '</select></div>'
+      + '<div class="fng-f"><span class="fng-l">As of</span>'
+      + '<input class="fng-in" type="date" value="' + esc(storageStatusDate() || fmtDate(new Date(), 'YYYY-MM-DD')) + '" onchange="' + R() + '.setStorageDate(this.value)"></div>'
+      + '</div>';
+    if (folder && archiveRoot()) {
+      html += '<label style="display:flex;gap:6px;align-items:center;font-size:11px;color:#8b95a9;margin-top:6px;cursor:pointer">'
+        + '<input type="checkbox"' + (showLiteralPath() ? ' checked' : '') + ' onchange="' + R() + '.toggleLiteralPath(this.checked)"> '
+        + 'Also record the full literal path (as entered \u2014 not verified)</label>';
+      if (showLiteralPath()) html += '<div class="fng-path" style="opacity:.8;margin-top:4px" title="Absolute path as entered \u2014 the tool cannot check the file is actually there">' + esc(curPath()) + ' <span style="color:#f0a860">(not verified)</span></div>';
+    }
+    return html;
+  }
   function curPath() {
     var lab = useLab(); if (!lab) return '';
     var tpl = useFileTpl(lab), folder = defaultTpl(lab.folderTemplates);
@@ -1212,7 +1294,10 @@
     var h = headerObject(); if (!h) return '';
     var html = '<h3 style="margin:0 0 6px">File metadata</h3>'
       + '<p style="margin:0 0 8px"><strong>File name:</strong> <code>' + esc(h.fileName || '(empty)') + '</code><br>';
-    if (h.fullPath && h.fullPath !== h.fileName) html += '<strong>Full path:</strong> <code>' + esc(h.fullPath) + '</code><br>';
+    if (h.relPath && h.relPath !== h.fileName) html += '<strong>Relative path:</strong> <code>' + esc(h.relPath) + '</code><br>';
+    if (h.archiveTarget) html += '<strong>Intended archive (NAS):</strong> <code>' + esc(h.archiveTarget) + '</code> (planned target \u2014 not verified)<br>';
+    if (h.storage) html += '<strong>Storage status:</strong> ' + esc(h.storage.status) + (h.storage.date ? ' (as of ' + esc(h.storage.date) + ')' : '') + '<br>';
+    if (h.literalPath) html += '<strong>Full path (as entered \u2014 not verified):</strong> <code>' + esc(h.literalPath) + '</code><br>';
     html += '<strong>Lab:</strong> ' + esc(h.lab);
     if (h.department) html += '<br><strong>Department:</strong> ' + esc(h.department);
     if (h.operatorEmail) html += '<br><strong>Operator email:</strong> ' + esc(h.operatorEmail);
@@ -1297,7 +1382,7 @@
     if (b) { var o = b.innerHTML; b.classList.add('ok'); b.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><polyline points="20 6 9 17 4 12"></polyline></svg>'; setTimeout(function () { b.classList.remove('ok'); b.innerHTML = o; }, 1300); }
     toast('File name copied.');
   };
-  ROOT.copyPath = function () { if (!guard()) return; copyText(curPath()); toast('Full path copied.'); };
+  ROOT.copyPath = function () { if (!guard()) return; var lit = showLiteralPath(); copyText(lit ? curPath() : relPath()); toast(lit ? 'Full path copied (not verified).' : 'Relative path copied.'); };
   ROOT.downloadSidecar = function () { if (!guard()) return; var name = curName(); if (!name) return; pushHistory(name); saveFieldHistories(); download(name + '.json', JSON.stringify(sidecar(), null, 2), 'application/json'); };
   ROOT.copyMarkdown = function () { copyText(notesMarkdown()); toast('Metadata (Markdown) copied.'); };
   // copy the whole metadata + notes block (the icon at the doc's top-right) as
@@ -1343,7 +1428,10 @@
     var o = sidecar(), h = o.header; if (!h || !h.fileName) return;
     pushHistory(h.fileName); saveFieldHistories();
     var rows = '<tr><td style="color:#6b7592;padding-right:10px">File name</td><td><strong>' + esc(h.fileName) + '</strong></td></tr>';
-    if (h.fullPath) rows += '<tr><td style="color:#6b7592">Full path</td><td>' + esc(h.fullPath) + '</td></tr>';
+    if (h.relPath) rows += '<tr><td style="color:#6b7592">Relative path</td><td>' + esc(h.relPath) + '</td></tr>';
+    if (h.archiveTarget) rows += '<tr><td style="color:#6b7592">Intended archive (NAS)</td><td>' + esc(h.archiveTarget) + ' (not verified)</td></tr>';
+    if (h.storage) rows += '<tr><td style="color:#6b7592">Storage status</td><td>' + esc(h.storage.status) + (h.storage.date ? ' (as of ' + esc(h.storage.date) + ')' : '') + '</td></tr>';
+    if (h.literalPath) rows += '<tr><td style="color:#6b7592">Full path (not verified)</td><td>' + esc(h.literalPath) + '</td></tr>';
     rows += '<tr><td style="color:#6b7592">Lab</td><td>' + esc(h.lab) + '</td></tr>'
           + '<tr><td style="color:#6b7592">Template</td><td>' + esc(h.template) + '</td></tr>';
     Object.keys(h.fields || {}).forEach(function (k) {
@@ -1412,7 +1500,7 @@
              : '<button class="fng-btn pri" onclick="' + R() + '.publish()">Publish changes</button>')
       + '<button class="fng-btn" onclick="' + R() + '.importLib()">Import library JSON</button>'
       + '</div>'
-      + '<div class="fng-f" style="max-width:640px;margin-top:8px"><span class="fng-l">GitLab file URL — derived automatically from this page&rsquo;s address</span>'
+      + '<div class="fng-f" style="max-width:640px;margin-top:8px"><span class="fng-l">GitLab Web IDE link — derived automatically from this page&rsquo;s address</span>'
       + '<input class="fng-in" readonly value="' + esc(publishLink() || 'set window.FNG_PUBLISH_BASE in index.html') + '"></div>'
       + (col ? '<p style="margin-top:6px;color:#f0604a;font-size:12px">⚠ Resolve the duplicate identifiers flagged with <b>!</b> below before publishing.</p>'
              : '<p class="fng-muted" style="margin-top:6px">Your edits are kept on this machine automatically. <b>Publish changes</b> downloads <code>library.json</code> and copies it — send it to a master to commit, or commit it yourself if you have GitLab access.</p>');
@@ -1435,7 +1523,7 @@
       + '</div>';
 
     var baseRow = ROOT.build.kind === 'folder'
-      ? '<div class="fng-f" style="margin:8px 0"><span class="fng-l">Base path (NAS root) — prepended to the folder structure</span>'
+      ? '<div class="fng-f" style="margin:8px 0"><span class="fng-l">Intended archive root (NAS) — recorded as a planned target only; the tool never asserts where the file currently is</span>'
         + '<input class="fng-in" value="' + esc(tpl.basePath || '') + '" placeholder="//nasac-m2.isis.unige.ch/m-GHoltmaat/GHoltmaat/USERS/" oninput="' + R() + '.setBasePath(this.value)"></div>'
       : '';
 
@@ -1592,7 +1680,7 @@
           + (t.any ? '<p class="fng-muted" style="margin-top:6px">Fields flagged <span class="fng-bang">!</span> match another ' + kind + ' — edit them to make each unique.</p>' : '')
         : '<span class="fng-muted">' + emptyMsg + '</span>';
     }
-    var ops = abbrTableHtml(abbrTable(opList, function (e, i) { return '' + i; }, { name: 'setOperatorName', ini: 'setOperatorInitials', f3: 'setOperatorFirst3', del: 'delOperator' }, emailCell), 'no operators yet', 'operator', 'Full name', 'Email');
+    var ops = abbrTableHtml(abbrTable(opList.slice().sort(function (a, b) { return cmpName(opName(a), opName(b)); }), function (e) { return '' + opList.indexOf(e); }, { name: 'setOperatorName', ini: 'setOperatorInitials', f3: 'setOperatorFirst3', del: 'delOperator' }, emailCell), 'no operators yet', 'operator', 'Full name', 'Email');
     var labsTable = abbrTableHtml(abbrTable(labs(), function (l) { return '\'' + l.id + '\''; }, { name: 'setLabName', ini: 'setLabInitials', f3: 'setLabFirst3', del: 'delLab' }, deptCell), 'no labs yet', 'lab', 'Lab name', 'Department');
     var devDup = countMap((L.devices || []).map(function (d) { return d.name; }));
 
@@ -1826,15 +1914,26 @@
     if (m) return m[1];
     return '';
   }
-  // The GitLab "edit this file" link, built from FNG_PUBLISH_BASE (the UNIGE group root,
-  // set once in index.html) + the lab slug → …/filenamer-<slug>/-/edit/main/library.json.
+  // The GitLab Web IDE link, built from FNG_PUBLISH_BASE (the UNIGE group root,
+  // set once in index.html) + the lab slug → …/-/ide/project/<group>/filenamer-<slug>/edit/main/-/library.json.
   // Derived from the slug FIRST so a library.json copied from another lab (carrying a stale
   // publishUrl) can never misdirect the master. publishUrl is used only as a fallback for
   // non-slug contexts (eLab / a locally opened file).
+  // Build a GitLab Web IDE deep link that opens <file> in <project> under the group
+  // root <base>: .../-/ide/project/<group>/<project>/edit/main/-/<file>. Lands the
+  // master straight in the IDE instead of the single-file editor page.
+  function ideUrl(base, project, file) {
+    base = String(base || '').replace(/\/+$/, '');
+    var m = base.match(/^(https?:\/\/[^\/]+)(\/.*)?$/);
+    var origin = m ? m[1] : base;
+    var group = (m && m[2] ? m[2] : '').replace(/^\/+|\/+$/g, '');
+    var proj = group ? (group + '/' + project) : project;
+    return origin + '/-/ide/project/' + proj + '/edit/main/-/' + file;
+  }
   function publishLink() {
     var base = (typeof window !== 'undefined' && window.FNG_PUBLISH_BASE) || '';
     var slug = labSlug();
-    if (base && slug) return base.replace(/\/+$/, '') + '/filenamer-' + slug + '/-/edit/main/library.json';
+    if (base && slug) return ideUrl(base, 'filenamer-' + slug, 'library.json');
     if (ROOT.library.publishUrl) return ROOT.library.publishUrl;
     return '';
   }
@@ -1842,8 +1941,8 @@
     if (!ROOT.ui.publishOpen) return '';
     var url = publishLink();
     var step1 = url
-      ? '<a class="fng-btn pri" href="' + esc(url) + '" target="_blank" rel="noopener">Open this lab\'s file in GitLab ▸</a>'
-      : '<span class="fng-muted">Set the “GitLab file URL” field (under the buttons) to get a one-click link here.</span>';
+      ? '<a class="fng-btn pri" href="' + esc(url) + '" target="_blank" rel="noopener">Open this lab\'s library in the Web IDE ▸</a>'
+      : '<span class="fng-muted">Set the “Web IDE link” field (under the buttons) to get a one-click link here.</span>';
     return '<div class="fng-modal" onclick="if(event.target===this)' + R() + '.closePublish()">'
       + '<div class="fng-modal-card"><div class="fng-modal-h"><h3 style="margin:0">Publish to the lab</h3>'
       + '<button class="fng-modal-x" title="Close" onclick="' + R() + '.closePublish()">✕</button></div>'
@@ -1852,10 +1951,10 @@
       + 'to your lab master and tell them what you changed. A master commits it (only masters have GitLab access).</p>'
       + '<p style="font-size:13px;margin:10px 0 4px"><b>If you are a master user</b>, commit it now:</p>'
       + '<ol style="font-size:13px;line-height:1.8;padding-left:20px;margin:6px 0">'
-      + '<li>' + step1 + '</li>'
-      + '<li>In GitLab, click <b>Edit</b> on <code>library.json</code> (or <b>Upload file → Replace</b> with the downloaded one).</li>'
-      + '<li>If editing: select all (Ctrl/Cmd+A) and <b>paste</b> (Ctrl/Cmd+V) the copied JSON.</li>'
-      + '<li>Enter a short message and <b>Commit to <code>main</code></b>. Machines update within a few minutes.</li>'
+      + '<li>' + step1 + ' — opens <code>library.json</code> in the editor.</li>'
+      + '<li><b>Replace the contents.</b> The new JSON is already on your clipboard: click inside <code>library.json</code>, select all (Ctrl/Cmd+A) and paste (Ctrl/Cmd+V). <span class="fng-muted">Or drag the downloaded <code>library.json</code> onto it in the file tree to overwrite it.</span></li>'
+      + '<li>Open <b>Source control</b> in the left sidebar, type a short message, and <b>Commit to <code>main</code></b>.</li>'
+      + '<li>Mirroring forwards it to GitLab Pages — machines pick it up within a few minutes.</li>'
       + '</ol>'
       + '<div class="fng-acts"><button class="fng-btn pri" onclick="' + R() + '.closePublish()">Done</button></div></div></div>';
   }
@@ -1901,13 +2000,13 @@
   function platformPublishLink() {
     var base = (typeof window !== 'undefined' && window.FNG_PUBLISH_BASE) || '';
     if (!base) return 'set window.FNG_PUBLISH_BASE in index.html';
-    return base.replace(/\/+$/, '') + '/filenamer-plat-' + (ROOT._platformSlug || '') + '/-/edit/main/platform.json';
+    return ideUrl(base, 'filenamer-plat-' + (ROOT._platformSlug || ''), 'platform.json');
   }
   function platTree() {
     var p = ROOT.platformEdit || { devices: [] };
     var pickId = ROOT.ui.platPick;
     var dup = countMap((p.devices || []).map(function (d) { return d.name; }));
-    var items = (p.devices || []).length ? (p.devices || []).map(function (d) {
+    var items = (p.devices || []).length ? (p.devices || []).slice().sort(function (a, b) { return cmpName(a.name, b.name); }).map(function (d) {
       var bad = d.name && dup[d.name] > 1;
       return '<button type="button" class="fng-treeitem' + (d.id === pickId ? ' on' : '') + '" onclick="' + R() + '.platPick(\'' + d.id + '\')">' + esc(d.name || '(unnamed)') + (bad ? ' <span class="fng-bang" title="Duplicate name">!</span>' : '') + '</button>';
     }).join('') : '<span class="fng-muted" style="padding:4px 8px">no devices yet</span>';
@@ -1947,7 +2046,7 @@
       + '<input class="fng-in" value="' + esc(p.name) + '" onchange="' + R() + '.setPlatformEditName(this.value)"></div>'
       + '<div class="fng-dmbody" style="margin-top:12px"><div class="fng-dmleft">' + platTree() + '</div>' + platMiddle() + '</div>'
       + '<div class="fng-acts" style="margin-top:14px"><button class="fng-btn pri" onclick="' + R() + '.publishPlatform()">Publish changes</button></div>'
-      + '<div class="fng-f" style="max-width:640px;margin-top:8px"><span class="fng-l">GitLab file URL</span>'
+      + '<div class="fng-f" style="max-width:640px;margin-top:8px"><span class="fng-l">GitLab Web IDE link</span>'
       + '<input class="fng-in" readonly value="' + esc(platformPublishLink()) + '"></div>'
       + '<p class="fng-muted" style="margin-top:6px">Your edits are kept on this machine automatically. <b>Publish changes</b> downloads <code>platform.json</code> and copies it — commit it in GitLab to share with all labs.</p>';
   }
@@ -1999,9 +2098,9 @@
       + '<button class="fng-modal-x" title="Close" onclick="' + R() + '.closePlatPublish()">✕</button></div>'
       + '<p class="fng-muted">✓ <code>platform.json</code> downloaded &nbsp;·&nbsp; ✓ contents copied to your clipboard.</p>'
       + '<ol style="font-size:13px;line-height:1.8;padding-left:20px;margin:6px 0">'
-      + '<li><a class="fng-btn pri" href="' + esc(url) + '" target="_blank" rel="noopener">Open platform.json in GitLab ▸</a></li>'
-      + '<li>Click <b>Edit</b> (or <b>Upload file → Replace</b>), select all and paste the copied JSON.</li>'
-      + '<li>Enter a message and <b>Commit to <code>main</code></b>. All labs pick it up within minutes.</li>'
+      + '<li><a class="fng-btn pri" href="' + esc(url) + '" target="_blank" rel="noopener">Open platform.json in the Web IDE ▸</a></li>'
+      + '<li><b>Replace the contents.</b> The new JSON is already on your clipboard: click inside <code>platform.json</code>, select all (Ctrl/Cmd+A) and paste (Ctrl/Cmd+V). <span class="fng-muted">Or drag the downloaded <code>platform.json</code> onto it in the file tree to overwrite it.</span></li>'
+      + '<li>Open <b>Source control</b> in the left sidebar, type a short message, and <b>Commit to <code>main</code></b>. All labs pick it up within minutes.</li>'
       + '</ol><div class="fng-acts"><button class="fng-btn pri" onclick="' + R() + '.closePlatPublish()">Done</button></div></div></div>';
   }
 
@@ -2171,6 +2270,29 @@
     // run now if the DOM is already parsed (e.g. cache-busted async load), else wait
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fngBoot);
     else fngBoot();
+
+    // Some browsers (notably Edge) restore the page from the back/forward cache
+    // WITHOUT re-running scripts, so the background library check never fires and the
+    // user keeps seeing the stale cached copy. Re-check the network whenever the page
+    // is shown again from cache, or when the tab regains visibility.
+    function fngRecheck() {
+      if (!ROOT._host || (window.eLabSDK && eLabSDK.Experiment)) return;
+      try {
+        if (ROOT._platformMode) { syncPlatformEdit(); }
+        else { syncSharedLibrary(); syncSharedPlatforms(); }
+      } catch (e) {}
+    }
+    window.addEventListener('pageshow', function (e) {
+      if (e && e.persisted) {
+        // Restored from the back/forward cache (the Edge case): this is effectively a
+        // fresh viewing, so clear the "user is mid-task" flag — outside Manage — so the
+        // newest library is applied rather than only cached for later. Re-render preserves
+        // any values already typed (applyDefaults only fills empty fields).
+        if (ROOT.ui && ROOT.ui.mode !== 'manage') ROOT.ui.touched = false;
+        fngRecheck();
+      }
+    });
+    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') fngRecheck(); });
   }
 
   /* --- headless test exports ---------------------------------------------- */
@@ -2179,7 +2301,8 @@
       buildName: buildName, inputFields: inputFields, defaultLibrary: defaultLibrary, normalize: normalize,
       normalizeIndex: normalizeIndex, normalizePlatformFile: normalizePlatformFile,
       deviceGroups: deviceGroups, findDeviceByName: findDeviceByName, groupOfDevice: groupOfDevice,
-      _setState: function (s) { s = s || {}; if (s.library) ROOT.library = s.library; if (s.platforms) ROOT.platforms = s.platforms; } };
+      headerObject: headerObject, sidecar: sidecar, relPath: relPath, folderSubtree: folderSubtree, archiveRoot: archiveRoot, curName: curName, curPath: curPath, storageStatus: storageStatus, looksLocalRoot: looksLocalRoot, showLiteralPath: showLiteralPath, locationBlock: locationBlock, headerMarkdown: headerMarkdown, ideUrl: ideUrl, cmpName: cmpName,
+      _setState: function (s) { s = s || {}; if (s.library) ROOT.library = s.library; if (s.platforms) ROOT.platforms = s.platforms; if (s.ui) ROOT.ui = s.ui; } };
   }
 
 })();

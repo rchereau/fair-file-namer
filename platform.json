@@ -2,7 +2,194 @@
   "version": 1,
   "name": "Bioimaging Platform",
   "devices": [
-    { "id": "img-sp8", "name": "SP8-Confocal", "info": { "Microscope": "Leica SP8", "Software": "LAS X", "Version": "3.7" } },
-    { "id": "img-z1", "name": "LightSheet-Z1", "info": { "Microscope": "Zeiss Lightsheet Z.1", "Software": "ZEN", "Version": "3.5" } }
+    {
+      "id": "img-stellaris5",
+      "name": "Stellaris5",
+      "info": {
+        "Type": "Confocal laser scanning microscope (point-scanning)",
+        "Microscope": "Leica STELLARIS 5, upright, HXP120 illuminator, motorized XY stage",
+        "Objectives": "HC PL FLUOTAR 4x/0.13; 10x/0.30; HC PL APO CS2 20x/0.75; HC PL APO 40x/0.95; HC PL APO CS2 63x/1.40 Oil",
+        "Lasers": "405, 488, 561, 638 nm",
+        "Detectors": "2x Leica HyD S (up to 850 nm)",
+        "Software": "Leica LAS X 4.5.0.25531",
+        "OS": "Windows 7 (64-bit)",
+        "Location": "Bioimaging Core Facility, CMU",
+        "Contact": "Tel. 94 779"
+      }
+    },
+    {
+      "id": "img-lsm800",
+      "name": "LSM800-Airyscan",
+      "info": {
+        "Type": "Confocal laser scanning microscope with Airyscan super-resolution detector",
+        "Microscope": "Zeiss LSM 800 (Airyscan)",
+        "Software": "Zeiss ZEN",
+        "Location": "Bioimaging Core Facility, CMU",
+        "Contact": "Tel. 94 787",
+        "Note": "Objectives / lasers / detector details to be completed (see facility page)"
+      }
+    },
+    {
+      "id": "img-nikon-a1r",
+      "name": "NikonA1R",
+      "info": {
+        "Type": "Spectral confocal laser scanning microscope (with temperature + CO2 control)",
+        "Microscope": "Nikon A1R spectral confocal",
+        "Software": "Nikon NIS-Elements",
+        "Location": "Bioimaging Core Facility, CMU",
+        "Contact": "Tel. 94 784",
+        "Note": "Objectives / lasers / detector details to be completed (see facility page)"
+      }
+    },
+    {
+      "id": "img-nipkow-sd",
+      "name": "SpinningDisk-Nipkow",
+      "info": {
+        "Type": "Spinning-disk (Nipkow) confocal with laser photo-manipulation (temperature + CO2 control)",
+        "Microscope": "Nipkow spinning-disk confocal",
+        "Location": "Bioimaging Core Facility, CMU",
+        "Contact": "Tel. 94 787",
+        "Note": "Stand / lasers / camera / software details to be completed (see facility page)"
+      }
+    },
+    {
+      "id": "img-axiocam-apotome",
+      "name": "Axiocam-Apotome",
+      "info": {
+        "Type": "Widefield fluorescence microscope with structured illumination (Apotome 2)",
+        "Microscope": "Zeiss Axio Imager M2, upright, motorized XY stage",
+        "Objectives": "EC Plan-Neofluar 5x/0.16; Plan-Apo 10x/0.45; EC Plan-Apo 20x/0.8; 40x/1.4 Oil; 63x/1.4 Oil; 100x/1.4 Oil",
+        "Illumination": "Colibri 5 RGB-UV LED (385/475/555/630 nm); 100 W halogen (transmitted)",
+        "Detector": "Zeiss Axiocam 702 mono (1920x1216, 14-bit)",
+        "Software": "Zeiss ZEN 2.6",
+        "OS": "Windows 10 (64-bit)",
+        "Location": "Bioimaging Core Facility, CMU",
+        "Contact": "Tel. 95 356"
+      }
+    },
+    {
+      "id": "img-video-timelapse",
+      "name": "VideoTimelapse",
+      "info": {
+        "Type": "Widefield video time-lapse microscope (temperature + CO2 control)",
+        "Location": "Bioimaging Core Facility, CMU",
+        "Contact": "Tel. 94 778",
+        "Note": "Stand / objectives / illumination / camera / software to be completed (see facility page)"
+      }
+    },
+    {
+      "id": "img-nikon-wf-p2",
+      "name": "NikonWF-P2",
+      "info": {
+        "Type": "Widefield fluorescence microscope",
+        "Microscope": "Nikon widefield (station P2)",
+        "Software": "Nikon NIS-Elements",
+        "Location": "Bioimaging Core Facility, CMU",
+        "Contact": "Tel. 94 786",
+        "Note": "Stand / objectives / filters / camera to be completed (see facility page)"
+      }
+    },
+    {
+      "id": "img-nikon-wf-p1",
+      "name": "NikonWF-P1",
+      "info": {
+        "Type": "Widefield fluorescence microscope",
+        "Microscope": "Nikon widefield (station P1)",
+        "Software": "Nikon NIS-Elements",
+        "Location": "Bioimaging Core Facility, CMU",
+        "Contact": "Tel. 94 781",
+        "Note": "Stand / objectives / filters / camera to be completed (see facility page)"
+      }
+    },
+    {
+      "id": "img-vs120",
+      "name": "VS120",
+      "info": {
+        "Type": "Brightfield / polarized-light slide scanner",
+        "Microscope": "Olympus VS120 (BX61VS), upright, motorized stage (up to 5 slides)",
+        "Objectives": "Plan Apo N 2x/0.08; U Plan S Apo 10x/0.40, 20x/0.75, 40x/0.95, 100x/1.4 Oil",
+        "Detector": "Allied Vision Pike F505C VC50 (color)",
+        "Location": "Room C06.1533.a, CMU",
+        "Contact": "Bioimaging Core Facility"
+      }
+    },
+    {
+      "id": "img-axioscan-z1",
+      "name": "AxioscanZ1",
+      "info": {
+        "Type": "Fluorescence / brightfield slide scanner",
+        "Microscope": "Zeiss Axioscan.Z1",
+        "Software": "Zeiss ZEN (slidescan)",
+        "Location": "Bioimaging Core Facility, CMU",
+        "Contact": "Tel. 94 782",
+        "Note": "Objectives / camera to be completed (see facility page)"
+      }
+    },
+    {
+      "id": "img-imagexpress",
+      "name": "ImageXpress",
+      "info": {
+        "Type": "High-content imaging / plate scanner (widefield + confocal option), temperature + CO2 control",
+        "Microscope": "Molecular Devices ImageXpress (Micro Confocal)",
+        "Software": "MetaXpress",
+        "Location": "Bioimaging Core Facility, CMU",
+        "Contact": "Tel. 95 388",
+        "Note": "Objectives / detectors to be completed (see facility page)"
+      }
+    },
+    {
+      "id": "img-axioscan-7",
+      "name": "Axioscan7",
+      "info": {
+        "Type": "Fluorescence / brightfield slide scanner",
+        "Microscope": "Zeiss Axioscan 7",
+        "Software": "Zeiss ZEN (slidescan)",
+        "Location": "Bioimaging Core Facility, CMU",
+        "Contact": "Tel. 94 782",
+        "Note": "Objectives / camera to be completed (see facility page)"
+      }
+    },
+    {
+      "id": "img-nikon-tirf",
+      "name": "NikonTIRF",
+      "info": {
+        "Type": "TIRF / evanescent-wave widefield microscope",
+        "Microscope": "Nikon Eclipse Ti with Perfect Focus System (PFS)",
+        "Objectives": "10x/0.3 Plan Fluor; 40x/1.3 Oil; 63x/1.4 Oil Plan Apo; 100x/1.49 Oil CFI Apo TIRF",
+        "Lasers": "Nikon LU-N4: 405 nm (100 mW), 488 nm (50 mW), 561 nm (50 mW), 640 nm (100 mW)",
+        "Camera": "Hamamatsu ORCA-Fusion BT (sCMOS)",
+        "Location": "Bioimaging Core Facility, CMU",
+        "Contact": "Tel. 95 583"
+      }
+    },
+    {
+      "id": "img-sp8-sted",
+      "name": "SP8-STED",
+      "info": {
+        "Type": "STED super-resolution confocal (3X) with FLIM",
+        "Microscope": "Leica TCS SP8 STED 3X on inverted Leica DMi8, motorized XY, SOLA light engine (Lumencor), DFC7000T camera",
+        "Objectives": "HC PL Fluotar 5x/0.15, 20x/0.55; HC PL Apo 63x/1.40 Oil; 93x/1.30 Glycerol motCORR STED; 100x/1.40 Oil",
+        "Lasers": "Pulsed White Light Laser 470-670 nm (80 MHz); 405 nm; STED depletion 592 nm and 775 nm",
+        "Detectors": "Spectral 405-800 nm; 2x PMT + 2x HyD (incl. 1 HyD SMD) + transmission PMT",
+        "Software": "Leica LAS X 3.5.2.18963",
+        "Location": "Bioimaging Core Facility, CMU",
+        "Contact": "Tel. 94 788"
+      }
+    },
+    {
+      "id": "img-leica-lmd",
+      "name": "LeicaLMD",
+      "info": {
+        "Type": "Laser microdissection + widefield fluorescence/transmission",
+        "Microscope": "Leica LMD on upright Leica DM6500, GFP fluorescence cube",
+        "Objectives": "UVI 5x/0.12 (LMD); HCX PL Fluotar L 20x/0.40 corr; 40x/0.60",
+        "Laser": "Cryslas UV 355 nm (max 50 uJ, 80 Hz) for microdissection",
+        "Cameras": "Leica LMD CC7000 (color); Leica DFC 360FX (mono)",
+        "Software": "Leica LMD + LAS-AF",
+        "OS": "Windows 7 / Windows XP",
+        "Location": "Bioimaging Core Facility, CMU",
+        "Contact": "Tel. 95 583 / 94 785"
+      }
+    }
   ]
 }
