@@ -1200,7 +1200,14 @@
     return decodeEntities(s).replace(/\n{3,}/g, '\n\n').trim();
   }
   // full metadata as Markdown (header + the user's notes)
-  function notesMarkdown() { return headerMarkdown() + '\n\n---\n\n' + NOTE_MARK + '\n\n' + htmlToMd(ROOT.ui.notesHtml || ''); }
+  // true only when the notes box has real content (ignores contenteditable
+  // leftovers like <br>, empty tags, whitespace and &nbsp;)
+  function notesNonEmpty() { return htmlToText(ROOT.ui.notesHtml || '').replace(/\u00a0/g, '').trim().length > 0; }
+  function notesMarkdown() {
+    var md = headerMarkdown();
+    if (notesNonEmpty()) md += '\n\n---\n\n' + NOTE_MARK + '\n\n' + htmlToMd(ROOT.ui.notesHtml || '');
+    return md;
+  }
 
   function curName() { var lab = useLab(); var tpl = lab && useFileTpl(lab); return tpl ? buildName(tpl, ROOT.library, ROOT.ui.values, { now: nowDate(), tplId: tpl.id, lab: lab }) : ''; }
 
@@ -1308,7 +1315,7 @@
       + clipTable(Object.keys(h.device.info).map(function (k) { return [k, h.device.info[k]]; }), 'Property', 'Value');
     if (h.config) html += '<p style="margin:10px 0 4px"><strong>Configuration — ' + esc(h.config.name) + '</strong> (this machine)</p>'
       + clipTable(Object.keys(h.config.settings).map(function (k) { return [k, h.config.settings[k]]; }), 'Setting', 'Value');
-    html += '<hr><h3 style="margin:0 0 6px">Notes</h3>' + (ROOT.ui.notesHtml || '<p></p>');
+    if (notesNonEmpty()) html += '<hr><h3 style="margin:0 0 6px">Notes</h3>' + ROOT.ui.notesHtml;
     return html;
   }
   // Wrap the visible HTML with an embedded machine-readable copy (best-effort).
@@ -1447,7 +1454,7 @@
       + '<div style="color:#4af0a0;font-size:11px;letter-spacing:.1em;margin-bottom:6px;">FAIR FILE NAMER · FILE METADATA</div>'
       + '<table style="border-collapse:collapse;font-size:13px;">' + rows + '</table>'
       + '<div style="font-size:11px;color:#6b7592;margin-top:6px;">generated ' + esc(h.generatedAt) + '</div>'
-      + (o.notesHtml ? '<div style="font-size:12px;color:#9fb0cf;margin-top:6px;"><b>Notes:</b><br>' + o.notesHtml + '</div>' : '') + '</div>';
+      + (htmlToText(o.notesHtml || '').replace(/\u00a0/g, '').trim() ? '<div style="font-size:12px;color:#9fb0cf;margin-top:6px;"><b>Notes:</b><br>' + o.notesHtml + '</div>' : '') + '</div>';
     var sec = section || (ROOT._sectionData && ROOT._sectionData.section);
     try { if (sec && sec.setContent) sec.setContent(html); } catch (e) {}
     try { if (sec && sec.saveHtmlContent) sec.saveHtmlContent(html, expJournalID || (ROOT._sectionData && ROOT._sectionData.expJournalID)); } catch (e) {}
@@ -2301,7 +2308,7 @@
       buildName: buildName, inputFields: inputFields, defaultLibrary: defaultLibrary, normalize: normalize,
       normalizeIndex: normalizeIndex, normalizePlatformFile: normalizePlatformFile,
       deviceGroups: deviceGroups, findDeviceByName: findDeviceByName, groupOfDevice: groupOfDevice,
-      headerObject: headerObject, sidecar: sidecar, relPath: relPath, folderSubtree: folderSubtree, archiveRoot: archiveRoot, curName: curName, curPath: curPath, storageStatus: storageStatus, looksLocalRoot: looksLocalRoot, showLiteralPath: showLiteralPath, locationBlock: locationBlock, headerMarkdown: headerMarkdown, ideUrl: ideUrl, cmpName: cmpName,
+      headerObject: headerObject, sidecar: sidecar, relPath: relPath, folderSubtree: folderSubtree, archiveRoot: archiveRoot, curName: curName, curPath: curPath, storageStatus: storageStatus, looksLocalRoot: looksLocalRoot, showLiteralPath: showLiteralPath, locationBlock: locationBlock, headerMarkdown: headerMarkdown, ideUrl: ideUrl, cmpName: cmpName, notesMarkdown: notesMarkdown, clipboardHtml: clipboardHtml, notesNonEmpty: notesNonEmpty,
       _setState: function (s) { s = s || {}; if (s.library) ROOT.library = s.library; if (s.platforms) ROOT.platforms = s.platforms; if (s.ui) ROOT.ui = s.ui; } };
   }
 
