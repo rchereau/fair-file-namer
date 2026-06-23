@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FAIR File Namer — usage statistics</title>
+
+<!-- ============================================================ CONFIG ===
+  Paste the SAME Web-app /exec URL and SECRET you set in analytics-appsscript.gs.
+  PRIVACY: the KEY below is visible to anyone who can open this file, so do NOT
+  publish stats.html on the public Pages site (it is mirrored and served publicly).
+  Keep it local (open the file from disk) or behind Pages access control.
+======================================================================== -->
+<script>
+  var ANALYTICS_URL = "https://script.google.com/macros/s/AKfycbw7a0_DbjW6C76CzlFTQk9CaRIBNGLXFnQPBdkKkIYWT6bxZMdlL0Xw1WrwPGmPTQHM/exec"; // e.g. "https://script.google.com/macros/s/XXXX/exec"
+  var KEY           = "yXht0wTWomVZrCc6TX7zwkNkWQyjGM"; // the READ_KEY from analytics-appsscript.gs (PRIVATE — never publish this file)
+</script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{ --bg:#0d0f12; --panel:#161a20; --panel2:#1c2129; --line:#252b3b; --ink:#e8edf5;
+         --dim:#9fb0cf; --muted:#6b7592; --ac:#4af0a0; --warn:#f0a860; }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;line-height:1.45}
+  header{display:flex;align-items:center;gap:14px;padding:16px 22px;border-bottom:1px solid var(--line);background:#0b0d10;position:sticky;top:0;z-index:5}
+  header h1{font-size:20px;margin:0;font-weight:600}
+  header .sub{color:var(--muted);font-size:12px}
+  .wrap{max-width:1180px;margin:0 auto;padding:18px 22px 60px}
+  .bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:6px 0 16px}
+  .seg{display:flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
+  .seg button{background:var(--panel);color:var(--dim);border:0;padding:6px 12px;font-size:13px;cursor:pointer}
+  .seg button.on{background:var(--ac);color:#08120c;font-weight:600}
+  .bar .lbl{font-size:12px;color:var(--muted);margin-right:-4px}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:22px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+  .card .k{color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.05em}
+  .card .v{font-size:28px;font-weight:700;margin-top:4px}
+  .card .v small{font-size:13px;color:var(--dim);font-weight:500}
+  .card .note{color:var(--dim);font-size:12px;margin-top:2px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:860px){.grid{grid-template-columns:1fr}}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:16px}
+  .panel h2{font-size:14px;margin:0 0 4px;font-weight:600}
+  .panel p.h{color:var(--muted);font-size:12px;margin:0 0 10px}
+  .panel.full{grid-column:1 / -1}
+  canvas{max-height:300px}
+  table{border-collapse:collapse;width:100%;font-size:13px}
+  th,td{text-align:left;padding:6px 9px;border-bottom:1px solid var(--line)}
+  th{color:var(--muted);font-weight:600;font-size:12px}
+  .pill{display:inline-block;padding:1px 9px;border-radius:20px;font-size:11px;font-weight:600}
+  .p-active{background:rgba(74,240,160,.16);color:var(--ac)}
+  .p-onboard{background:rgba(126,184,247,.16);color:#7eb8f7}
+  .p-dormant{background:rgba(240,168,96,.16);color:var(--warn)}
+  .p-none{background:rgba(107,117,146,.18);color:var(--dim)}
+  input[type=date]{background:var(--panel2);border:1px solid var(--line);color:var(--ink);border-radius:6px;padding:4px 7px;font-size:13px}
+  .launch{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:8px}
+  .launch .row{display:flex;align-items:center;gap:8px;justify-content:space-between;background:var(--panel2);border:1px solid var(--line);border-radius:7px;padding:6px 9px}
+  .launch .row span{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .heat{display:grid;gap:2px;font-size:11px;overflow-x:auto}
+  .heat .hc{height:20px;border-radius:3px;background:var(--panel2)}
+  .heat .hl{color:var(--dim);white-space:nowrap;padding-right:6px;display:flex;align-items:center}
+  .msg{padding:30px;text-align:center;color:var(--dim)}
+  .msg.err{color:#f0604a}
+  code{background:var(--panel2);padding:1px 5px;border-radius:4px;font-size:12px}
+  .foot{color:var(--muted);font-size:12px;margin-top:24px;border-top:1px solid var(--line);padding-top:12px}
+</style>
+</head>
+<body>
+<header>
+  <h1>FAIR File Namer · usage</h1>
+  <span class="sub" id="sub">adoption statistics</span>
+</header>
+<div class="wrap">
+  <div id="status" class="msg">Loading events…</div>
+
+  <div id="dash" style="display:none">
+    <div class="bar">
+      <span class="lbl">Window</span>
+      <div class="seg" id="rangeSeg">
+        <button data-d="30">30 days</button>
+        <button data-d="90" class="on">90 days</button>
+        <button data-d="0">All time</button>
+      </div>
+      <span class="lbl">Group by</span>
+      <div class="seg" id="groupSeg">
+        <button data-g="lab" class="on">Lab</button>
+        <button data-g="dept">Department</button>
+        <button data-g="global">Global</button>
+      </div>
+      <span style="flex:1"></span>
+      <span class="sub" id="meta"></span>
+    </div>
+
+    <div class="cards" id="cards"></div>
+
+    <div class="grid">
+      <div class="panel full">
+        <h2 id="hWeek">Naming activity per week</h2>
+        <p class="h">Total export events per ISO week, stacked by the chosen grouping. The headline adoption trend.</p>
+        <canvas id="cWeek"></canvas>
+      </div>
+
+      <div class="panel">
+        <h2 id="hGroup">Events per lab</h2>
+        <p class="h">All-window totals by group, split by action.</p>
+        <canvas id="cGroup"></canvas>
+      </div>
+      <div class="panel">
+        <h2>Cohort curve — average per lab since launch</h2>
+        <p class="h">Mean events per lab in week 1, 2, 3… after each lab's own launch. Always lab-level (launch is per lab). Rising/plateau = adopted; decaying = tried once.</p>
+        <canvas id="cCohort"></canvas>
+      </div>
+
+      <div class="panel">
+        <h2>Export channel</h2>
+        <p class="h">File-name copy is the strongest "the name is actually used" signal.</p>
+        <canvas id="cAction"></canvas>
+      </div>
+      <div class="panel">
+        <h2>Raw-data storage at naming time</h2>
+        <p class="h">Whether the archive-to-NASAC good practice is landing.</p>
+        <canvas id="cStore"></canvas>
+      </div>
+
+      <div class="panel full">
+        <h2 id="hStatus">Adoption status</h2>
+        <p class="h">From recency &amp; volume since each lab's launch. Events before a lab's launch date are excluded everywhere.</p>
+        <table id="tStatus"><thead></thead><tbody></tbody></table>
+      </div>
+
+      <div class="panel full">
+        <h2>Launch dates <span class="sub">(per lab · saved to the Sheet)</span></h2>
+        <p class="h">Set when each lab went live. Stored centrally so it's the same on any machine. Events before the date are ignored.</p>
+        <div id="launch" class="launch"></div>
+      </div>
+
+      <div class="panel full">
+        <h2>Activity heatmap (events per group × week)</h2>
+        <p class="h">Darker = more activity. Spot onboarding, steady use and dormancy at a glance.</p>
+        <div id="heat" class="heat"></div>
+      </div>
+    </div>
+
+    <div class="foot" id="foot"></div>
+  </div>
+</div>
+
+<script>
+/* ----------------------------------------------------------------- state */
+var RAW = [];
+var LAUNCH = {};              // { labId: 'YYYY-MM-DD' } (sheet-backed, cached locally)
+var LABNAME = {};             // labId -> last seen lab name (for launch upsert payload)
+var RANGE_DAYS = 90;          // 0 = all
+var GROUP = 'lab';            // 'lab' | 'dept' | 'global'
+var charts = {};
+var PALETTE = ['#4af0a0','#7eb8f7','#f0a860','#c792ea','#f06a9a','#5ad1c8','#e8c84a','#9fd356','#ff7a7a','#8a9bff','#62d8a6','#d98cff'];
+var ACTIONS = [['name','File name'],['eln','ELN copy'],['sidecar','.json sidecar'],['md','.md export']];
+var ACTION_COLOR = { name:'#4af0a0', eln:'#7eb8f7', sidecar:'#f0a860', md:'#c792ea' };
+
+function loadLaunchCache(){ try { return JSON.parse(localStorage.getItem('fng.stats.launch') || '{}'); } catch(e){ return {}; } }
+function cacheLaunch(){ try { localStorage.setItem('fng.stats.launch', JSON.stringify(LAUNCH)); } catch(e){} }
+
+/* -------------------------------------------------------------- load data */
+function load(){
+  if (!ANALYTICS_URL || !KEY){ showErr('Set ANALYTICS_URL and KEY at the top of this file first.'); return; }
+  var s = document.createElement('script');
+  window.__fngData = function(resp){
+    try { document.body.removeChild(s); } catch(e){}
+    if (!resp || !resp.ok){ showErr((resp && resp.error) || 'The endpoint refused the request (check KEY).'); return; }
+    RAW = (resp.events || []).map(normalise).filter(function(e){ return e.ts; });
+    RAW.forEach(function(e){ if(e.labId) LABNAME[e.labId]=e.lab; });
+    // Sheet launch dates are the source of truth; fall back to the local cache for labs not in the Sheet yet.
+    var sheet = {};
+    (resp.launch || []).forEach(function(r){ var d=r.launchDate? String(r.launchDate).slice(0,10):''; if(r.labId && d) sheet[r.labId]=d; if(r.labId && r.lab && !LABNAME[r.labId]) LABNAME[r.labId]=r.lab; });
+    LAUNCH = Object.assign({}, loadLaunchCache(), sheet);
+    cacheLaunch();
+    boot();
+  };
+  s.onerror = function(){ showErr('Could not reach the data endpoint. Check ANALYTICS_URL and your connection.'); };
+  s.src = ANALYTICS_URL + (ANALYTICS_URL.indexOf('?') >= 0 ? '&' : '?') + 'key=' + encodeURIComponent(KEY) + '&callback=__fngData&_t=' + Date.now();
+  document.body.appendChild(s);
+}
+function normalise(r){
+  return { ts: r.ts ? new Date(r.ts) : null, action: String(r.action||''), labId: String(r.labId||''),
+           lab: String(r.lab||r.labId||'(unknown)'), dept: String(r.dept||''), operator: String(r.operator||''),
+           deviceScope: String(r.deviceScope||''), template: String(r.template||''), storage: String(r.storage||'') };
+}
+function showErr(m){ var el=document.getElementById('status'); el.className='msg err'; el.textContent=m; }
+
+/* ----------------------------------------------------- launch (sheet-backed) */
+function setLaunch(labId, date){
+  if (date) LAUNCH[labId] = date; else delete LAUNCH[labId];
+  cacheLaunch();
+  if (ANALYTICS_URL && KEY) {
+    try {
+      fetch(ANALYTICS_URL, { method:'POST', mode:'no-cors', keepalive:true,
+        headers:{'Content-Type':'text/plain;charset=utf-8'},
+        body: JSON.stringify({ key:KEY, type:'launch', rows:[{ labId:labId, lab:LABNAME[labId]||'', launchDate:date||'' }] }) });
+    } catch(e){}
+  }
+  renderAll();
+}
+
+/* ------------------------------------------------------------ aggregation */
+function labMap(){ var m={}; RAW.forEach(function(e){ if(!m[e.labId]) m[e.labId]={id:e.labId,name:e.lab,dept:e.dept}; }); return m; }
+function launchDate(labId){ var d=LAUNCH[labId]; return d ? new Date(d+'T00:00:00') : null; }
+function afterLaunch(e){ var l=launchDate(e.labId); return !l || e.ts >= l; }
+function inRange(e){ if(!RANGE_DAYS) return true; return e.ts >= new Date(Date.now()-RANGE_DAYS*864e5); }
+function kept(){ return RAW.filter(afterLaunch); }
+function windowed(){ return kept().filter(inRange); }
+
+function groupKey(e){ return GROUP==='global' ? 'ALL' : GROUP==='dept' ? (e.dept||'(no dept)') : e.labId; }
+function groupName(id){ if(GROUP==='global') return 'All labs'; if(GROUP==='dept') return id; var l=labMap()[id]; return l?l.name:id; }
+function groupList(arr){ arr=arr||kept(); var s={},o=[]; arr.forEach(function(e){ var k=groupKey(e); if(!s[k]){s[k]=1;o.push(k);} });
+  o.sort(function(a,b){ return groupName(a).localeCompare(groupName(b)); }); return o; }
+
+function isoWeek(d){
+  d = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  var day = (d.getUTCDay()+6)%7; d.setUTCDate(d.getUTCDate()-day+3);
+  var firstThu = new Date(Date.UTC(d.getUTCFullYear(),0,4));
+  var wk = 1 + Math.round(((d-firstThu)/864e5 - 3 + ((firstThu.getUTCDay()+6)%7))/7);
+  return d.getUTCFullYear() + '-W' + (wk<10?'0':'') + wk;
+}
+function weeksSince(d, from){ return Math.floor((d - from)/(7*864e5)); }
+function uniq(a){ var s={},o=[]; a.forEach(function(x){ if(!s[x]){s[x]=1;o.push(x);} }); return o; }
+function median(a){ a=a.slice().sort(function(x,y){return x-y;}); var n=a.length; return n%2? a[(n-1)/2] : Math.round((a[n/2-1]+a[n/2])/2); }
+function minTs(a){ return new Date(Math.min.apply(null,a.map(function(e){return +e.ts;}))); }
+function maxTs(a){ return new Date(Math.max.apply(null,a.map(function(e){return +e.ts;}))); }
+function fmtD(d){ return d.toISOString().slice(0,10); }
+function esc(s){ return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+
+/* ----------------------------------------------------------------- render */
+function boot(){
+  document.getElementById('status').style.display='none';
+  document.getElementById('dash').style.display='';
+  var rs = document.getElementById('rangeSeg');
+  rs.querySelectorAll('button').forEach(function(b){ b.onclick=function(){ rs.querySelectorAll('button').forEach(function(x){x.classList.remove('on');}); b.classList.add('on'); RANGE_DAYS=+b.dataset.d; renderAll(); }; });
+  var gs = document.getElementById('groupSeg');
+  gs.querySelectorAll('button').forEach(function(b){ b.onclick=function(){ gs.querySelectorAll('button').forEach(function(x){x.classList.remove('on');}); b.classList.add('on'); GROUP=b.dataset.g; renderAll(); }; });
+  renderAll();
+}
+function renderAll(){ renderMeta(); renderCards(); renderWeek(); renderGroupBar(); renderCohort(); renderAction(); renderStore(); renderStatus(); renderLaunch(); renderHeat(); }
+
+function renderMeta(){
+  var k = kept(), all = RAW.length;
+  var span = k.length ? (fmtD(minTs(k)) + ' → ' + fmtD(maxTs(k))) : '—';
+  document.getElementById('meta').textContent = k.length + ' events kept · ' + (all-k.length) + ' pre-launch excluded · ' + span;
+  document.getElementById('sub').textContent = 'adoption statistics · ' + Object.keys(labMap()).length + ' labs seen';
+  var gl = GROUP==='dept'?'department':GROUP==='global'?'scope':'lab';
+  document.getElementById('hGroup').textContent = 'Events per ' + gl;
+  document.getElementById('hStatus').textContent = 'Adoption status' + (GROUP==='lab'?'':' (by '+gl+')');
+}
+
+function renderCards(){
+  var w = windowed(), w30 = kept().filter(function(e){ return e.ts >= new Date(Date.now()-30*864e5); });
+  var labs = labMap(); var totalLabs = Object.keys(labs).length;
+  var launched = Object.keys(labs).filter(function(id){ return LAUNCH[id]; }).length;
+  var activeLabs30 = uniq(w30.map(function(e){return e.labId;})).length;
+  var activeDepts30 = uniq(w30.map(function(e){return e.dept||'(no dept)';})).length;
+  var nameAll = kept().filter(function(e){return e.action==='name';}).length;
+  var name30 = w30.filter(function(e){return e.action==='name';}).length;
+  var ops30 = uniq(w30.filter(function(e){return e.operator;}).map(function(e){return e.labId+'|'+e.operator;})).length;
+  var ttf = [];
+  Object.keys(labs).forEach(function(id){ var l=launchDate(id); if(!l) return; var ev=RAW.filter(function(e){return e.labId===id && e.ts>=l;}); if(!ev.length) return; ttf.push(Math.max(0, Math.round((minTs(ev)-l)/864e5))); });
+  var cards = [
+    ['Active labs (30d)', activeLabs30 + (launched? ' <small>/ '+launched+' launched</small>':' <small>/ '+totalLabs+' seen</small>'), launched? Math.round(100*activeLabs30/launched)+'% of launched labs' : 'set launch dates below'],
+    ['Active departments (30d)', ''+activeDepts30, 'distinct departments with activity'],
+    ['File-name copies', name30 + ' <small>/ 30d</small>', nameAll + ' all-time · the core "name used" signal'],
+    ['All export events', w.length + (RANGE_DAYS? ' <small>/ '+RANGE_DAYS+'d</small>':' <small>all</small>'), kept().length + ' all-time'],
+    ['Active operators (30d)', ''+ops30, 'distinct operators (hashed) with ≥1 event'],
+    ['Median time-to-first-use', ttf.length? median(ttf)+' <small>days</small>' : '—', ttf.length? 'after a lab\u2019s launch ('+ttf.length+' labs)' : 'needs launch dates']
+  ];
+  document.getElementById('cards').innerHTML = cards.map(function(c){
+    return '<div class="card"><div class="k">'+c[0]+'</div><div class="v">'+c[1]+'</div><div class="note">'+c[2]+'</div></div>';
+  }).join('');
+}
+
+function destroy(id){ if(charts[id]){ charts[id].destroy(); delete charts[id]; } }
+function mk(id, cfg){ destroy(id); charts[id] = new Chart(document.getElementById(id), cfg); }
+var GRID = { color:'#252b3b' }, TICK = { color:'#9fb0cf', font:{size:11} };
+function scales(stack){ return { x:{stacked:!!stack,grid:GRID,ticks:TICK}, y:{stacked:!!stack,grid:GRID,ticks:TICK,beginAtZero:true} }; }
+function legend(){ return { labels:{ color:'#e8edf5', boxWidth:12, font:{size:11} } }; }
+
+function renderWeek(){
+  var ev = windowed();
+  var weeks = uniq(ev.map(function(e){return isoWeek(e.ts);})).sort();
+  var ids = groupList(ev);
+  var ds = ids.map(function(id,i){
+    var by={}; ev.filter(function(e){return groupKey(e)===id;}).forEach(function(e){ var w=isoWeek(e.ts); by[w]=(by[w]||0)+1; });
+    return { label: groupName(id), data: weeks.map(function(w){return by[w]||0;}), backgroundColor: PALETTE[i%PALETTE.length] };
+  });
+  mk('cWeek', { type:'bar', data:{ labels:weeks, datasets:ds }, options:{ responsive:true, plugins:{legend:legend()}, scales:scales(true) } });
+}
+
+function renderGroupBar(){
+  var ev = windowed(); var ids = groupList(ev);
+  ids.sort(function(a,b){ return ev.filter(function(e){return groupKey(e)===b;}).length - ev.filter(function(e){return groupKey(e)===a;}).length; });
+  var ds = ACTIONS.map(function(a){
+    return { label:a[1], data: ids.map(function(id){ return ev.filter(function(e){return groupKey(e)===id && e.action===a[0];}).length; }), backgroundColor: ACTION_COLOR[a[0]] };
+  });
+  mk('cGroup', { type:'bar', data:{ labels:ids.map(groupName), datasets:ds }, options:{ indexAxis:'y', responsive:true, plugins:{legend:legend()}, scales:scales(true) } });
+}
+
+function renderCohort(){
+  var labs = labMap(); var ids = Object.keys(labs).filter(function(id){ return launchDate(id); });
+  if (!ids.length){ mk('cCohort', emptyChart('Set launch dates to see the cohort curve')); return; }
+  var maxW = 0, perLab = {};
+  ids.forEach(function(id){ var l=launchDate(id); perLab[id]={};
+    RAW.filter(function(e){return e.labId===id && e.ts>=l;}).forEach(function(e){ var w=weeksSince(e.ts,l); perLab[id][w]=(perLab[id][w]||0)+1; if(w>maxW)maxW=w; });
+  });
+  var now=Date.now(); var age={}; ids.forEach(function(id){ age[id]=weeksSince(new Date(now), launchDate(id)); });
+  var labels=[], avg=[];
+  for (var w=0; w<=maxW; w++){
+    var elig = ids.filter(function(id){ return age[id]>=w; });
+    if (!elig.length) break;
+    var sum = elig.reduce(function(s,id){ return s+(perLab[id][w]||0); }, 0);
+    labels.push('wk '+(w+1)); avg.push(+(sum/elig.length).toFixed(1));
+  }
+  mk('cCohort', { type:'line', data:{ labels:labels, datasets:[{ label:'avg events / lab', data:avg, borderColor:'#4af0a0', backgroundColor:'rgba(74,240,160,.15)', fill:true, tension:.25, pointRadius:3 }] },
+    options:{ responsive:true, plugins:{legend:legend()}, scales:scales(false) } });
+}
+function emptyChart(msg){ return { type:'bar', data:{labels:[msg],datasets:[{data:[0],backgroundColor:'#252b3b'}]}, options:{plugins:{legend:{display:false}},scales:scales(false)} }; }
+
+function renderAction(){
+  var ev = windowed();
+  var data = ACTIONS.map(function(a){ return ev.filter(function(e){return e.action===a[0];}).length; });
+  mk('cAction', { type:'doughnut', data:{ labels:ACTIONS.map(function(a){return a[1];}),
+    datasets:[{ data:data, backgroundColor:ACTIONS.map(function(a){return ACTION_COLOR[a[0]];}), borderColor:'#161a20', borderWidth:2 }] },
+    options:{ responsive:true, plugins:{legend:legend()} } });
+}
+function renderStore(){
+  var ev = windowed(); var by={};
+  ev.forEach(function(e){ var k=e.storage||'(unset)'; by[k]=(by[k]||0)+1; });
+  var labels=Object.keys(by);
+  mk('cStore', { type:'doughnut', data:{ labels:labels,
+    datasets:[{ data:labels.map(function(k){return by[k];}), backgroundColor:labels.map(function(k,i){return PALETTE[i%PALETTE.length];}), borderColor:'#161a20', borderWidth:2 }] },
+    options:{ responsive:true, plugins:{legend:legend()} } });
+}
+
+function statusOfGroup(id){
+  var ev = kept().filter(function(e){ return groupKey(e)===id; });
+  if (!ev.length) return 'none';
+  var last = maxTs(ev), days = (Date.now()-last)/864e5;
+  if (GROUP==='lab'){ var l=launchDate(id); if (l && (Date.now()-l)/864e5 < 30) return 'onboard'; }
+  if (days <= 30) return 'active';
+  if (days > 60) return 'dormant';
+  return 'active';
+}
+var STATUS_LABEL = { active:['Active','p-active'], onboard:['Onboarding','p-onboard'], dormant:['Dormant','p-dormant'], none:['No use yet','p-none'] };
+
+function renderStatus(){
+  var ids = groupList();
+  var headCols = (GROUP==='lab') ? ['Lab','Dept','First use','Last use','Events','Operators','Status']
+               : (GROUP==='dept') ? ['Department','First use','Last use','Events','Operators','Status']
+               : ['Scope','First use','Last use','Events','Operators','Status'];
+  document.querySelector('#tStatus thead').innerHTML = '<tr>' + headCols.map(function(h){return '<th>'+h+'</th>';}).join('') + '</tr>';
+  var labs = labMap();
+  var tb = document.querySelector('#tStatus tbody');
+  tb.innerHTML = ids.map(function(id){
+    var ev = kept().filter(function(e){ return groupKey(e)===id; });
+    var ops = uniq(ev.filter(function(e){return e.operator;}).map(function(e){return e.operator;})).length;
+    var st = STATUS_LABEL[statusOfGroup(id)];
+    var first = ev.length?fmtD(minTs(ev)):'—', last = ev.length?fmtD(maxTs(ev)):'—';
+    var lead = (GROUP==='lab') ? '<td>'+esc(groupName(id))+'</td><td>'+esc((labs[id]&&labs[id].dept)||'—')+'</td>'
+                               : '<td>'+esc(groupName(id))+'</td>';
+    return '<tr>'+lead+'<td>'+first+'</td><td>'+last+'</td><td>'+ev.length+'</td><td>'+ops+'</td>'
+      + '<td><span class="pill '+st[1]+'">'+st[0]+'</span></td></tr>';
+  }).join('') || '<tr><td colspan="7" class="msg">No events yet.</td></tr>';
+}
+
+function renderLaunch(){
+  var labs = labMap(); var ids = Object.keys(labs).sort(function(a,b){ return labs[a].name.localeCompare(labs[b].name); });
+  var box = document.getElementById('launch');
+  box.innerHTML = ids.map(function(id){
+    return '<div class="row"><span title="'+esc(labs[id].name)+'">'+esc(labs[id].name)+'</span>'
+      + '<input type="date" value="'+(LAUNCH[id]||'')+'" data-lab="'+esc(id)+'"></div>';
+  }).join('') || '<span class="msg">No labs seen yet.</span>';
+  box.querySelectorAll('input[type=date]').forEach(function(inp){
+    inp.onchange = function(){ setLaunch(this.dataset.lab, this.value); };
+  });
+}
+
+function renderHeat(){
+  var ev = kept(); var ids = groupList(ev);
+  var weeks = uniq(ev.map(function(e){return isoWeek(e.ts);})).sort();
+  if (!weeks.length){ document.getElementById('heat').innerHTML='<span class="msg">No events yet.</span>'; return; }
+  var max=1, grid={};
+  ids.forEach(function(id){ grid[id]={}; });
+  ev.forEach(function(e){ var k=groupKey(e); grid[k][isoWeek(e.ts)]=(grid[k][isoWeek(e.ts)]||0)+1; });
+  ids.forEach(function(id){ weeks.forEach(function(w){ if(grid[id][w]>max)max=grid[id][w]; }); });
+  var H = document.getElementById('heat');
+  H.style.gridTemplateColumns = '150px repeat(' + weeks.length + ', 1fr)';
+  var html = '<div class="hl"></div>' + weeks.map(function(w){ return '<div class="hl" style="font-size:9px">'+w.slice(5)+'</div>'; }).join('');
+  ids.forEach(function(id){
+    html += '<div class="hl">'+esc(groupName(id))+'</div>';
+    weeks.forEach(function(w){ var n=grid[id][w]||0; var a=n? (0.18+0.82*n/max):0; html += '<div class="hc" title="'+esc(groupName(id))+' · '+w+' · '+n+'" style="background:'+(n?'rgba(74,240,160,'+a.toFixed(2)+')':'var(--panel2)')+'"></div>'; });
+  });
+  H.innerHTML = html;
+  document.getElementById('foot').innerHTML = 'Definitions: an <b>event</b> is one export action (file-name copy, ELN copy, .json or .md); rapid duplicate clicks are de-duped in the tool. <b>Active</b> = \u22651 event in the last 30 days; <b>Onboarding</b> = lab launched &lt;30 days ago; <b>Dormant</b> = no event in 60+ days. Operators are pseudonymised (hashed in the tool) and shown only as counts. Launch dates are saved to the Sheet (shared across machines).';
+}
+
+load();
+</script>
+</body>
+</html>

@@ -40,6 +40,10 @@
   var LS_DOCSIZE = 'fng.doc.size';               // per-machine metadata display size
   var LS_HIST = 'fng.recentNames';               // per-machine recent file names
   var LS_PLATFORMS = 'fng.platforms.cache';      // shared faculty-wide platform devices (cached)
+  var LS_STORAGE = 'fng.machine.storageStatus';  // per-machine raw-data storage status
+  var LS_STORAGE_DATE = 'fng.machine.storageDate';
+  var LS_SHOWPATH = 'fng.machine.showLiteralPath'; // opt-in: record unverified absolute path
+  var LS_ANALYTICS = 'fng.analytics.queue';      // buffered usage-event pings (flushed to endpoint)
 
   // Display options for the rendered metadata document.
   var FONTS = { sans: 'IBM Plex Sans, system-ui, -apple-system, Segoe UI, sans-serif', serif: 'Georgia, "Times New Roman", serif', mono: 'ui-monospace, Menlo, Consolas, monospace' };
@@ -186,6 +190,9 @@
     return applyFmt(values[field.id], field.format);
   }
   function fieldById(lib, id) { return (lib.fields || []).filter(function (f) { return f.id === id; })[0]; }
+  // Case-insensitive, natural (numeric-aware) name compare for alphabetical display
+  // ordering of operators and devices, e.g. "Rig2" before "Rig10".
+  function cmpName(a, b) { return String(a == null ? '' : a).localeCompare(String(b == null ? '' : b), undefined, { sensitivity: 'base', numeric: true }); }
   function operatorByName(name) { var ops = (ROOT.library && ROOT.library.operators) || []; for (var i = 0; i < ops.length; i++) { if (opName(ops[i]) === name) return ops[i]; } return null; }
   function countMap(arr) { var m = {}; (arr || []).forEach(function (v) { v = String(v == null ? '' : v); if (v) m[v] = (m[v] || 0) + 1; }); return m; }
   function anyDup(arr) { var m = countMap(arr); for (var k in m) { if (m[k] > 1) return true; } return false; }
@@ -283,7 +290,10 @@
         var fresh = JSON.stringify(lib);
         if (fresh === JSON.stringify(ROOT.library)) return;          // already up to date
         try { localStorage.setItem(libCacheKey(), fresh); } catch (e) {}    // cache for next launch
-        var busy = (ROOT.ui.mode === 'manage') || (ROOT.ui.values && Object.keys(ROOT.ui.values).length > 0);
+        // "Busy" = the user is actually working (editing in Manage, or has touched a field).
+        // Auto-filled defaults (machine device, last operator) do NOT count, so a freshly
+        // opened or re-shown page always takes the newest library without a second reload.
+        var busy = (ROOT.ui.mode === 'manage') || !!ROOT.ui.touched;
         if (!busy) { ROOT.library = lib; ROOT._savedSnapshot = fresh; rerender(); toast('Lab templates updated.'); }
         else { toast('Updated lab templates downloaded — they apply next time you reload.'); }
       })
@@ -428,7 +438,7 @@
       + '.fng-devbtn{width:100%;text-align:left;padding:7px 9px;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
       + '.fng-ph{color:#5b647d;font-style:italic;}'
       + '.fng-doccopy{position:absolute;top:8px;right:8px;z-index:2;}'
-      + '.fng-modal-card.fng-dmcard{width:96vw;max-width:1320px;}'
+      + '.fng-modal-card.fng-dmcard{width:92vw;max-width:880px;}'
       + '.fng-warn{background:rgba(247,201,72,.08);border:1px solid #6b5a1f;border-left:3px solid #f7c948;border-radius:6px;color:#e7d9a8;font-size:12.5px;line-height:1.55;padding:9px 12px;margin:0 0 16px;}'
       + '.fng-warn b{color:#f7c948;}'
       + '.fng-dmbody{display:flex;gap:12px;align-items:flex-start;flex-wrap:nowrap;}'
@@ -584,7 +594,7 @@
     if (p.length === 3) return new Date(+p[0], +p[1] - 1, +p[2], d.getHours(), d.getMinutes(), d.getSeconds());
     return new Date();
   }
-  ROOT.setDateOverride = function (v) { ROOT.ui.dateOverride = v || ''; refreshUsePreview(); refreshHeader(); };
+  ROOT.setDateOverride = function (v) { ROOT.ui.touched = true; ROOT.ui.dateOverride = v || ''; refreshUsePreview(); refreshHeader(); };
 
   function labs() { return ROOT.library.labs; }
   function labById(id) { return labs().filter(function (l) { return l.id === id; })[0]; }
@@ -636,11 +646,15 @@
           + DEPARTMENTS.map(function (d) { return '<option value="' + esc(d.code) + '"' + (d.code === v ? ' selected' : '') + '>' + esc(d.code) + ' — ' + esc(d.label) + '</option>'; }).join('') + '</select>';
       } else if (f.source === 'operator') {
         ctrl = '<select class="fng-sel" onchange="' + R() + '.setVal(\'' + f.id + '\',this.value)"><option value="">— select —</option>'
-          + (L.operators || []).map(function (o) { var n = opName(o); return '<option value="' + esc(n) + '"' + (n === v ? ' selected' : '') + '>' + esc(n) + '</option>'; }).join('') + '</select>';
+          + (L.operators || []).slice().sort(function (a, b) { return cmpName(opName(a), opName(b)); }).map(function (o) { var n = opName(o); return '<option value="' + esc(n) + '"' + (n === v ? ' selected' : '') + '>' + esc(n) + '</option>'; }).join('') + '</select>';
       } else if (f.source === 'device') {
-        // Opens the Manage devices window to browse / select / edit / configure devices.
-        ctrl = '<button type="button" class="fng-btn fng-devbtn' + (v ? ' pri' : '') + '" title="Open the device manager" onclick="' + R() + '.openDevManager()">'
-          + (v ? esc(v) : 'Manage devices ▾') + '</button>';
+        // Opens a read-only device browser to choose a device; the gear opens the
+        // user's own configurations for the chosen operator + device.
+        ctrl = '<div class="fng-devwrap">'
+          + '<button type="button" class="fng-btn fng-devbtn' + (v ? ' pri' : '') + '" style="flex:1" title="Browse and choose a device" onclick="' + R() + '.openDevManager()">'
+          + (v ? esc(v) : 'Choose device ▾') + '</button>'
+          + '<button type="button" class="fng-btn fng-star" title="User configurations for this operator + device" onclick="' + R() + '.openConfigMgr()">⚙</button>'
+          + '</div>';
       } else if (f.source === 'list') {
         ctrl = '<select class="fng-sel" onchange="' + R() + '.setVal(\'' + f.id + '\',this.value)"><option value="">— select —</option>'
           + (f.options || []).map(function (o) { return '<option value="' + esc(o) + '"' + (o === v ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join('') + '</select>';
@@ -669,7 +683,7 @@
       + renderMetaDoc()
       + '<div class="fng-acts">'
       + (hasCounter ? '<button class="fng-btn pri" onclick="' + R() + '.nextRun()">Next run ▸</button>' : '')
-      + '<button class="fng-btn" onclick="' + R() + '.copyPath()">Copy full path</button>'
+      + '<button class="fng-btn" onclick="' + R() + '.copyPath()">Copy path</button>'
       + '<button class="fng-btn" onclick="' + R() + '.copyMarkdown()">Copy metadata (Markdown)</button>'
       + '<button class="fng-btn" onclick="' + R() + '.downloadMarkdown()">Download .md</button>'
       + '<button class="fng-btn" onclick="' + R() + '.downloadSidecar()">Download .json</button>'
@@ -718,13 +732,20 @@
     var desc;
     if (p.scope === 'lab') {
       var d = labDeviceById(p.id) || { name: p.name, info: {} };
-      var infoText = Object.keys(d.info || {}).map(function (k) { return k + ': ' + d.info[k]; }).join('\n');
-      desc = '<div class="fng-card" style="margin-top:10px"><h3 style="margin-top:0">Description <span class="fng-muted" style="text-transform:none;letter-spacing:0">· shared library · editable</span></h3>'
-        + '<div class="fng-f"><span class="fng-l">Device name (used in the file name)</span><input class="fng-in" value="' + esc(d.name) + '" onchange="' + R() + '.devmgrSetLabName(\'' + p.id + '\',this.value)"></div>'
-        + '<div class="fng-f" style="margin-top:6px"><span class="fng-l">Generic info — one "Key: value" per line (added to metadata)</span>'
-        + '<textarea class="fng-ta" style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;min-height:120px" oninput="' + R() + '.devmgrSetLabInfo(\'' + p.id + '\',this.value)">' + esc(infoText) + '</textarea></div>'
-        + '<div class="fng-row" style="margin-top:8px;align-items:center"><button class="fng-btn sm" onclick="' + R() + '.devmgrDelLabDevice(\'' + p.id + '\')">Remove device</button>'
-        + '<span class="fng-muted">Edits are kept on this machine; use <b>Publish changes</b> in Manage to send them to a master.</span></div></div>';
+      if (!dm.edit) {
+        var roRows = Object.keys(d.info || {}).map(function (k) { return '<tr><td>' + esc(k) + '</td><td>' + esc(d.info[k]) + '</td></tr>'; }).join('');
+        desc = '<div class="fng-card" style="margin-top:10px"><h3 style="margin-top:0">Description <span class="fng-muted" style="text-transform:none;letter-spacing:0">· lab device · read-only</span></h3>'
+          + (roRows ? '<table class="fng-doc-t"><tbody>' + roRows + '</tbody></table>' : '<p class="fng-muted">No details provided.</p>')
+          + '<p class="fng-muted" style="margin-top:6px">Lab devices are maintained by a master in the <b>Manage</b> tab.</p></div>';
+      } else {
+        var infoText = Object.keys(d.info || {}).map(function (k) { return k + ': ' + d.info[k]; }).join('\n');
+        desc = '<div class="fng-card" style="margin-top:10px"><h3 style="margin-top:0">Description <span class="fng-muted" style="text-transform:none;letter-spacing:0">· shared library · editable</span></h3>'
+          + '<div class="fng-f"><span class="fng-l">Device name (used in the file name)</span><input class="fng-in" value="' + esc(d.name) + '" onchange="' + R() + '.devmgrSetLabName(\'' + p.id + '\',this.value)"></div>'
+          + '<div class="fng-f" style="margin-top:6px"><span class="fng-l">Generic info — one "Key: value" per line (added to metadata)</span>'
+          + '<textarea class="fng-ta" style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;min-height:120px" oninput="' + R() + '.devmgrSetLabInfo(\'' + p.id + '\',this.value)">' + esc(infoText) + '</textarea></div>'
+          + '<div class="fng-row" style="margin-top:8px;align-items:center"><button class="fng-btn sm" onclick="' + R() + '.devmgrDelLabDevice(\'' + p.id + '\')">Remove device</button>'
+          + '<span class="fng-muted">Edits are kept on this machine; use <b>Publish changes</b> in Manage to send them to a master.</span></div></div>';
+      }
     } else {
       var pl = (ROOT.platforms || []).filter(function (x) { return x.id === p.platId; })[0];
       var pd = pl && (pl.devices || []).filter(function (x) { return x.id === p.id; })[0];
@@ -742,14 +763,14 @@
   }
   function devmgrTree() {
     var dm = ROOT.ui.devmgr, pick = dm.pick || {};
-    var labDevs = (ROOT.library && ROOT.library.devices) || [];
+    var labDevs = ((ROOT.library && ROOT.library.devices) || []).slice().sort(function (a, b) { return cmpName(a.name, b.name); });
     var labKids = dm.openLab ? '<div class="fng-treekids">' + (labDevs.length ? labDevs.map(function (d) {
       return '<button type="button" class="fng-treeitem' + (pick.scope === 'lab' && pick.id === d.id ? ' on' : '') + '" onclick="' + R() + '.devmgrPickLab(\'' + d.id + '\')">' + esc(d.name) + '</button>';
     }).join('') : '<span class="fng-muted" style="padding:4px 8px">no devices yet</span>')
-      + '<button type="button" class="fng-treeadd" onclick="' + R() + '.devmgrAddLab()">+ add device</button></div>' : '';
+      + (dm.edit ? '<button type="button" class="fng-treeadd" onclick="' + R() + '.devmgrAddLab()">+ add device</button>' : '') + '</div>' : '';
     var plats = (ROOT.platforms || []);
     var platKids = dm.openPlat ? '<div class="fng-treekids">' + (plats.length ? plats.map(function (p) {
-      var devKids = dm.openPlatId === p.id ? '<div class="fng-treekids">' + ((p.devices || []).length ? (p.devices || []).map(function (d) {
+      var devKids = dm.openPlatId === p.id ? '<div class="fng-treekids">' + ((p.devices || []).length ? (p.devices || []).slice().sort(function (a, b) { return cmpName(a.name, b.name); }).map(function (d) {
         return '<button type="button" class="fng-treeitem' + (pick.scope === 'plat' && pick.platId === p.id && pick.id === d.id ? ' on' : '') + '" onclick="' + R() + '.devmgrPickPlat(\'' + p.id + '\',\'' + d.id + '\')">' + esc(d.name) + '</button>';
       }).join('') : '<span class="fng-muted" style="padding:4px 8px">no devices</span>') + '</div>' : '';
       return '<button type="button" class="fng-treefolder sub' + (dm.openPlatId === p.id ? ' open' : '') + '" onclick="' + R() + '.devmgrTogglePlat(\'' + p.id + '\')">' + (dm.openPlatId === p.id ? '▾ ' : '▸ ') + esc(p.name) + '</button>' + devKids;
@@ -764,12 +785,13 @@
     return '<div class="fng-modal" onclick="if(event.target===this)' + R() + '.closeDevManager()">'
       + '<div class="fng-modal-card fng-dmcard"><div class="fng-modal-h"><h3 style="margin:0">Manage devices</h3>'
       + '<button class="fng-modal-x" title="Close" onclick="' + R() + '.closeDevManager()">✕</button></div>'
-      + '<div class="fng-dmbody"><div class="fng-dmleft">' + devmgrTree() + '</div>' + devmgrMiddle() + devmgrRight() + '</div>'
+      + '<div class="fng-dmbody"><div class="fng-dmleft">' + devmgrTree() + '</div>' + devmgrMiddle() + '</div>'
       + '<div class="fng-acts" style="margin-top:12px"><button class="fng-btn pri" onclick="' + R() + '.closeDevManager()">Done</button></div></div></div>';
   }
-  ROOT.openDevManager = function () {
+  ROOT.openDevManager = function (edit) {
     var dm = ROOT.ui.devmgr = ROOT.ui.devmgr || {};
     dm.open = true;
+    dm.edit = !!edit;   // Use tab = read-only browser; Manage tab = full editor
     // Default view: show the device currently in use (and its configs); if nothing is
     // selected in Use, collapse everything.
     var cur = currentDeviceName();
@@ -786,6 +808,40 @@
     rerender();
   };
   ROOT.closeDevManager = function () { if (ROOT.ui.devmgr) ROOT.ui.devmgr.open = false; rerender(); };
+
+  /* --- User configuration window (#3) -------------------------------------
+   * Shows ONLY the configurations for the current operator + the device chosen
+   * for the file name. Configs are created/edited here and stay on this machine. */
+  ROOT.openConfigMgr = function () { ROOT.ui.cfgOpen = true; rerender(); };
+  ROOT.closeConfigMgr = function () { ROOT.ui.cfgOpen = false; rerender(); };
+  function renderConfigManager() {
+    if (!ROOT.ui.cfgOpen) return '';
+    var op = currentOperator(), dev = currentDeviceName(), body;
+    if (!dev) {
+      body = '<p class="fng-muted">Choose a <b>device</b> first (the device button), then add configurations for it here.</p>';
+    } else if (!op) {
+      body = '<p class="fng-muted">Select your <b>operator</b> on the main screen first — configurations are saved per operator + device, on this machine.</p>';
+    } else {
+      var list = odConfigs(op, dev), actId = activeConfigId(op, dev);
+      var active = list.filter(function (c) { return c.id === actId; })[0];
+      var sel = '<select class="fng-sel" onchange="' + R() + '.selectConfig(this.value)"><option value="">— none —</option>'
+        + list.map(function (c) { return '<option value="' + esc(c.id) + '"' + (c.id === actId ? ' selected' : '') + '>' + esc(c.name) + '</option>'; }).join('') + '</select>';
+      var editor = active
+        ? '<div class="fng-f" style="margin-top:8px"><span class="fng-l">Settings — one "Key: value" per line (saved on this machine; added to the metadata when this device is in use)</span>'
+          + '<textarea class="fng-ta" style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;min-height:120px" oninput="' + R() + '.editConfig(this.value)">' + esc(active.text || '') + '</textarea></div>'
+        : '<p class="fng-muted" style="margin-top:6px">No configuration selected — create one with <b>New</b>.</p>';
+      body = '<p class="fng-muted" style="margin-top:0">Operator <b>' + esc(op) + '</b> · device <b>' + esc(dev) + '</b> · this machine.</p>'
+        + '<div class="fng-row" style="align-items:flex-end"><div class="fng-f" style="flex:1;max-width:280px"><span class="fng-l">Saved configurations</span>' + sel + '</div>'
+        + '<button class="fng-btn sm" onclick="' + R() + '.newConfig()">+ New</button>'
+        + (active ? '<button class="fng-btn sm" onclick="' + R() + '.renameConfig()">Rename</button><button class="fng-btn sm" onclick="' + R() + '.deleteConfig()">Delete</button>' : '')
+        + '</div>' + editor;
+    }
+    return '<div class="fng-modal" onclick="if(event.target===this)' + R() + '.closeConfigMgr()">'
+      + '<div class="fng-modal-card"><div class="fng-modal-h"><h3 style="margin:0">User configuration</h3>'
+      + '<button class="fng-modal-x" title="Close" onclick="' + R() + '.closeConfigMgr()">✕</button></div>'
+      + body
+      + '<div class="fng-acts"><button class="fng-btn pri" onclick="' + R() + '.closeConfigMgr()">Done</button></div></div></div>';
+  }
   ROOT.devmgrToggleLab = function () { ROOT.ui.devmgr.openLab = !ROOT.ui.devmgr.openLab; rerender(); };
   ROOT.devmgrTogglePlatRoot = function () { ROOT.ui.devmgr.openPlat = !ROOT.ui.devmgr.openPlat; rerender(); };
   ROOT.devmgrTogglePlat = function (pid) { ROOT.ui.devmgr.openPlatId = (ROOT.ui.devmgr.openPlatId === pid ? null : pid); rerender(); };
@@ -793,6 +849,7 @@
   ROOT.devmgrPickPlat = function (pid, id) { var p = (ROOT.platforms || []).filter(function (x) { return x.id === pid; })[0]; var d = p && (p.devices || []).filter(function (x) { return x.id === id; })[0]; if (!d) return; ROOT.ui.devmgr.pick = { scope: 'plat', platId: pid, id: id, name: d.name }; rerender(); };
   ROOT.devmgrUse = function () {
     var p = ROOT.ui.devmgr && ROOT.ui.devmgr.pick; if (!p) return;
+    ROOT.ui.touched = true;
     var lab = useLab(), tpl = lab && useFileTpl(lab), fid = tpl && deviceFieldId(tpl);
     if (fid) ROOT.ui.values[fid] = p.name;
     try { localStorage.setItem(LS_DEVICE, p.name); } catch (e) {}
@@ -863,7 +920,7 @@
     var sepc = '<span class="sep">' + esc(tpl.separator || '_') + '</span>';
     var nameHtml = segs.length ? segs.join(sepc) : '<span class="fng-muted">add fields to this template…</span>';
     var folder = defaultTpl(lab.folderTemplates);
-    var pathHtml = folder ? '<div class="fng-path">' + esc(curPath()) + '</div>' : '';
+    var pathHtml = locationBlock(folder);
     return '<div class="fng-ex" id="fng-ex"><div class="h">File name</div>'
       + '<div class="fng-namerow"><div class="fng-name">' + nameHtml + '</div>'
       + '<button class="fng-copy" id="fng-copybtn" title="Copy file name" onclick="' + R() + '.copyName()">'
@@ -903,6 +960,7 @@
     ROOT.ui.devGroup = groupOfDevice(name); rerender();
   };
   ROOT.setVal = function (k, v) {
+    ROOT.ui.touched = true;   // a real user edit — don't let a background sync overwrite mid-task
     ROOT.ui.values[k] = v;
     var f = fieldById(ROOT.library, k);
     // remember the last department / operator chosen on this machine (only non-empty)
@@ -949,11 +1007,11 @@
     var op = currentOperator(), dev = currentDeviceName(); if (!op || !dev) return null;
     return odConfigs(op, dev).filter(function (c) { return c.id === activeConfigId(op, dev); })[0] || null;
   }
-  // config handlers act on (operator + the device OPENED in the Manage devices window)
-  ROOT.selectConfig = function (id) { var op = currentOperator(), dev = pickedDeviceName(); if (!op || !dev) return; setActiveConfigId(op, dev, id); rerender(); };
+  // config handlers act on (current operator + the device chosen for the file name)
+  ROOT.selectConfig = function (id) { var op = currentOperator(), dev = currentDeviceName(); if (!op || !dev) return; setActiveConfigId(op, dev, id); rerender(); };
   ROOT.newConfig = function () {
     var op = currentOperator(); if (!op) { toast('Select your operator on the main screen first.'); return; }
-    var dev = pickedDeviceName(); if (!dev) return;
+    var dev = currentDeviceName(); if (!dev) { toast('Choose a device first.'); return; }
     var def = 'Config ' + (odConfigs(op, dev).length + 1);
     var name = (typeof window !== 'undefined' && window.prompt) ? window.prompt('Name this configuration:', def) : def;
     if (name === null) return; name = (name || '').trim() || def;
@@ -962,18 +1020,18 @@
     m[k].push(c); saveAllConfigs(m); setActiveConfigId(op, dev, c.id); rerender();
   };
   ROOT.editConfig = function (text) {   // no rerender — keep the textarea cursor
-    var op = currentOperator(), dev = pickedDeviceName(); if (!op || !dev) return;
+    var op = currentOperator(), dev = currentDeviceName(); if (!op || !dev) return;
     var m = loadAllConfigs(), k = cfgKey(op, dev), c = (m[k] || []).filter(function (x) { return x.id === activeConfigId(op, dev); })[0];
     if (!c) return; c.text = text; saveAllConfigs(m); refreshHeader();
   };
   ROOT.renameConfig = function () {
-    var op = currentOperator(), dev = pickedDeviceName(); if (!op || !dev) return;
+    var op = currentOperator(), dev = currentDeviceName(); if (!op || !dev) return;
     var m = loadAllConfigs(), k = cfgKey(op, dev), c = (m[k] || []).filter(function (x) { return x.id === activeConfigId(op, dev); })[0]; if (!c) return;
     var n = (typeof window !== 'undefined' && window.prompt) ? window.prompt('Rename configuration:', c.name) : c.name;
     if (n === null) return; c.name = (n || '').trim() || c.name; saveAllConfigs(m); rerender();
   };
   ROOT.deleteConfig = function () {
-    var op = currentOperator(), dev = pickedDeviceName(); if (!op || !dev) return;
+    var op = currentOperator(), dev = currentDeviceName(); if (!op || !dev) return;
     if (typeof window !== 'undefined' && window.confirm && !window.confirm('Delete this configuration?')) return;
     var m = loadAllConfigs(), k = cfgKey(op, dev); m[k] = (m[k] || []).filter(function (x) { return x.id !== activeConfigId(op, dev); });
     saveAllConfigs(m); setActiveConfigId(op, dev, ''); rerender();
@@ -997,12 +1055,24 @@
     var folder = defaultTpl(lab.folderTemplates);
     var sepc = tpl.separator || '_';
     var pattern = (tpl.fieldIds || []).map(function (id) { var ff = fieldById(L, id); return ff ? ff.name : id; }).join(sepc);
-    var h = { fileName: curName(), fullPath: folder ? curPath() : '', lab: lab.name, template: tpl.name, separator: sepc, pattern: pattern, fields: fields };
+    var h = { fileName: curName(), lab: lab.name, template: tpl.name, separator: sepc, pattern: pattern, fields: fields };
+    // location & storage: the name is the durable identifier; paths are mutable
+    var _subtree = folder ? buildName(folder, L, ROOT.ui.values, ctx) : '';
+    if (_subtree) h.relPath = _subtree + '/' + (h.fileName || '');          // relative, location-independent
+    var _root = (folder && folder.basePath) ? normPath(folder.basePath) : '';
+    if (_root) h.archiveTarget = _root;                                      // intended NAS destination (planned, not verified)
+    h.storage = storageStatus();                                             // controlled: Local / Transferred / Both
+    if (showLiteralPath()) { var _lit = [_root, _subtree].filter(Boolean).join('/'); h.literalPath = (_lit ? _lit + '/' : '') + (h.fileName || ''); }
     // Department is bound to the lab — always recorded in the metadata, even if it
     // isn't part of the naming template.
     var depCode = (lab && lab.dept) ? lab.dept : '';
     if (!depCode) (tpl.fieldIds || []).forEach(function (id) { var ff = fieldById(L, id); if (ff && ff.source === 'department') depCode = ROOT.ui.values[id] || depCode; });
     if (depCode) { var dlh = DEPARTMENTS.filter(function (d) { return d.code === depCode; })[0]; h.department = dlh ? (depCode + ' — ' + dlh.label) : depCode; }
+    // operator's email — kept in the metadata for contact, never put in the file name
+    (tpl.fieldIds || []).forEach(function (id) {
+      var ef = fieldById(L, id);
+      if (ef && ef.source === 'operator') { var op = operatorByName(ROOT.ui.values[id] || ''); if (op && op.email) h.operatorEmail = op.email; }
+    });
     // attach the selected device's generic info (software, version, …)
     (tpl.fieldIds || []).forEach(function (id) {
       var f = fieldById(L, id);
@@ -1011,6 +1081,11 @@
         var d = findDeviceByName(sel);
         if (d && d.info && Object.keys(d.info).length) h.device = { name: d.name, info: d.info };
       }
+    });
+    // operator email (from the managed operator list) — always recorded in metadata
+    (tpl.fieldIds || []).forEach(function (id) {
+      var f = fieldById(L, id);
+      if (f && f.source === 'operator') { var op = operatorByName(ROOT.ui.values[id] || ''); if (op && op.email) h.operatorEmail = op.email; }
     });
     // attach the operator's active experiment configuration (local to this machine)
     var cfg = activeConfig();
@@ -1023,9 +1098,13 @@
     var md = [];
     md.push('## File metadata', '');
     md.push('**File name:** `' + (h.fileName || '(empty)') + '`  ');
-    if (h.fullPath && h.fullPath !== h.fileName) md.push('**Full path:** `' + h.fullPath + '`  ');
+    if (h.relPath && h.relPath !== h.fileName) md.push('**Relative path:** `' + h.relPath + '`  ');
+    if (h.archiveTarget) md.push('**Intended archive (NAS):** `' + h.archiveTarget + '` _(planned target \u2014 not verified)_  ');
+    if (h.storage) md.push('**Storage status:** ' + h.storage.status + (h.storage.date ? ' (as of ' + h.storage.date + ')' : '') + '  ');
+    if (h.literalPath) md.push('**Full path (as entered \u2014 not verified):** `' + h.literalPath + '`  ');
     md.push('**Lab:** ' + h.lab + '  ');
     if (h.department) md.push('**Department:** ' + h.department + '  ');
+    if (h.operatorEmail) md.push('**Operator email:** ' + h.operatorEmail + '  ');
     md.push('**Template:** ' + h.template + '  ');
     md.push('**Generated:** ' + fmtDate(new Date(), 'YYYY-MM-DD') + ' ' + fmtDate(new Date(), 'HH:MM'));
     md.push('', '| Field | Value |', '| --- | --- |');
@@ -1047,8 +1126,11 @@
     var h = headerObject(); if (!h) return '';
     var html = '<h3 class="fng-doc-h">File metadata</h3>'
       + '<p><b>File name:</b> <code>' + esc(h.fileName || '(empty)') + '</code><br>';
-    if (h.fullPath && h.fullPath !== h.fileName) html += '<b>Full path:</b> <code>' + esc(h.fullPath) + '</code><br>';
-    html += '<b>Lab:</b> ' + esc(h.lab) + (h.department ? '<br><b>Department:</b> ' + esc(h.department) : '') + '<br><b>Template:</b> ' + esc(h.template)
+    if (h.relPath && h.relPath !== h.fileName) html += '<b>Relative path:</b> <code>' + esc(h.relPath) + '</code><br>';
+    if (h.archiveTarget) html += '<b>Intended archive (NAS):</b> <code>' + esc(h.archiveTarget) + '</code> <span style="color:#6b7592">(planned target \u2014 not verified)</span><br>';
+    if (h.storage) html += '<b>Storage status:</b> ' + esc(h.storage.status) + (h.storage.date ? ' <span style="color:#6b7592">(as of ' + esc(h.storage.date) + ')</span>' : '') + '<br>';
+    if (h.literalPath) html += '<b>Full path:</b> <code>' + esc(h.literalPath) + '</code> <span style="color:#f0a860">(as entered \u2014 not verified)</span><br>';
+    html += '<b>Lab:</b> ' + esc(h.lab) + (h.department ? '<br><b>Department:</b> ' + esc(h.department) : '') + (h.operatorEmail ? '<br><b>Operator email:</b> ' + esc(h.operatorEmail) : '') + '<br><b>Template:</b> ' + esc(h.template)
       + '<br><b>Generated:</b> ' + fmtDate(new Date(), 'YYYY-MM-DD') + ' ' + fmtDate(new Date(), 'HH:MM') + '</p>'
       + '<table class="fng-doc-t"><thead><tr><th>Field</th><th>Value</th></tr></thead><tbody>';
     Object.keys(h.fields).forEach(function (k) { html += '<tr><td>' + esc(k) + '</td><td>' + esc(h.fields[k] || '—') + '</td></tr>'; });
@@ -1119,9 +1201,74 @@
     return decodeEntities(s).replace(/\n{3,}/g, '\n\n').trim();
   }
   // full metadata as Markdown (header + the user's notes)
-  function notesMarkdown() { return headerMarkdown() + '\n\n---\n\n' + NOTE_MARK + '\n\n' + htmlToMd(ROOT.ui.notesHtml || ''); }
+  // true only when the notes box has real content (ignores contenteditable
+  // leftovers like <br>, empty tags, whitespace and &nbsp;)
+  function notesNonEmpty() { return htmlToText(ROOT.ui.notesHtml || '').replace(/\u00a0/g, '').trim().length > 0; }
+  function notesMarkdown() {
+    var md = headerMarkdown();
+    if (notesNonEmpty()) md += '\n\n---\n\n' + NOTE_MARK + '\n\n' + htmlToMd(ROOT.ui.notesHtml || '');
+    return md;
+  }
 
   function curName() { var lab = useLab(); var tpl = lab && useFileTpl(lab); return tpl ? buildName(tpl, ROOT.library, ROOT.ui.values, { now: nowDate(), tplId: tpl.id, lab: lab }) : ''; }
+
+  /* --- location & storage helpers -----------------------------------------
+   * The file NAME is the durable identifier (intrinsic, travels with the file).
+   * A folder PATH is mutable and environment-specific, so we split it into a
+   * location-independent convention subtree (recorded) and an absolute root /
+   * intended NAS target (recorded only as a planned, unverified destination).
+   * The full literal path is opt-in and always labelled "not verified". */
+  function folderSubtree() {
+    var lab = useLab(); if (!lab) return '';
+    var folder = defaultTpl(lab.folderTemplates); if (!folder) return '';
+    var tpl = useFileTpl(lab);
+    return buildName(folder, ROOT.library, ROOT.ui.values, { now: nowDate(), tplId: tpl ? tpl.id : '', lab: lab });
+  }
+  function archiveRoot() { var lab = useLab(); if (!lab) return ''; var folder = defaultTpl(lab.folderTemplates); return (folder && folder.basePath) ? normPath(folder.basePath) : ''; }
+  function relPath() { var sub = folderSubtree(), n = curName(); return sub ? (sub + '/' + n) : n; }
+
+  var STORAGE_OPTS = ['Local (acquisition PC)', 'Transferred to NASAC', 'Both (local + NASAC)'];
+  function storageStatusVal() { try { return localStorage.getItem(LS_STORAGE) || STORAGE_OPTS[0]; } catch (e) { return STORAGE_OPTS[0]; } }
+  function storageStatusDate() { try { return localStorage.getItem(LS_STORAGE_DATE) || ''; } catch (e) { return ''; } }
+  function storageStatus() { return { status: storageStatusVal(), date: storageStatusDate() || fmtDate(new Date(), 'YYYY-MM-DD') }; }
+  function showLiteralPath() { try { return localStorage.getItem(LS_SHOWPATH) === '1'; } catch (e) { return false; } }
+  // a root that looks like a local disk rather than a NAS share (//server/share)
+  function looksLocalRoot(p) { p = normPath(p); return /^[A-Za-z]:\//.test(p) || /^\/(Users|home|mnt|media|tmp|var|Desktop|Documents)\b/i.test(p); }
+
+  ROOT.setStorageStatus = function (v) { try { localStorage.setItem(LS_STORAGE, v); } catch (e) {} refreshUsePreview(); refreshHeader(); };
+  ROOT.setStorageDate = function (v) { try { if (v) localStorage.setItem(LS_STORAGE_DATE, v); else localStorage.removeItem(LS_STORAGE_DATE); } catch (e) {} refreshHeader(); };
+  ROOT.toggleLiteralPath = function (on) { try { localStorage.setItem(LS_SHOWPATH, on ? '1' : '0'); } catch (e) {} refreshUsePreview(); refreshHeader(); };
+
+  // The block shown under the file name in the Use tab: relative path, intended
+  // archive (with a local-vs-NAS nudge), the controlled storage status, and the
+  // opt-in (unverified) absolute path.
+  function locationBlock(folder) {
+    var html = '';
+    if (folder) {
+      html += '<div class="fng-path" title="Relative path \u2014 travels with the file, independent of where it is stored">' + esc(relPath()) + '</div>';
+      var root = archiveRoot();
+      if (root) {
+        html += '<div class="fng-muted" style="font-size:11px;margin-top:3px">Intended archive (NAS): <code>' + esc(root) + '</code> \u2014 planned target, not verified</div>';
+        if (looksLocalRoot(root)) html += '<div style="font-size:11px;margin-top:2px;color:#f0a860">\u26a0 This looks like a local drive. Good practice is to archive raw data on NASAC (a //server/share path).</div>';
+      }
+    }
+    var cur = storageStatusVal();
+    html += '<div class="fng-row" style="margin-top:8px;align-items:flex-end">'
+      + '<div class="fng-f"><span class="fng-l">Raw-data storage</span>'
+      + '<select class="fng-sel" onchange="' + R() + '.setStorageStatus(this.value)">'
+      + STORAGE_OPTS.map(function (o) { return '<option value="' + esc(o) + '"' + (o === cur ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join('')
+      + '</select></div>'
+      + '<div class="fng-f"><span class="fng-l">As of</span>'
+      + '<input class="fng-in" type="date" value="' + esc(storageStatusDate() || fmtDate(new Date(), 'YYYY-MM-DD')) + '" onchange="' + R() + '.setStorageDate(this.value)"></div>'
+      + '</div>';
+    if (folder && archiveRoot()) {
+      html += '<label style="display:flex;gap:6px;align-items:center;font-size:11px;color:#8b95a9;margin-top:6px;cursor:pointer">'
+        + '<input type="checkbox"' + (showLiteralPath() ? ' checked' : '') + ' onchange="' + R() + '.toggleLiteralPath(this.checked)"> '
+        + 'Also record the full literal path (as entered \u2014 not verified)</label>';
+      if (showLiteralPath()) html += '<div class="fng-path" style="opacity:.8;margin-top:4px" title="Absolute path as entered \u2014 the tool cannot check the file is actually there">' + esc(curPath()) + ' <span style="color:#f0a860">(not verified)</span></div>';
+    }
+    return html;
+  }
   function curPath() {
     var lab = useLab(); if (!lab) return '';
     var tpl = useFileTpl(lab), folder = defaultTpl(lab.folderTemplates);
@@ -1136,6 +1283,155 @@
     return { header: h, notes: htmlToText(ROOT.ui.notesHtml || ''), notesHtml: ROOT.ui.notesHtml || '' };
   }
   function copyText(t) { if (t && navigator.clipboard) navigator.clipboard.writeText(t); }
+
+  /* --- usage analytics (event ping) ---------------------------------------
+   * Opt-in and fire-and-forget: active ONLY when window.FNG_ANALYTICS_URL is
+   * set (in index.html). Each export sends ONE minimal event to a private
+   * endpoint (Google Apps Script -> Sheet): no file names and no field values,
+   * only lab + operator names, the action, and a few coarse facets. Events are
+   * buffered in localStorage and flushed, so a failed POST is retried later. */
+  var ANALYTICS_EV_V = 1;
+  function analyticsCfg() {
+    if (typeof window === 'undefined' || !window.FNG_ANALYTICS_URL) return null;
+    return { url: window.FNG_ANALYTICS_URL, key: window.FNG_ANALYTICS_KEY || '' };
+  }
+  function fieldValueBySource(src) {
+    var fs = (ROOT.library && ROOT.library.fields) || [];
+    for (var i = 0; i < fs.length; i++) { if (fs[i].source === src) { var v = ROOT.ui.values[fs[i].id]; if (v) return v; } }
+    return '';
+  }
+  function currentDeviceScope() {
+    var nm = fieldValueBySource('device'); if (!nm) return '';
+    return groupOfDevice(nm) === '__lab' ? 'lab' : 'platform';
+  }
+  // Pseudonymise the operator: a stable short token instead of the plaintext name,
+  // so the datastore never holds raw names. cyrb53 is a fast non-cryptographic hash —
+  // this is data-minimisation, not strong anonymity (someone holding both the data and
+  // the operator roster could re-derive it), but raw names never leave the browser.
+  var OP_SALT = 'fng-op-v1';   // change this to rotate every operator token
+  function cyrb53(str, seed) {
+    seed = seed || 0;
+    var h1 = 0xdeadbeef ^ seed, h2 = 0x41c6ce57 ^ seed;
+    for (var i = 0, ch; i < str.length; i++) { ch = str.charCodeAt(i); h1 = Math.imul(h1 ^ ch, 2654435761); h2 = Math.imul(h2 ^ ch, 1597334677); }
+    h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+    h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+    return 4294967296 * (2097151 & h2) + (h1 >>> 0);
+  }
+  function hashOperator(name) {
+    name = String(name || '').trim().toLowerCase();
+    return name ? 'op-' + cyrb53(OP_SALT + '|' + name).toString(36) : '';
+  }
+  // The event payload — deliberately minimal. The lab NAME is included; the operator is
+  // a stable HASH (never the raw name); never any file name or field value.
+  function buildAnalyticsEvent(action) {
+    var lab = useLab(); if (!lab) return null;
+    var tpl = useFileTpl(lab);
+    return { v: ANALYTICS_EV_V, ts: new Date().toISOString(), action: action,
+      labId: lab.id || '', lab: lab.name || '', dept: lab.dept || '',
+      operator: hashOperator(fieldValueBySource('operator')),
+      deviceScope: currentDeviceScope(),
+      template: (tpl && tpl.name) || '',
+      storage: storageStatusVal() };
+  }
+  function aQueue() { try { return JSON.parse(localStorage.getItem(LS_ANALYTICS) || '[]'); } catch (e) { return []; } }
+  function aQueueSet(a) { try { localStorage.setItem(LS_ANALYTICS, JSON.stringify(a.slice(-500))); } catch (e) {} }
+  var _aLastSig = '', _aLastAt = 0;
+  function logEvent(action) {
+    if (!analyticsCfg()) return;
+    try {
+      var ev = buildAnalyticsEvent(action); if (!ev) return;
+      var sig = action + '|' + ev.labId + '|' + ev.operator + '|' + ev.template;
+      var now = Date.now();
+      if (sig === _aLastSig && (now - _aLastAt) < 3000) return;   // drop rapid duplicate clicks
+      _aLastSig = sig; _aLastAt = now;
+      var q = aQueue(); q.push(ev); aQueueSet(q); flushAnalytics();
+    } catch (e) {}
+  }
+  function flushAnalytics() {
+    var cfg = analyticsCfg(); if (!cfg) return;
+    var q = aQueue(); if (!q.length) return;
+    var batch = q.slice(0, 50);
+    var body = JSON.stringify({ key: cfg.key, events: batch });
+    try {
+      fetch(cfg.url, { method: 'POST', mode: 'no-cors', keepalive: true,
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: body })
+        .then(function () { aQueueSet(aQueue().slice(batch.length)); })  // assume delivered (opaque response)
+        .catch(function () {});                                          // network failure: keep queued, retry next time
+    } catch (e) {}
+  }
+
+  /* --- rich clipboard: paste a FORMATTED block into the ELN ----------------
+   * The ELN (eLabNext) editor is rich-text/HTML: pasting Markdown shows the raw
+   * "## ** |" marks. So we put real HTML on the clipboard (rendered headings +
+   * tables + the notes), with the Markdown as the plain-text fallback. The
+   * HTML tables are themselves machine-readable (Field/Value rows parse cleanly);
+   * we also embed the full sidecar JSON as an HTML comment + data-attribute as a
+   * best-effort machine record (whether it survives depends on the ELN's
+   * sanitiser — the downloaded .json sidecar is the guaranteed canonical form). */
+  function clipTable(pairs, c1, c2) {
+    var TS = 'border-collapse:collapse;margin:4px 0;', CS = 'border:1px solid #999;padding:4px 9px;text-align:left;';
+    var rows = pairs.map(function (p) { return '<tr><td style="' + CS + '">' + esc(p[0]) + '</td><td style="' + CS + '">' + esc(p[1] == null || p[1] === '' ? '—' : p[1]) + '</td></tr>'; }).join('');
+    return '<table style="' + TS + '"><thead><tr><th style="' + CS + '">' + esc(c1) + '</th><th style="' + CS + '">' + esc(c2) + '</th></tr></thead><tbody>' + rows + '</tbody></table>';
+  }
+  // Self-contained HTML (no app CSS classes — those don't exist in the ELN).
+  function clipboardHtml() {
+    var h = headerObject(); if (!h) return '';
+    var html = '<h3 style="margin:0 0 6px">File metadata</h3>'
+      + '<p style="margin:0 0 8px"><strong>File name:</strong> <code>' + esc(h.fileName || '(empty)') + '</code><br>';
+    if (h.relPath && h.relPath !== h.fileName) html += '<strong>Relative path:</strong> <code>' + esc(h.relPath) + '</code><br>';
+    if (h.archiveTarget) html += '<strong>Intended archive (NAS):</strong> <code>' + esc(h.archiveTarget) + '</code> (planned target \u2014 not verified)<br>';
+    if (h.storage) html += '<strong>Storage status:</strong> ' + esc(h.storage.status) + (h.storage.date ? ' (as of ' + esc(h.storage.date) + ')' : '') + '<br>';
+    if (h.literalPath) html += '<strong>Full path (as entered \u2014 not verified):</strong> <code>' + esc(h.literalPath) + '</code><br>';
+    html += '<strong>Lab:</strong> ' + esc(h.lab);
+    if (h.department) html += '<br><strong>Department:</strong> ' + esc(h.department);
+    if (h.operatorEmail) html += '<br><strong>Operator email:</strong> ' + esc(h.operatorEmail);
+    html += '<br><strong>Template:</strong> ' + esc(h.template)
+      + '<br><strong>Generated:</strong> ' + fmtDate(new Date(), 'YYYY-MM-DD') + ' ' + fmtDate(new Date(), 'HH:MM') + '</p>';
+    html += clipTable(Object.keys(h.fields).map(function (k) { return [k, h.fields[k]]; }), 'Field', 'Value');
+    if (h.device) html += '<p style="margin:10px 0 4px"><strong>Device — ' + esc(h.device.name) + '</strong></p>'
+      + clipTable(Object.keys(h.device.info).map(function (k) { return [k, h.device.info[k]]; }), 'Property', 'Value');
+    if (h.config) html += '<p style="margin:10px 0 4px"><strong>Configuration — ' + esc(h.config.name) + '</strong> (this machine)</p>'
+      + clipTable(Object.keys(h.config.settings).map(function (k) { return [k, h.config.settings[k]]; }), 'Setting', 'Value');
+    if (notesNonEmpty()) html += '<hr><h3 style="margin:0 0 6px">Notes</h3>' + ROOT.ui.notesHtml;
+    return html;
+  }
+  // Wrap the visible HTML with an embedded machine-readable copy (best-effort).
+  function clipboardPayload() {
+    var inner = clipboardHtml();
+    var json = JSON.stringify(sidecar());
+    var html = '<div data-fng-metadata="' + esc(json) + '">' + inner + '</div>'
+      + '<!--FNG-METADATA ' + json.replace(/--/g, '\u2013\u2013') + ' FNG-METADATA-->';
+    return { html: html, text: notesMarkdown() };
+  }
+  // Put both text/html and text/plain on the clipboard; fall back gracefully.
+  function writeRichClipboard(html, text, done) {
+    if (navigator.clipboard && window.ClipboardItem) {
+      try {
+        navigator.clipboard.write([new ClipboardItem({
+          'text/html': new Blob([html], { type: 'text/html' }),
+          'text/plain': new Blob([text], { type: 'text/plain' })
+        })]).then(function () { if (done) done(true); }, function () { legacyCopyHtml(html, text, done); });
+        return;
+      } catch (e) {}
+    }
+    legacyCopyHtml(html, text, done);
+  }
+  function legacyCopyHtml(html, text, done) {
+    try {
+      var holder = document.createElement('div');
+      holder.contentEditable = 'true';
+      holder.style.cssText = 'position:fixed;left:-9999px;top:0;';
+      holder.innerHTML = html;
+      document.body.appendChild(holder);
+      var range = document.createRange(); range.selectNodeContents(holder);
+      var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range);
+      var ok = false; try { ok = document.execCommand('copy'); } catch (e) {}
+      sel.removeAllRanges(); document.body.removeChild(holder);
+      if (ok) { if (done) done(true); return; }
+    } catch (e) {}
+    try { if (navigator.clipboard) navigator.clipboard.writeText(text); } catch (e) {}
+    if (done) done(false);
+  }
   // Every user-input field (not the auto date/counter/lab, not ELN-filled ones) must be
   // filled before a name can be copied/exported. Returns the names still empty.
   function missingInputs() {
@@ -1165,22 +1461,23 @@
 
   ROOT.copyName = function () {
     if (!guard()) return;
-    copyText(curName()); pushHistory(curName()); saveFieldHistories();
+    copyText(curName()); pushHistory(curName()); saveFieldHistories(); logEvent('name');
     var b = document.getElementById('fng-copybtn');
     if (b) { var o = b.innerHTML; b.classList.add('ok'); b.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><polyline points="20 6 9 17 4 12"></polyline></svg>'; setTimeout(function () { b.classList.remove('ok'); b.innerHTML = o; }, 1300); }
     toast('File name copied.');
   };
-  ROOT.copyPath = function () { if (!guard()) return; copyText(curPath()); toast('Full path copied.'); };
-  ROOT.downloadSidecar = function () { if (!guard()) return; var name = curName(); if (!name) return; pushHistory(name); saveFieldHistories(); download(name + '.json', JSON.stringify(sidecar(), null, 2), 'application/json'); };
+  ROOT.copyPath = function () { if (!guard()) return; var lit = showLiteralPath(); copyText(lit ? curPath() : relPath()); toast(lit ? 'Full path copied (not verified).' : 'Relative path copied.'); };
+  ROOT.downloadSidecar = function () { if (!guard()) return; var name = curName(); if (!name) return; pushHistory(name); saveFieldHistories(); download(name + '.json', JSON.stringify(sidecar(), null, 2), 'application/json'); logEvent('sidecar'); };
   ROOT.copyMarkdown = function () { copyText(notesMarkdown()); toast('Metadata (Markdown) copied.'); };
-  // copy the whole metadata + notes block (the icon at the doc's top-right), with a flash
+  // copy the whole metadata + notes block (the icon at the doc's top-right) as
+  // FORMATTED HTML so it pastes nicely into the ELN, with a flash.
   ROOT.copyDoc = function () {
-    copyText(notesMarkdown());
+    var p = clipboardPayload(); logEvent('eln');
     var b = document.getElementById('fng-md-copybtn');
     if (b) { var o = b.innerHTML; b.classList.add('ok'); b.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><polyline points="20 6 9 17 4 12"></polyline></svg>'; setTimeout(function () { b.classList.remove('ok'); b.innerHTML = o; }, 1300); }
-    toast('Metadata & notes copied.');
+    writeRichClipboard(p.html, p.text, function () { toast('Metadata & notes copied (formatted for the ELN).'); });
   };
-  ROOT.downloadMarkdown = function () { if (!guard()) return; var name = curName(); if (!name) return; pushHistory(name); saveFieldHistories(); download(name + '.md', notesMarkdown(), 'text/markdown'); };
+  ROOT.downloadMarkdown = function () { if (!guard()) return; var name = curName(); if (!name) return; pushHistory(name); saveFieldHistories(); download(name + '.md', notesMarkdown(), 'text/markdown'); logEvent('md'); };
 
   // advance counters for the next file; reset clears what the user typed
   function bumpCounters() {
@@ -1215,7 +1512,10 @@
     var o = sidecar(), h = o.header; if (!h || !h.fileName) return;
     pushHistory(h.fileName); saveFieldHistories();
     var rows = '<tr><td style="color:#6b7592;padding-right:10px">File name</td><td><strong>' + esc(h.fileName) + '</strong></td></tr>';
-    if (h.fullPath) rows += '<tr><td style="color:#6b7592">Full path</td><td>' + esc(h.fullPath) + '</td></tr>';
+    if (h.relPath) rows += '<tr><td style="color:#6b7592">Relative path</td><td>' + esc(h.relPath) + '</td></tr>';
+    if (h.archiveTarget) rows += '<tr><td style="color:#6b7592">Intended archive (NAS)</td><td>' + esc(h.archiveTarget) + ' (not verified)</td></tr>';
+    if (h.storage) rows += '<tr><td style="color:#6b7592">Storage status</td><td>' + esc(h.storage.status) + (h.storage.date ? ' (as of ' + esc(h.storage.date) + ')' : '') + '</td></tr>';
+    if (h.literalPath) rows += '<tr><td style="color:#6b7592">Full path (not verified)</td><td>' + esc(h.literalPath) + '</td></tr>';
     rows += '<tr><td style="color:#6b7592">Lab</td><td>' + esc(h.lab) + '</td></tr>'
           + '<tr><td style="color:#6b7592">Template</td><td>' + esc(h.template) + '</td></tr>';
     Object.keys(h.fields || {}).forEach(function (k) {
@@ -1231,7 +1531,7 @@
       + '<div style="color:#4af0a0;font-size:11px;letter-spacing:.1em;margin-bottom:6px;">FAIR FILE NAMER · FILE METADATA</div>'
       + '<table style="border-collapse:collapse;font-size:13px;">' + rows + '</table>'
       + '<div style="font-size:11px;color:#6b7592;margin-top:6px;">generated ' + esc(h.generatedAt) + '</div>'
-      + (o.notesHtml ? '<div style="font-size:12px;color:#9fb0cf;margin-top:6px;"><b>Notes:</b><br>' + o.notesHtml + '</div>' : '') + '</div>';
+      + (htmlToText(o.notesHtml || '').replace(/\u00a0/g, '').trim() ? '<div style="font-size:12px;color:#9fb0cf;margin-top:6px;"><b>Notes:</b><br>' + o.notesHtml + '</div>' : '') + '</div>';
     var sec = section || (ROOT._sectionData && ROOT._sectionData.section);
     try { if (sec && sec.setContent) sec.setContent(html); } catch (e) {}
     try { if (sec && sec.saveHtmlContent) sec.saveHtmlContent(html, expJournalID || (ROOT._sectionData && ROOT._sectionData.expJournalID)); } catch (e) {}
@@ -1284,7 +1584,7 @@
              : '<button class="fng-btn pri" onclick="' + R() + '.publish()">Publish changes</button>')
       + '<button class="fng-btn" onclick="' + R() + '.importLib()">Import library JSON</button>'
       + '</div>'
-      + '<div class="fng-f" style="max-width:640px;margin-top:8px"><span class="fng-l">GitLab file URL — derived automatically from this page&rsquo;s address</span>'
+      + '<div class="fng-f" style="max-width:640px;margin-top:8px"><span class="fng-l">GitLab Web IDE link — derived automatically from this page&rsquo;s address</span>'
       + '<input class="fng-in" readonly value="' + esc(publishLink() || 'set window.FNG_PUBLISH_BASE in index.html') + '"></div>'
       + (col ? '<p style="margin-top:6px;color:#f0604a;font-size:12px">⚠ Resolve the duplicate identifiers flagged with <b>!</b> below before publishing.</p>'
              : '<p class="fng-muted" style="margin-top:6px">Your edits are kept on this machine automatically. <b>Publish changes</b> downloads <code>library.json</code> and copies it — send it to a master to commit, or commit it yourself if you have GitLab access.</p>');
@@ -1307,7 +1607,7 @@
       + '</div>';
 
     var baseRow = ROOT.build.kind === 'folder'
-      ? '<div class="fng-f" style="margin:8px 0"><span class="fng-l">Base path (NAS root) — prepended to the folder structure</span>'
+      ? '<div class="fng-f" style="margin:8px 0"><span class="fng-l">Intended archive root (NAS) — recorded as a planned target only; the tool never asserts where the file currently is</span>'
         + '<input class="fng-in" value="' + esc(tpl.basePath || '') + '" placeholder="//nasac-m2.isis.unige.ch/m-GHoltmaat/GHoltmaat/USERS/" oninput="' + R() + '.setBasePath(this.value)"></div>'
       : '';
 
@@ -1335,6 +1635,7 @@
       + '<div class="fng-tiles" id="fng-tilebox" ondragover="' + R() + '.tileDragOver(event)" ondrop="' + R() + '.tileDrop(event)">' + tiles + '</div>'
       + '<h3 style="margin-top:14px">Available fields</h3>'
       + '<div class="fng-tiles fng-avail">' + avail + '</div>'
+      + customFieldsCard()
       + buildExample(lab, tpl);
   }
 
@@ -1436,6 +1737,9 @@
         + DEPARTMENTS.map(function (d) { return '<option value="' + esc(d.code) + '"' + (l.dept === d.code ? ' selected' : '') + '>' + esc(d.code) + ' — ' + esc(d.label) + '</option>'; }).join('')
         + '</select></td>';
     }
+    function emailCell(e, i) {
+      return '<td><input class="fng-in" type="email" style="width:190px" placeholder="name@unige.ch" value="' + esc(e.email || '') + '" onchange="' + R() + '.setOperatorEmail(' + i + ',this.value)"></td>';
+    }
     function abbrTable(list, keyOf, fns, extraCell) {
       var fullV = list.map(function (e) { return applyFmt(opName(e), 'full'); });
       var iniV = list.map(abbrIni), f3V = list.map(abbrF3);
@@ -1449,7 +1753,7 @@
         return '<tr>' + cellInput(R() + '.' + fns.name + '(' + k + ',this.value)', opName(e), fb, 150)
           + cellInput(R() + '.' + fns.ini + '(' + k + ',this.value)', iniDisp, ib, 80)
           + cellInput(R() + '.' + fns.f3 + '(' + k + ',this.value)', f3Disp, tb, 80)
-          + (extraCell ? extraCell(e) : '')
+          + (extraCell ? extraCell(e, i) : '')
           + '<td><button class="fng-btn sm" title="remove" onclick="' + R() + '.' + fns.del + '(' + k + ')">✕</button></td></tr>';
       }).join('');
       return { rows: rows, any: any };
@@ -1460,7 +1764,7 @@
           + (t.any ? '<p class="fng-muted" style="margin-top:6px">Fields flagged <span class="fng-bang">!</span> match another ' + kind + ' — edit them to make each unique.</p>' : '')
         : '<span class="fng-muted">' + emptyMsg + '</span>';
     }
-    var ops = abbrTableHtml(abbrTable(opList, function (e, i) { return '' + i; }, { name: 'setOperatorName', ini: 'setOperatorInitials', f3: 'setOperatorFirst3', del: 'delOperator' }), 'no operators yet', 'operator', 'Full name');
+    var ops = abbrTableHtml(abbrTable(opList.slice().sort(function (a, b) { return cmpName(opName(a), opName(b)); }), function (e) { return '' + opList.indexOf(e); }, { name: 'setOperatorName', ini: 'setOperatorInitials', f3: 'setOperatorFirst3', del: 'delOperator' }, emailCell), 'no operators yet', 'operator', 'Full name', 'Email');
     var labsTable = abbrTableHtml(abbrTable(labs(), function (l) { return '\'' + l.id + '\''; }, { name: 'setLabName', ini: 'setLabInitials', f3: 'setLabFirst3', del: 'delLab' }, deptCell), 'no labs yet', 'lab', 'Lab name', 'Department');
     var devDup = countMap((L.devices || []).map(function (d) { return d.name; }));
 
@@ -1475,22 +1779,11 @@
         + '<textarea class="fng-ta" style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px" placeholder="Software: ScanImage" oninput="' + R() + '.setDeviceInfo(' + i + ',this.value)">' + esc(infoText) + '</textarea></div></div>';
     }).join('') || '<span class="fng-muted">no devices yet</span>';
 
-    var customs = L.fields.filter(function (f) { return !f.builtin; });
-    var customList = customs.map(function (f) {
-      var meta = f.source === 'list' ? 'list: ' + (f.options || []).join(', ') : f.source === 'date' ? 'date ' + f.format : f.source === 'counter' ? 'counter' : 'free text';
-      return '<span class="fng-chiprm">' + esc(f.name) + ' <span class="fng-muted">(' + esc(meta) + ')</span><button onclick="' + R() + '.delField(\'' + f.id + '\')">✕</button></span>';
-    }).join('') || '<span class="fng-muted">no custom fields</span>';
-
-    var nf = ROOT.newField;
-    var typeSel = '<select class="fng-sel" onchange="' + R() + '.setNF(\'type\',this.value)">'
-      + ['freetext', 'list', 'date', 'counter'].map(function (t) { return '<option value="' + t + '"' + (nf.type === t ? ' selected' : '') + '>' + (t === 'freetext' ? 'free text' : t) + '</option>'; }).join('') + '</select>';
-    var extra = nf.type === 'list'
-      ? '<div class="fng-f" style="flex:1"><span class="fng-l">Options (comma-separated)</span><input class="fng-in" value="' + esc(nf.optionsCsv) + '" placeholder="A, B, C" oninput="' + R() + '.setNF(\'optionsCsv\',this.value)"></div>'
-      : nf.type === 'date'
-        ? '<div class="fng-f"><span class="fng-l">Date format</span><select class="fng-sel" onchange="' + R() + '.setNF(\'format\',this.value)">' + ['YYYYMMDD', 'YYYY-MM-DD', 'YYMMDD', 'YYYYMM', 'YYYY'].map(function (x) { return '<option' + (nf.format === x ? ' selected' : '') + '>' + x + '</option>'; }).join('') + '</select></div>'
-        : '';
-
     return '<h3 style="margin-top:22px">Lists &amp; fields</h3>'
+      + '<div class="fng-card"><h3 style="margin-top:0">Acquisition devices</h3>'
+      + '<p class="fng-muted">Lab devices and the shared platform devices are managed in a dedicated window — browse and edit lab devices.</p>'
+      + '<div class="fng-row" style="margin-top:6px"><button class="fng-btn pri" onclick="' + R() + '.openDevManager(true)">Manage devices ▾</button></div></div>'
+
       + '<div class="fng-card"><h3 style="margin-top:0">Labs</h3>'
       + labsTable
       + '<div class="fng-row" style="margin-top:8px"><button class="fng-btn sm" onclick="' + R() + '.addLab()">+ Add lab</button></div></div>'
@@ -1499,21 +1792,34 @@
       + ops
       + '<div class="fng-row" style="margin-top:8px"><input class="fng-in" id="fng-newop" placeholder="Full name"><button class="fng-btn sm" onclick="' + R() + '.addOperator()">+ Add operator</button></div></div>'
 
-      + '<div class="fng-card"><h3 style="margin-top:0">Acquisition devices</h3>'
-      + '<p class="fng-muted">Lab devices and the shared platform devices are managed in a dedicated window — browse, edit lab devices, and keep your own local configs.</p>'
-      + '<div class="fng-row" style="margin-top:6px"><button class="fng-btn pri" onclick="' + R() + '.openDevManager()">Manage devices ▾</button></div></div>'
-
       + '<div class="fng-card"><h3 style="margin-top:0">Departments <span class="fng-muted">(fixed)</span></h3>'
-      + '<div class="fng-mini">' + DEPARTMENTS.map(function (d) { return '<span class="fng-chiprm" style="padding-right:11px">' + esc(d.code) + ' — ' + esc(d.label) + '</span>'; }).join('') + '</div></div>'
+      + '<div class="fng-mini">' + DEPARTMENTS.map(function (d) { return '<span class="fng-chiprm" style="padding-right:11px">' + esc(d.code) + ' — ' + esc(d.label) + '</span>'; }).join('') + '</div></div>';
+  }
 
-      + '<div class="fng-card"><h3 style="margin-top:0">Custom fields</h3>'
+  // Custom-field management card — shown in the template editor, just below the
+  // "Available fields" palette (so a new field appears in the palette right above).
+  function customFieldsCard() {
+    var L = ROOT.library;
+    var customs = L.fields.filter(function (f) { return !f.builtin; });
+    var customList = customs.map(function (f) {
+      var meta = f.source === 'list' ? 'list: ' + (f.options || []).join(', ') : f.source === 'date' ? 'date ' + f.format : f.source === 'counter' ? 'counter' : 'free text';
+      return '<span class="fng-chiprm">' + esc(f.name) + ' <span class="fng-muted">(' + esc(meta) + ')</span><button onclick="' + R() + '.delField(\'' + f.id + '\')">✕</button></span>';
+    }).join('') || '<span class="fng-muted">no custom fields</span>';
+    var nf = ROOT.newField;
+    var typeSel = '<select class="fng-sel" onchange="' + R() + '.setNF(\'type\',this.value)">'
+      + ['freetext', 'list', 'date', 'counter'].map(function (t) { return '<option value="' + t + '"' + (nf.type === t ? ' selected' : '') + '>' + (t === 'freetext' ? 'free text' : t) + '</option>'; }).join('') + '</select>';
+    var extra = nf.type === 'list'
+      ? '<div class="fng-f" style="flex:1"><span class="fng-l">Options (comma-separated)</span><input class="fng-in" value="' + esc(nf.optionsCsv) + '" placeholder="A, B, C" oninput="' + R() + '.setNF(\'optionsCsv\',this.value)"></div>'
+      : nf.type === 'date'
+        ? '<div class="fng-f"><span class="fng-l">Date format</span><select class="fng-sel" onchange="' + R() + '.setNF(\'format\',this.value)">' + ['YYYYMMDD', 'YYYY-MM-DD', 'YYMMDD', 'YYYYMM', 'YYYY'].map(function (x) { return '<option' + (nf.format === x ? ' selected' : '') + '>' + x + '</option>'; }).join('') + '</select></div>'
+        : '';
+    return '<div class="fng-card" style="margin-top:8px"><h3 style="margin-top:0">Custom fields</h3>'
       + '<div class="fng-mini">' + customList + '</div>'
       + '<div class="fng-row" style="margin-top:10px;align-items:flex-end">'
       + '<div class="fng-f"><span class="fng-l">Field name</span><input class="fng-in" value="' + esc(nf.name) + '" placeholder="e.g. Stain" oninput="' + R() + '.setNF(\'name\',this.value)"></div>'
       + '<div class="fng-f"><span class="fng-l">Type</span>' + typeSel + '</div>'
       + extra
-      + '<button class="fng-btn sm pri" onclick="' + R() + '.addField()">+ Add field</button></div></div>'
-      + '</details>';
+      + '<button class="fng-btn sm pri" onclick="' + R() + '.addField()">+ Add custom field</button></div></div>';
   }
 
   /* --- manage mutations --- */
@@ -1615,6 +1921,7 @@
   ROOT.setOperatorName = function (i, v) { var o = ROOT.library.operators[i]; if (o) o.name = v; rerender(); };
   ROOT.setOperatorInitials = function (i, v) { var o = ROOT.library.operators[i]; if (o) setOverride(o, 'initials', 'acronym', v); rerender(); };
   ROOT.setOperatorFirst3 = function (i, v) { var o = ROOT.library.operators[i]; if (o) setOverride(o, 'first3', 'first3', v); rerender(); };
+  ROOT.setOperatorEmail = function (i, v) { var o = ROOT.library.operators[i]; if (o) o.email = (v || '').trim(); dirty(); };   // no rerender (keep focus)
 
   // devices (master-maintained). Name change / info edit do NOT rerender (keep cursor).
   ROOT.addDevice = function () {
@@ -1691,15 +1998,26 @@
     if (m) return m[1];
     return '';
   }
-  // The GitLab "edit this file" link, built from FNG_PUBLISH_BASE (the UNIGE group root,
-  // set once in index.html) + the lab slug → …/filenamer-<slug>/-/edit/main/library.json.
+  // The GitLab Web IDE link, built from FNG_PUBLISH_BASE (the UNIGE group root,
+  // set once in index.html) + the lab slug → …/-/ide/project/<group>/filenamer-<slug>/edit/main/-/library.json.
   // Derived from the slug FIRST so a library.json copied from another lab (carrying a stale
   // publishUrl) can never misdirect the master. publishUrl is used only as a fallback for
   // non-slug contexts (eLab / a locally opened file).
+  // Build a GitLab Web IDE deep link that opens <file> in <project> under the group
+  // root <base>: .../-/ide/project/<group>/<project>/edit/main/-/<file>. Lands the
+  // master straight in the IDE instead of the single-file editor page.
+  function ideUrl(base, project, file) {
+    base = String(base || '').replace(/\/+$/, '');
+    var m = base.match(/^(https?:\/\/[^\/]+)(\/.*)?$/);
+    var origin = m ? m[1] : base;
+    var group = (m && m[2] ? m[2] : '').replace(/^\/+|\/+$/g, '');
+    var proj = group ? (group + '/' + project) : project;
+    return origin + '/-/ide/project/' + proj + '/edit/main/-/' + file;
+  }
   function publishLink() {
     var base = (typeof window !== 'undefined' && window.FNG_PUBLISH_BASE) || '';
     var slug = labSlug();
-    if (base && slug) return base.replace(/\/+$/, '') + '/filenamer-' + slug + '/-/edit/main/library.json';
+    if (base && slug) return ideUrl(base, 'filenamer-' + slug, 'library.json');
     if (ROOT.library.publishUrl) return ROOT.library.publishUrl;
     return '';
   }
@@ -1707,8 +2025,8 @@
     if (!ROOT.ui.publishOpen) return '';
     var url = publishLink();
     var step1 = url
-      ? '<a class="fng-btn pri" href="' + esc(url) + '" target="_blank" rel="noopener">Open this lab\'s file in GitLab ▸</a>'
-      : '<span class="fng-muted">Set the “GitLab file URL” field (under the buttons) to get a one-click link here.</span>';
+      ? '<a class="fng-btn pri" href="' + esc(url) + '" target="_blank" rel="noopener">Open this lab\'s library in the Web IDE ▸</a>'
+      : '<span class="fng-muted">Set the “Web IDE link” field (under the buttons) to get a one-click link here.</span>';
     return '<div class="fng-modal" onclick="if(event.target===this)' + R() + '.closePublish()">'
       + '<div class="fng-modal-card"><div class="fng-modal-h"><h3 style="margin:0">Publish to the lab</h3>'
       + '<button class="fng-modal-x" title="Close" onclick="' + R() + '.closePublish()">✕</button></div>'
@@ -1717,10 +2035,10 @@
       + 'to your lab master and tell them what you changed. A master commits it (only masters have GitLab access).</p>'
       + '<p style="font-size:13px;margin:10px 0 4px"><b>If you are a master user</b>, commit it now:</p>'
       + '<ol style="font-size:13px;line-height:1.8;padding-left:20px;margin:6px 0">'
-      + '<li>' + step1 + '</li>'
-      + '<li>In GitLab, click <b>Edit</b> on <code>library.json</code> (or <b>Upload file → Replace</b> with the downloaded one).</li>'
-      + '<li>If editing: select all (Ctrl/Cmd+A) and <b>paste</b> (Ctrl/Cmd+V) the copied JSON.</li>'
-      + '<li>Enter a short message and <b>Commit to <code>main</code></b>. Machines update within a few minutes.</li>'
+      + '<li>' + step1 + ' — opens <code>library.json</code> in the editor.</li>'
+      + '<li><b>Replace the contents.</b> The new JSON is already on your clipboard: click inside <code>library.json</code>, select all (Ctrl/Cmd+A) and paste (Ctrl/Cmd+V). <span class="fng-muted">Or drag the downloaded <code>library.json</code> onto it in the file tree to overwrite it.</span></li>'
+      + '<li>Open <b>Source control</b> in the left sidebar, type a short message, and <b>Commit to <code>main</code></b>.</li>'
+      + '<li>Mirroring forwards it to GitLab Pages — machines pick it up within a few minutes.</li>'
       + '</ol>'
       + '<div class="fng-acts"><button class="fng-btn pri" onclick="' + R() + '.closePublish()">Done</button></div></div></div>';
   }
@@ -1766,45 +2084,71 @@
   function platformPublishLink() {
     var base = (typeof window !== 'undefined' && window.FNG_PUBLISH_BASE) || '';
     if (!base) return 'set window.FNG_PUBLISH_BASE in index.html';
-    return base.replace(/\/+$/, '') + '/filenamer-plat-' + (ROOT._platformSlug || '') + '/-/edit/main/platform.json';
+    return ideUrl(base, 'filenamer-plat-' + (ROOT._platformSlug || ''), 'platform.json');
+  }
+  function platTree() {
+    var p = ROOT.platformEdit || { devices: [] };
+    var pickId = ROOT.ui.platPick;
+    var dup = countMap((p.devices || []).map(function (d) { return d.name; }));
+    var items = (p.devices || []).length ? (p.devices || []).slice().sort(function (a, b) { return cmpName(a.name, b.name); }).map(function (d) {
+      var bad = d.name && dup[d.name] > 1;
+      return '<button type="button" class="fng-treeitem' + (d.id === pickId ? ' on' : '') + '" onclick="' + R() + '.platPick(\'' + d.id + '\')">' + esc(d.name || '(unnamed)') + (bad ? ' <span class="fng-bang" title="Duplicate name">!</span>' : '') + '</button>';
+    }).join('') : '<span class="fng-muted" style="padding:4px 8px">no devices yet</span>';
+    return '<div class="fng-tree">'
+      + '<div class="fng-treefolder open" style="cursor:default">▾ ' + esc(p.name || ROOT._platformSlug || 'Platform') + ' devices</div>'
+      + '<div class="fng-treekids">' + items
+      + '<button type="button" class="fng-treeadd" onclick="' + R() + '.addPDevice()">+ add device</button></div>'
+      + '</div>';
+  }
+  function platMiddle() {
+    var p = ROOT.platformEdit || { devices: [] };
+    var d = (p.devices || []).filter(function (x) { return x.id === ROOT.ui.platPick; })[0];
+    if (!d) return '<div class="fng-dmmid"><p class="fng-muted">Select a device on the left, or add one, to edit its name and description.</p></div>';
+    var di = (p.devices || []).indexOf(d);
+    var dup = countMap((p.devices || []).map(function (x) { return x.name; }));
+    var dDup = d.name && dup[d.name] > 1;
+    var infoText = Object.keys(d.info || {}).map(function (k) { return k + ': ' + d.info[k]; }).join('\n');
+    var head = '<div class="fng-row" style="justify-content:space-between;align-items:center;gap:8px"><h3 style="margin:0">' + esc(d.name || '(unnamed)') + '</h3>'
+      + '<button class="fng-btn sm" onclick="' + R() + '.delPDevice(' + di + ')">Remove device</button></div>';
+    var desc = '<div class="fng-card" style="margin-top:10px"><h3 style="margin-top:0">Description <span class="fng-muted" style="text-transform:none;letter-spacing:0">· this platform · editable</span></h3>'
+      + '<div class="fng-f"><span class="fng-l">Device name (used in the file name)' + (dDup ? ' <span class="fng-bang" title="Another device in this platform has this name — make it unique">!</span>' : '') + '</span>'
+      + '<input class="fng-in' + (dDup ? ' fng-dupin' : '') + '" value="' + esc(d.name) + '" onchange="' + R() + '.setPDeviceName(' + di + ',this.value)"></div>'
+      + '<div class="fng-f" style="margin-top:6px"><span class="fng-l">Generic info — one "Key: value" per line (added to metadata)</span>'
+      + '<textarea class="fng-ta" style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;min-height:120px" placeholder="Software: Aurora" oninput="' + R() + '.setPDeviceInfo(' + di + ',this.value)">' + esc(infoText) + '</textarea></div></div>';
+    return '<div class="fng-dmmid">' + head + desc + '</div>';
   }
   function renderPlatformAdmin() {
     if (!ROOT._isMaster) {
       return '<h3 style="margin-top:0">Platform devices</h3>'
-        + '<p class="fng-muted">This page edits one platform\'s device list. Open it with '
-        + '<code>?platform=&lt;slug&gt;&amp;admin=1</code> to manage it.</p>';
+        + '<p class="fng-muted">This page edits one platform\'s device list. Open it from the platform link your administrator gave you (<code>platform.html?platform=&lt;slug&gt;</code>).</p>';
     }
     var p = ROOT.platformEdit || normalizePlatformFile({}, ROOT._platformSlug, ROOT._platformSlug);
-    var dup = countMap((p.devices || []).map(function (d) { return d.name; }));
-    var devs = (p.devices || []).map(function (d, di) {
-      var infoText = Object.keys(d.info || {}).map(function (k) { return k + ': ' + d.info[k]; }).join('\n');
-      var dDup = d.name && dup[d.name] > 1;
-      return '<div class="fng-card" style="margin-top:8px">'
-        + '<div class="fng-row" style="align-items:flex-end"><div class="fng-f" style="flex:1"><span class="fng-l">Device name (used in the file name)' + (dDup ? ' <span class="fng-bang" title="Another device in this platform has this name — make it unique">!</span>' : '') + '</span>'
-        + '<input class="fng-in' + (dDup ? ' fng-dupin' : '') + '" value="' + esc(d.name) + '" onchange="' + R() + '.setPDeviceName(' + di + ',this.value)"></div>'
-        + '<button class="fng-btn sm" onclick="' + R() + '.delPDevice(' + di + ')">Remove</button></div>'
-        + '<div class="fng-f" style="margin-top:6px"><span class="fng-l">Generic info — one "Key: value" per line (added to metadata)</span>'
-        + '<textarea class="fng-ta" style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px" placeholder="Software: Aurora" oninput="' + R() + '.setPDeviceInfo(' + di + ',this.value)">' + esc(infoText) + '</textarea></div></div>';
-    }).join('') || '<span class="fng-muted">no devices yet</span>';
-
     return '<div class="fng-tabs"><button class="fng-tab on">Platform devices</button></div>'
       + '<h3 style="margin-top:0">Platform devices · <code>' + esc(ROOT._platformSlug || '') + '</code></h3>'
       + '<p class="fng-muted">These devices appear as the <b>' + esc(p.name) + '</b> tab in <b>every</b> lab\'s device picker. You edit only this platform.</p>'
       + '<div class="fng-f" style="max-width:480px"><span class="fng-l">Platform name (the tab label)</span>'
       + '<input class="fng-in" value="' + esc(p.name) + '" onchange="' + R() + '.setPlatformEditName(this.value)"></div>'
-      + devs
-      + '<div class="fng-row" style="margin-top:12px"><input class="fng-in" id="fng-newpdev" placeholder="Device name e.g. Aurora-Flow"><button class="fng-btn sm" onclick="' + R() + '.addPDevice()">+ Add device</button></div>'
+      + '<div class="fng-dmbody" style="margin-top:12px"><div class="fng-dmleft">' + platTree() + '</div>' + platMiddle() + '</div>'
       + '<div class="fng-acts" style="margin-top:14px"><button class="fng-btn pri" onclick="' + R() + '.publishPlatform()">Publish changes</button></div>'
-      + '<div class="fng-f" style="max-width:640px;margin-top:8px"><span class="fng-l">GitLab file URL</span>'
+      + '<div class="fng-f" style="max-width:640px;margin-top:8px"><span class="fng-l">GitLab Web IDE link</span>'
       + '<input class="fng-in" readonly value="' + esc(platformPublishLink()) + '"></div>'
       + '<p class="fng-muted" style="margin-top:6px">Your edits are kept on this machine automatically. <b>Publish changes</b> downloads <code>platform.json</code> and copies it — commit it in GitLab to share with all labs.</p>';
   }
+  ROOT.platPick = function (id) { ROOT.ui.platPick = id; rerender(); };
   ROOT.setPlatformEditName = function (v) { if (ROOT.platformEdit) { ROOT.platformEdit.name = v; rerender(); } };
   ROOT.addPDevice = function () {
-    var el = document.getElementById('fng-newpdev'); var v = el ? el.value.trim() : '';
-    if (v && ROOT.platformEdit) { ROOT.platformEdit.devices.push({ id: uid('dev'), name: v, info: {} }); rerender(); }
+    if (!ROOT.platformEdit) return;
+    var name = (typeof window !== 'undefined' && window.prompt) ? window.prompt('New device name:', '') : '';
+    if (name === null) return; name = (name || '').trim(); if (!name) return;
+    var d = { id: uid('dev'), name: name, info: {} };
+    ROOT.platformEdit.devices.push(d); ROOT.ui.platPick = d.id; dirtyP(); rerender();
   };
-  ROOT.delPDevice = function (di) { if (ROOT.platformEdit) { ROOT.platformEdit.devices.splice(di, 1); rerender(); } };
+  ROOT.delPDevice = function (di) {
+    if (!ROOT.platformEdit) return;
+    var d = ROOT.platformEdit.devices[di];
+    if (d && d.id === ROOT.ui.platPick) ROOT.ui.platPick = null;
+    ROOT.platformEdit.devices.splice(di, 1); dirtyP(); rerender();
+  };
   ROOT.setPDeviceName = function (di, v) { var d = ROOT.platformEdit && ROOT.platformEdit.devices[di]; if (d) { d.name = v; rerender(); } };
   ROOT.setPDeviceInfo = function (di, text) {   // no rerender — keep the textarea cursor
     var d = ROOT.platformEdit && ROOT.platformEdit.devices[di]; if (!d) return;
@@ -1838,9 +2182,9 @@
       + '<button class="fng-modal-x" title="Close" onclick="' + R() + '.closePlatPublish()">✕</button></div>'
       + '<p class="fng-muted">✓ <code>platform.json</code> downloaded &nbsp;·&nbsp; ✓ contents copied to your clipboard.</p>'
       + '<ol style="font-size:13px;line-height:1.8;padding-left:20px;margin:6px 0">'
-      + '<li><a class="fng-btn pri" href="' + esc(url) + '" target="_blank" rel="noopener">Open platform.json in GitLab ▸</a></li>'
-      + '<li>Click <b>Edit</b> (or <b>Upload file → Replace</b>), select all and paste the copied JSON.</li>'
-      + '<li>Enter a message and <b>Commit to <code>main</code></b>. All labs pick it up within minutes.</li>'
+      + '<li><a class="fng-btn pri" href="' + esc(url) + '" target="_blank" rel="noopener">Open platform.json in the Web IDE ▸</a></li>'
+      + '<li><b>Replace the contents.</b> The new JSON is already on your clipboard: click inside <code>platform.json</code>, select all (Ctrl/Cmd+A) and paste (Ctrl/Cmd+V). <span class="fng-muted">Or drag the downloaded <code>platform.json</code> onto it in the file tree to overwrite it.</span></li>'
+      + '<li>Open <b>Source control</b> in the left sidebar, type a short message, and <b>Commit to <code>main</code></b>. All labs pick it up within minutes.</li>'
       + '</ol><div class="fng-acts"><button class="fng-btn pri" onclick="' + R() + '.closePlatPublish()">Done</button></div></div></div>';
   }
 
@@ -1857,7 +2201,7 @@
       + '<button class="fng-tab' + (ROOT.ui.mode === 'manage' ? ' on' : '') + '" onclick="' + R() + '.go(\'manage\')">Manage</button>'
       + '</div>' : '';
     var body = (ROOT.ui.mode === 'manage' && master) ? renderManage() : renderUse();
-    return '<div class="fng">' + css() + tabs + body + renderDevManager() + '</div>';
+    return '<div class="fng">' + css() + tabs + body + renderDevManager() + renderConfigManager() + '</div>';
   }
   ROOT.go = function (m) { ROOT.ui.mode = m; rerender(); };
 
@@ -2004,12 +2348,35 @@
           }
         }
         if (ROOT._platformMode) { syncPlatformEdit(); }   // refresh just this platform's file
-        else { syncSharedLibrary(); syncSharedPlatforms(); }   // lab templates + merged platform devices
+        else { syncSharedLibrary(); syncSharedPlatforms(); try { flushAnalytics(); } catch (e) {} }   // lab templates + merged platform devices
       }
     }
     // run now if the DOM is already parsed (e.g. cache-busted async load), else wait
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', fngBoot);
     else fngBoot();
+
+    // Some browsers (notably Edge) restore the page from the back/forward cache
+    // WITHOUT re-running scripts, so the background library check never fires and the
+    // user keeps seeing the stale cached copy. Re-check the network whenever the page
+    // is shown again from cache, or when the tab regains visibility.
+    function fngRecheck() {
+      if (!ROOT._host || (window.eLabSDK && eLabSDK.Experiment)) return;
+      try {
+        if (ROOT._platformMode) { syncPlatformEdit(); }
+        else { syncSharedLibrary(); syncSharedPlatforms(); }
+      } catch (e) {}
+    }
+    window.addEventListener('pageshow', function (e) {
+      if (e && e.persisted) {
+        // Restored from the back/forward cache (the Edge case): this is effectively a
+        // fresh viewing, so clear the "user is mid-task" flag — outside Manage — so the
+        // newest library is applied rather than only cached for later. Re-render preserves
+        // any values already typed (applyDefaults only fills empty fields).
+        if (ROOT.ui && ROOT.ui.mode !== 'manage') ROOT.ui.touched = false;
+        fngRecheck();
+      }
+    });
+    document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'visible') fngRecheck(); });
   }
 
   /* --- headless test exports ---------------------------------------------- */
@@ -2018,7 +2385,8 @@
       buildName: buildName, inputFields: inputFields, defaultLibrary: defaultLibrary, normalize: normalize,
       normalizeIndex: normalizeIndex, normalizePlatformFile: normalizePlatformFile,
       deviceGroups: deviceGroups, findDeviceByName: findDeviceByName, groupOfDevice: groupOfDevice,
-      _setState: function (s) { s = s || {}; if (s.library) ROOT.library = s.library; if (s.platforms) ROOT.platforms = s.platforms; } };
+      headerObject: headerObject, sidecar: sidecar, relPath: relPath, folderSubtree: folderSubtree, archiveRoot: archiveRoot, curName: curName, curPath: curPath, storageStatus: storageStatus, looksLocalRoot: looksLocalRoot, showLiteralPath: showLiteralPath, locationBlock: locationBlock, headerMarkdown: headerMarkdown, ideUrl: ideUrl, cmpName: cmpName, notesMarkdown: notesMarkdown, clipboardHtml: clipboardHtml, notesNonEmpty: notesNonEmpty, buildAnalyticsEvent: buildAnalyticsEvent,
+      _setState: function (s) { s = s || {}; if (s.library) ROOT.library = s.library; if (s.platforms) ROOT.platforms = s.platforms; if (s.ui) ROOT.ui = s.ui; } };
   }
 
 })();
