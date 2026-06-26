@@ -34,6 +34,7 @@
   };
   var LS_KEY = 'fng.library.v3';
   var LS_DEVICE = 'fng.machine.defaultDevice';   // per-machine (per-browser) default device
+  var LS_FAV = 'fng.machine.favDevices';         // per-machine list of favorite device names
   var LS_DEPT = 'fng.machine.lastDept';          // per-machine last-selected department
   var LS_OPER = 'fng.machine.lastOperator';      // per-machine last-selected operator
   var LS_DOCFONT = 'fng.doc.font';               // per-machine metadata display font
@@ -44,6 +45,8 @@
   var LS_STORAGE_DATE = 'fng.machine.storageDate';
   var LS_SHOWPATH = 'fng.machine.showLiteralPath'; // opt-in: record unverified absolute path
   var LS_ANALYTICS = 'fng.analytics.queue';      // buffered usage-event pings (flushed to endpoint)
+  var LS_FSROOT = 'fng.machine.dataFolder';      // per-machine label of the chosen File System Access data folder
+  var LS_FSPATH = 'fng.machine.dataFolderPath';  // per-machine absolute path of that folder (the browser cannot read it from the picker)
 
   // Display options for the rendered metadata document.
   var FONTS = { sans: 'IBM Plex Sans, system-ui, -apple-system, Segoe UI, sans-serif', serif: 'Georgia, "Times New Roman", serif', mono: 'ui-monospace, Menlo, Consolas, monospace' };
@@ -422,9 +425,58 @@
       + '.fng-fillrow .fng-sel,.fng-fillrow .fng-in,.fng-fillrow .fng-f>div{width:100%;}'
       + '.fng-devwrap{display:flex;gap:6px;align-items:center;}'
       + '.fng-devwrap .fng-sel{flex:1;width:auto;}'
-      + '.fng-star{flex:none;background:transparent;border:1px solid var(--bd);border-radius:6px;color:var(--dim);cursor:pointer;font-size:14px;line-height:1;padding:7px 9px;}'
+      + '.fng-star{flex:none;background:transparent;border:1px solid var(--bd);border-radius:6px;color:var(--dim);cursor:pointer;font-size:18px;line-height:1;padding:5px 10px;}'
       + '.fng-star:hover{border-color:var(--ac);color:var(--ac);}'
       + '.fng-star.on{color:var(--ac);border-color:var(--ac);}'
+      + '.fng-devwrap .fng-star{font-size:22px;padding:3px 11px;}'
+      + '.fng-mtiles{display:flex;gap:14px;margin-top:16px;align-items:stretch;}'
+      + '@media (max-width:640px){.fng-mtiles{flex-direction:column;}}'
+      + '.fng-mtile{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:10px;border:1px solid transparent;border-radius:16px;padding:26px 16px;cursor:pointer;transition:background .15s,border-color .15s,transform .1s,box-shadow .15s;}'
+      + '.fng-mtile:hover{transform:translateY(-2px);}'
+      + '.fng-mtile-i{font-size:34px;line-height:1;filter:drop-shadow(0 2px 6px rgba(0,0,0,.35));}'
+      + '.fng-mtile-t{font-size:15px;font-weight:600;color:#eef3fb;}'
+      + '.fng-mtile.t-build{background:linear-gradient(140deg,rgba(74,240,160,.22),rgba(74,240,160,.04));border-color:rgba(74,240,160,.35);}'
+      + '.fng-mtile.t-build:hover{background:linear-gradient(140deg,rgba(74,240,160,.34),rgba(74,240,160,.08));border-color:rgba(74,240,160,.7);box-shadow:0 8px 22px rgba(74,240,160,.12);}'
+      + '.fng-mtile.t-dev{background:linear-gradient(140deg,rgba(126,184,247,.22),rgba(126,184,247,.04));border-color:rgba(126,184,247,.35);}'
+      + '.fng-mtile.t-dev:hover{background:linear-gradient(140deg,rgba(126,184,247,.34),rgba(126,184,247,.08));border-color:rgba(126,184,247,.7);box-shadow:0 8px 22px rgba(126,184,247,.12);}'
+      + '.fng-mtile.t-labs{background:linear-gradient(140deg,rgba(199,146,234,.22),rgba(199,146,234,.04));border-color:rgba(199,146,234,.35);}'
+      + '.fng-mtile.t-labs:hover{background:linear-gradient(140deg,rgba(199,146,234,.34),rgba(199,146,234,.08));border-color:rgba(199,146,234,.7);box-shadow:0 8px 22px rgba(199,146,234,.12);}'
+      + '.fng-modal-card.fng-bigcard{width:92vw;max-width:900px;}'
+      + '.fng-modal-card.fng-rvcard{width:94vw;max-width:1000px;}'
+      + '.fng-save{margin-top:12px;padding:10px 12px;border:1px solid var(--bd);border-radius:10px;background:rgba(255,255,255,.02);}'
+      + '.fng-save-cur{font-size:12.5px;color:#dbe3f0;}'
+      + '.fng-fslist{margin:4px 0 0;padding-left:18px;font-size:12.5px;color:#dbe3f0;}'
+      + '.fng-fslist li{margin:2px 0;}'
+      + '.fng-rv{display:flex;gap:14px;align-items:flex-start;}'
+      + '.fng-rv-nav{flex:none;width:172px;display:flex;flex-direction:column;gap:6px;}'
+      + '.fng-rv-navb{display:flex;justify-content:space-between;align-items:center;gap:8px;background:var(--pn);border:1px solid var(--bd);border-radius:8px;color:#cdd6e6;padding:9px 11px;cursor:pointer;font-size:13px;text-align:left;}'
+      + '.fng-rv-navb.on{border-color:var(--ac);color:#fff;background:rgba(74,240,160,.08);}'
+      + '.fng-rv-count{flex:none;background:rgba(255,255,255,.1);border-radius:10px;padding:1px 8px;font-size:11px;}'
+      + '.fng-rv-body{flex:1;min-width:0;max-height:60vh;overflow:auto;display:flex;flex-direction:column;gap:10px;}'
+      + '.fng-rv-bar{display:flex;gap:8px;}'
+      + '.fng-rv-card{border:1px solid var(--bd);border-radius:10px;padding:10px 12px;border-left:3px solid var(--bd);}'
+      + '.fng-rv-card.s-added{border-left-color:#4af0a0;}'
+      + '.fng-rv-card.s-removed{border-left-color:#f0604a;}'
+      + '.fng-rv-card.s-changed{border-left-color:#e0b341;}'
+      + '.fng-rv-card.rej{opacity:.45;}'
+      + '.fng-rv-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}'
+      + '.fng-rv-badge{flex:none;font-size:11px;font-weight:700;border-radius:5px;padding:2px 7px;}'
+      + '.fng-rv-badge.b-added{background:rgba(74,240,160,.16);color:#4af0a0;}'
+      + '.fng-rv-badge.b-removed{background:rgba(240,96,74,.16);color:#f0815a;}'
+      + '.fng-rv-badge.b-changed{background:rgba(224,179,65,.16);color:#e0b341;}'
+      + '.fng-rv-label{flex:1;min-width:120px;font-weight:600;color:#eaf0fa;}'
+      + '.fng-rv-dec{flex:none;display:flex;gap:6px;}'
+      + '.fng-rv-sides{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;}'
+      + '.fng-rv-card.s-added .fng-rv-sides,.fng-rv-card.s-removed .fng-rv-sides{grid-template-columns:1fr;}'
+      + '.fng-rv-side{background:rgba(255,255,255,.02);border:1px solid var(--bd);border-radius:8px;padding:8px 10px;}'
+      + '.fng-rv-sh{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--dim);margin-bottom:6px;}'
+      + '.fng-rv-prop{display:flex;gap:8px;padding:3px 0;font-size:12.5px;align-items:baseline;}'
+      + '.fng-rv-prop.chg{background:rgba(224,179,65,.1);border-radius:4px;}'
+      + '.fng-rv-k{flex:none;width:92px;color:var(--dim);}'
+      + '.fng-rv-v{color:#dbe3f0;word-break:break-word;}'
+      + '.fng-rv-prop .fng-in,.fng-rv-prop .fng-sel,.fng-rv-prop .fng-ta{flex:1;min-width:0;}'
+      + '.fng-rv-empty{color:var(--dim);font-style:italic;font-size:12.5px;}'
+      + '@media (max-width:640px){.fng-rv{flex-direction:column;}.fng-rv-nav{width:100%;flex-direction:row;flex-wrap:wrap;}.fng-rv-sides{grid-template-columns:1fr;}}'
       + '.fng-devpick{display:flex;flex-direction:column;gap:6px;}'
       + '.fng-devtabs{display:flex;flex-wrap:wrap;gap:4px;}'
       + '.fng-devtab{background:var(--pn);border:1px solid var(--bd);border-radius:6px;color:var(--dim);font-size:11px;padding:5px 10px;cursor:pointer;}'
@@ -438,7 +490,14 @@
       + '.fng-devbtn{width:100%;text-align:left;padding:7px 9px;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
       + '.fng-ph{color:#5b647d;font-style:italic;}'
       + '.fng-doccopy{position:absolute;top:8px;right:8px;z-index:2;}'
-      + '.fng-modal-card.fng-dmcard{width:92vw;max-width:880px;}'
+      + '.fng-elab{position:absolute;top:42px;right:8px;z-index:2;display:inline-flex;align-items:center;gap:6px;background:#007782;border:1px solid rgba(255,255,255,.18);border-radius:7px;padding:4px 8px 4px 6px;text-decoration:none;box-shadow:0 2px 8px rgba(0,0,0,.32);transition:transform .1s,box-shadow .15s,filter .15s;}'
+      + '.fng-elab:hover{transform:translateY(-1px);box-shadow:0 5px 14px rgba(0,0,0,.42);filter:brightness(1.08);}'
+      + '.fng-elab img{height:22px;display:block;}'
+      + '.fng-elab-go{color:#fff;font-size:15px;line-height:1;font-weight:700;}'
+      + '.fng-modal-card.fng-dmcard{width:92vw;max-width:880px;height:min(80vh,640px);display:flex;flex-direction:column;overflow:hidden;}'
+      + '.fng-dmcard .fng-dmbody{flex:1 1 auto;min-height:0;align-items:stretch;overflow:hidden;}'
+      + '.fng-dmcard .fng-dmleft{max-height:none;min-height:0;}'
+      + '.fng-dmcard .fng-dmmid{max-height:none;min-height:0;}'
       + '.fng-warn{background:rgba(247,201,72,.08);border:1px solid #6b5a1f;border-left:3px solid #f7c948;border-radius:6px;color:#e7d9a8;font-size:12.5px;line-height:1.55;padding:9px 12px;margin:0 0 16px;}'
       + '.fng-warn b{color:#f7c948;}'
       + '.fng-dmbody{display:flex;gap:12px;align-items:flex-start;flex-wrap:nowrap;}'
@@ -455,6 +514,13 @@
       + '.fng-treeitem.on{background:rgba(74,240,160,.12);color:var(--ac);}'
       + '.fng-treeadd{text-align:left;background:transparent;border:none;color:var(--dim);font-size:11px;padding:5px 8px;cursor:pointer;}'
       + '.fng-treeadd:hover{color:var(--ac);}'
+      + '.fng-favrow{display:flex;align-items:center;gap:2px;border-radius:6px;}'
+      + '.fng-favrow.on{background:rgba(74,240,160,.12);}'
+      + '.fng-favname{flex:1;text-align:left;background:transparent;border:none;color:#aab4cc;font-size:12px;padding:5px 8px;cursor:pointer;border-radius:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}'
+      + '.fng-favname:hover{color:#eaf0fa;}'
+      + '.fng-favrow.on .fng-favname{color:var(--ac);}'
+      + '.fng-favstar{background:transparent;border:none;color:#f0c419;font-size:13px;line-height:1;cursor:pointer;padding:4px 7px;border-radius:6px;}'
+      + '.fng-favstar:hover{background:var(--pn);}'
       + '.fng-devpickgrid{display:flex;gap:10px;flex-wrap:wrap;}'
       + '.fng-pickcard{flex:1 1 200px;display:flex;flex-direction:column;gap:4px;align-items:flex-start;background:var(--pn);border:1px solid var(--bd);border-radius:8px;color:#eaf0fa;font-size:14px;padding:14px;cursor:pointer;text-align:left;}'
       + '.fng-pickcard:hover{border-color:var(--ac);}'
@@ -479,6 +545,8 @@
       + '.fng-copy{flex:none;background:transparent;border:1px solid var(--bd);border-radius:6px;color:var(--dim);cursor:pointer;padding:5px 7px;line-height:0;}'
       + '.fng-copy:hover{border-color:var(--ac);color:var(--ac);}'
       + '.fng-path{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;color:#9fb0cf;margin-top:7px;word-break:break-all;}'
+      + '.fng-pathrow{display:flex;align-items:center;gap:8px;margin-top:7px;}'
+      + '.fng-pathrow .fng-path{flex:1;min-width:0;margin-top:0;}'
       // tiles
       + '.fng-tiles{display:flex;flex-wrap:wrap;gap:7px;min-height:38px;padding:8px;border:1px dashed var(--bd);border-radius:8px;background:rgba(255,255,255,.012);}'
       + '.fng-tile{display:inline-flex;align-items:center;gap:7px;background:var(--pn);border:1px solid var(--bd);border-radius:7px;padding:6px 9px;font-size:12px;color:#eaf0fa;cursor:grab;user-select:none;}'
@@ -528,7 +596,8 @@
       + '.fng-modal-x:hover{color:#f07080;}'
       // required / validation / copy feedback / recent
       + '.fng-l.req:after{content:" *";color:var(--ac);}'
-      + '.fng-missing select,.fng-missing input{border-color:#f0a04a;}'
+      + '.fng-fillrow input:invalid,.fng-fillrow select:invalid{border-color:#e0533a;background:rgba(224,83,58,.07);}'
+      + '.fng-devempty{border-color:#e0533a !important;}'
       + '.fng-copy.ok{border-color:var(--ac);color:var(--ac);}'
       + '.fng-recent{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:3px 0;}'
       + '.fng-recent code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;color:#ffd9a0;word-break:break-all;}'
@@ -555,6 +624,13 @@
   ROOT.elnAutofill = {};
 
   function machineDevice() { try { return localStorage.getItem(LS_DEVICE) || ''; } catch (e) { return ''; } }
+  // Favorite devices: a per-machine list of device names, shown at the top of the
+  // device browser for quick switching on PCs that drive several instruments.
+  function favDevices() { try { var a = JSON.parse(localStorage.getItem(LS_FAV) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+  function favSet(a) { try { localStorage.setItem(LS_FAV, JSON.stringify(a)); } catch (e) {} }
+  function isFav(name) { return favDevices().indexOf(name) !== -1; }
+  function addFav(name) { if (!name) return; var a = favDevices(); if (a.indexOf(name) === -1) { a.push(name); favSet(a); } }
+  function removeFav(name) { favSet(favDevices().filter(function (n) { return n !== name; })); }
   function machineDept() { try { return localStorage.getItem(LS_DEPT) || ''; } catch (e) { return ''; } }
   function machineOperator() { try { return localStorage.getItem(LS_OPER) || ''; } catch (e) { return ''; } }
 
@@ -642,32 +718,31 @@
           return '<div class="fng-f fng-narrow"><span class="fng-l">' + esc(f.name) + ' <span class="fng-auto">auto · lab</span></span>'
             + '<div class="fng-ro">' + esc(lab.dept) + (dlab ? ' — ' + esc(dlab.label) : '') + '</div></div>';
         }
-        ctrl = '<select class="fng-sel" onchange="' + R() + '.setVal(\'' + f.id + '\',this.value)"><option value="">— select —</option>'
+        ctrl = '<select class="fng-sel" required onchange="' + R() + '.setVal(\'' + f.id + '\',this.value)"><option value="">— select —</option>'
           + DEPARTMENTS.map(function (d) { return '<option value="' + esc(d.code) + '"' + (d.code === v ? ' selected' : '') + '>' + esc(d.code) + ' — ' + esc(d.label) + '</option>'; }).join('') + '</select>';
       } else if (f.source === 'operator') {
-        ctrl = '<select class="fng-sel" onchange="' + R() + '.setVal(\'' + f.id + '\',this.value)"><option value="">— select —</option>'
+        ctrl = '<select class="fng-sel" required onchange="' + R() + '.setVal(\'' + f.id + '\',this.value)"><option value="">— select —</option>'
           + (L.operators || []).slice().sort(function (a, b) { return cmpName(opName(a), opName(b)); }).map(function (o) { var n = opName(o); return '<option value="' + esc(n) + '"' + (n === v ? ' selected' : '') + '>' + esc(n) + '</option>'; }).join('') + '</select>';
       } else if (f.source === 'device') {
         // Opens a read-only device browser to choose a device; the gear opens the
         // user's own configurations for the chosen operator + device.
         ctrl = '<div class="fng-devwrap">'
-          + '<button type="button" class="fng-btn fng-devbtn' + (v ? ' pri' : '') + '" style="flex:1" title="Browse and choose a device" onclick="' + R() + '.openDevManager()">'
+          + '<button type="button" class="fng-btn fng-devbtn' + (v ? ' pri' : ' fng-devempty') + '" style="flex:1" title="Browse and choose a device" onclick="' + R() + '.openDevManager()">'
           + (v ? esc(v) : 'Choose device ▾') + '</button>'
           + '<button type="button" class="fng-btn fng-star" title="User configurations for this operator + device" onclick="' + R() + '.openConfigMgr()">⚙</button>'
           + '</div>';
       } else if (f.source === 'list') {
-        ctrl = '<select class="fng-sel" onchange="' + R() + '.setVal(\'' + f.id + '\',this.value)"><option value="">— select —</option>'
+        ctrl = '<select class="fng-sel" required onchange="' + R() + '.setVal(\'' + f.id + '\',this.value)"><option value="">— select —</option>'
           + (f.options || []).map(function (o) { return '<option value="' + esc(o) + '"' + (o === v ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join('') + '</select>';
       } else {
         var dl = 'fng-dl-' + f.id, hist = fieldHistory(f.id).slice(0, 5);
-        ctrl = '<input class="fng-in" list="' + dl + '" value="' + esc(v) + '" spellcheck="false" oninput="' + R() + '.setVal(\'' + f.id + '\',this.value)">'
+        ctrl = '<input class="fng-in" required list="' + dl + '" value="' + esc(v) + '" spellcheck="false" oninput="' + R() + '.setVal(\'' + f.id + '\',this.value)">'
           + '<datalist id="' + dl + '">' + hist.map(function (x) { return '<option value="' + esc(x) + '"></option>'; }).join('') + '</datalist>';
       }
       var lblcls = 'fng-l' + (f.required ? ' req' : '');
-      var miss = f.required && !String(v).trim();
       var fcls = 'fng-f' + (f.source === 'department' ? ' fng-narrow' : '');
       return '<div class="' + fcls + '"><span class="' + lblcls + '">' + esc(f.name) + '</span>'
-        + '<div' + (miss ? ' class="fng-missing"' : '') + '>' + ctrl + '</div>' + extra + '</div>';
+        + '<div>' + ctrl + '</div>' + extra + '</div>';
     }).join('') || '<p class="fng-muted">This template is fully automatic — nothing to fill in.</p>';
 
     var hasDate = (tpl.fieldIds || []).some(function (id) { var f = fieldById(L, id); return f && f.source === 'date'; });
@@ -727,8 +802,11 @@
     var inUse = (p.name === currentDeviceName());
     var useBtn = inUse
       ? '<button class="fng-btn saved" disabled title="This is the default device for this machine">Default device ✓</button>'
-      : '<button class="fng-btn pri" onclick="' + R() + '.devmgrUse()">Set as default device for this machine</button>';
-    var head = '<div class="fng-row" style="justify-content:space-between;align-items:center;gap:8px"><h3 style="margin:0">' + esc(p.name) + '</h3>' + useBtn + '</div>';
+      : '<button class="fng-btn" onclick="' + R() + '.devmgrUse()">Set as default device for this machine</button>';
+    var fav = isFav(p.name);
+    var favBtn = '<button class="fng-btn' + (fav ? ' saved' : '') + '" title="' + (fav ? 'Click to remove from favorites' : 'Add to your favorite devices on this machine') + '" onclick="' + R() + '.devmgrFav()">' + (fav ? '★ Favorite' : '☆ Set as favorite') + '</button>';
+    var selectBtn = dm.edit ? '' : '<button class="fng-btn pri" title="Use this device for the current file name (does not change the machine default)" onclick="' + R() + '.devmgrSelect()">Select</button>';
+    var head = '<div class="fng-row" style="justify-content:space-between;align-items:center;gap:8px"><h3 style="margin:0">' + esc(p.name) + '</h3><div class="fng-row" style="gap:6px;align-items:center">' + selectBtn + useBtn + favBtn + '</div></div>';
     var desc;
     if (p.scope === 'lab') {
       var d = labDeviceById(p.id) || { name: p.name, info: {} };
@@ -742,7 +820,7 @@
         desc = '<div class="fng-card" style="margin-top:10px"><h3 style="margin-top:0">Description <span class="fng-muted" style="text-transform:none;letter-spacing:0">· shared library · editable</span></h3>'
           + '<div class="fng-f"><span class="fng-l">Device name (used in the file name)</span><input class="fng-in" value="' + esc(d.name) + '" onchange="' + R() + '.devmgrSetLabName(\'' + p.id + '\',this.value)"></div>'
           + '<div class="fng-f" style="margin-top:6px"><span class="fng-l">Generic info — one "Key: value" per line (added to metadata)</span>'
-          + '<textarea class="fng-ta" style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;min-height:120px" oninput="' + R() + '.devmgrSetLabInfo(\'' + p.id + '\',this.value)">' + esc(infoText) + '</textarea></div>'
+          + '<textarea class="fng-ta" style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;min-height:240px" oninput="' + R() + '.devmgrSetLabInfo(\'' + p.id + '\',this.value)">' + esc(infoText) + '</textarea></div>'
           + '<div class="fng-row" style="margin-top:8px;align-items:center"><button class="fng-btn sm" onclick="' + R() + '.devmgrDelLabDevice(\'' + p.id + '\')">Remove device</button>'
           + '<span class="fng-muted">Edits are kept on this machine; use <b>Publish changes</b> in Manage to send them to a master.</span></div></div>';
       }
@@ -765,17 +843,25 @@
     var dm = ROOT.ui.devmgr, pick = dm.pick || {};
     var labDevs = ((ROOT.library && ROOT.library.devices) || []).slice().sort(function (a, b) { return cmpName(a.name, b.name); });
     var labKids = dm.openLab ? '<div class="fng-treekids">' + (labDevs.length ? labDevs.map(function (d) {
-      return '<button type="button" class="fng-treeitem' + (pick.scope === 'lab' && pick.id === d.id ? ' on' : '') + '" onclick="' + R() + '.devmgrPickLab(\'' + d.id + '\')">' + esc(d.name) + '</button>';
+      return '<button type="button" class="fng-treeitem' + (pick.scope === 'lab' && pick.id === d.id ? ' on' : '') + '" onclick="' + R() + '.devmgrPickLab(\'' + d.id + '\')"' + (dm.edit ? '' : ' ondblclick="' + R() + '.devmgrSelect()"') + '>' + esc(d.name) + '</button>';
     }).join('') : '<span class="fng-muted" style="padding:4px 8px">no devices yet</span>')
       + (dm.edit ? '<button type="button" class="fng-treeadd" onclick="' + R() + '.devmgrAddLab()">+ add device</button>' : '') + '</div>' : '';
     var plats = (ROOT.platforms || []);
     var platKids = dm.openPlat ? '<div class="fng-treekids">' + (plats.length ? plats.map(function (p) {
       var devKids = dm.openPlatId === p.id ? '<div class="fng-treekids">' + ((p.devices || []).length ? (p.devices || []).slice().sort(function (a, b) { return cmpName(a.name, b.name); }).map(function (d) {
-        return '<button type="button" class="fng-treeitem' + (pick.scope === 'plat' && pick.platId === p.id && pick.id === d.id ? ' on' : '') + '" onclick="' + R() + '.devmgrPickPlat(\'' + p.id + '\',\'' + d.id + '\')">' + esc(d.name) + '</button>';
+        return '<button type="button" class="fng-treeitem' + (pick.scope === 'plat' && pick.platId === p.id && pick.id === d.id ? ' on' : '') + '" onclick="' + R() + '.devmgrPickPlat(\'' + p.id + '\',\'' + d.id + '\')"' + (dm.edit ? '' : ' ondblclick="' + R() + '.devmgrSelect()"') + '>' + esc(d.name) + '</button>';
       }).join('') : '<span class="fng-muted" style="padding:4px 8px">no devices</span>') + '</div>' : '';
       return '<button type="button" class="fng-treefolder sub' + (dm.openPlatId === p.id ? ' open' : '') + '" onclick="' + R() + '.devmgrTogglePlat(\'' + p.id + '\')">' + (dm.openPlatId === p.id ? '▾ ' : '▸ ') + esc(p.name) + '</button>' + devKids;
     }).join('') : '<span class="fng-muted" style="padding:4px 8px">no platforms yet</span>') + '</div>' : '';
+    var favs = favDevices();
+    var favRows = favs.length ? favs.map(function (name, i) {
+      return '<div class="fng-favrow' + (pick.name === name ? ' on' : '') + '">'
+        + '<button type="button" class="fng-favname" onclick="' + R() + '.devmgrPickFav(' + i + ')"' + (dm.edit ? '' : ' ondblclick="' + R() + '.devmgrSelect()"') + '>' + esc(name) + '</button>'
+        + '<button type="button" class="fng-favstar" title="Remove from favorites" onclick="' + R() + '.removeFavByIndex(' + i + ')">★</button>'
+        + '</div>';
+    }).join('') : '';
     return '<div class="fng-tree">'
+      + favRows
       + '<button type="button" class="fng-treefolder' + (dm.openLab ? ' open' : '') + '" onclick="' + R() + '.devmgrToggleLab()">' + (dm.openLab ? '▾ ' : '▸ ') + 'Lab devices</button>' + labKids
       + '<button type="button" class="fng-treefolder' + (dm.openPlat ? ' open' : '') + '" onclick="' + R() + '.devmgrTogglePlatRoot()">' + (dm.openPlat ? '▾ ' : '▸ ') + 'Platform devices</button>' + platKids
       + '</div>';
@@ -783,10 +869,10 @@
   function renderDevManager() {
     var dm = ROOT.ui.devmgr; if (!dm || !dm.open) return '';
     return '<div class="fng-modal" onclick="if(event.target===this)' + R() + '.closeDevManager()">'
-      + '<div class="fng-modal-card fng-dmcard"><div class="fng-modal-h"><h3 style="margin:0">Manage devices</h3>'
+      + '<div class="fng-modal-card fng-dmcard"><div class="fng-modal-h"><h3 style="margin:0">' + (dm.edit ? 'Manage devices' : 'Select devices') + '</h3>'
       + '<button class="fng-modal-x" title="Close" onclick="' + R() + '.closeDevManager()">✕</button></div>'
       + '<div class="fng-dmbody"><div class="fng-dmleft">' + devmgrTree() + '</div>' + devmgrMiddle() + '</div>'
-      + '<div class="fng-acts" style="margin-top:12px"><button class="fng-btn pri" onclick="' + R() + '.closeDevManager()">Done</button></div></div></div>';
+      + '<div class="fng-acts" style="margin-top:12px"><button class="fng-btn pri" onclick="' + R() + '.closeDevManager()">Close</button></div></div></div>';
   }
   ROOT.openDevManager = function (edit) {
     var dm = ROOT.ui.devmgr = ROOT.ui.devmgr || {};
@@ -845,6 +931,14 @@
   ROOT.devmgrToggleLab = function () { ROOT.ui.devmgr.openLab = !ROOT.ui.devmgr.openLab; rerender(); };
   ROOT.devmgrTogglePlatRoot = function () { ROOT.ui.devmgr.openPlat = !ROOT.ui.devmgr.openPlat; rerender(); };
   ROOT.devmgrTogglePlat = function (pid) { ROOT.ui.devmgr.openPlatId = (ROOT.ui.devmgr.openPlatId === pid ? null : pid); rerender(); };
+  ROOT.devmgrSelect = function () {
+    var p = ROOT.ui.devmgr && ROOT.ui.devmgr.pick; if (!p) return;
+    ROOT.ui.touched = true;
+    var lab = useLab(), tpl = lab && useFileTpl(lab), fid = tpl && deviceFieldId(tpl);
+    if (fid) ROOT.ui.values[fid] = p.name;
+    if (ROOT.ui.devmgr) ROOT.ui.devmgr.open = false;   // selecting closes the picker
+    rerender();
+  };
   ROOT.devmgrPickLab = function (id) { var d = labDeviceById(id); if (!d) return; ROOT.ui.devmgr.pick = { scope: 'lab', id: id, name: d.name }; rerender(); };
   ROOT.devmgrPickPlat = function (pid, id) { var p = (ROOT.platforms || []).filter(function (x) { return x.id === pid; })[0]; var d = p && (p.devices || []).filter(function (x) { return x.id === id; })[0]; if (!d) return; ROOT.ui.devmgr.pick = { scope: 'plat', platId: pid, id: id, name: d.name }; rerender(); };
   ROOT.devmgrUse = function () {
@@ -853,6 +947,24 @@
     var lab = useLab(), tpl = lab && useFileTpl(lab), fid = tpl && deviceFieldId(tpl);
     if (fid) ROOT.ui.values[fid] = p.name;
     try { localStorage.setItem(LS_DEVICE, p.name); } catch (e) {}
+    addFav(p.name);   // a default device is also a favorite
+    rerender();
+  };
+
+  ROOT.devmgrFav = function () {
+    var p = ROOT.ui.devmgr && ROOT.ui.devmgr.pick; if (!p) return;
+    if (isFav(p.name)) removeFav(p.name); else addFav(p.name);
+    rerender();
+  };
+  ROOT.removeFavByIndex = function (i) { var a = favDevices(); if (i >= 0 && i < a.length) { a.splice(i, 1); favSet(a); rerender(); } };
+  ROOT.devmgrPickFav = function (i) {
+    var name = favDevices()[i]; if (!name) return; var dm = ROOT.ui.devmgr;
+    var ld = (ROOT.library.devices || []).filter(function (x) { return x.name === name; })[0];
+    if (ld) { dm.openLab = true; dm.pick = { scope: 'lab', id: ld.id, name: ld.name }; rerender(); return; }
+    var hit = null;
+    (ROOT.platforms || []).forEach(function (pf) { (pf.devices || []).forEach(function (d) { if (!hit && d.name === name) hit = { platId: pf.id, id: d.id, name: d.name }; }); });
+    if (hit) { dm.openPlat = true; dm.openPlatId = hit.platId; dm.pick = { scope: 'plat', platId: hit.platId, id: hit.id, name: hit.name }; }
+    else { dm.pick = { scope: 'lab', id: '', name: name }; }   // device no longer exists; still selectable so it can be unfavorited
     rerender();
   };
   ROOT.devmgrAddLab = function () {
@@ -920,12 +1032,13 @@
     var sepc = '<span class="sep">' + esc(tpl.separator || '_') + '</span>';
     var nameHtml = segs.length ? segs.join(sepc) : '<span class="fng-muted">add fields to this template…</span>';
     var folder = defaultTpl(lab.folderTemplates);
-    var pathHtml = locationBlock(folder);
-    return '<div class="fng-ex" id="fng-ex"><div class="h">File name</div>'
+    var fileCard = '<div class="fng-ex"><div class="h">File name</div>'
       + '<div class="fng-namerow"><div class="fng-name">' + nameHtml + '</div>'
       + '<button class="fng-copy" id="fng-copybtn" title="Copy file name" onclick="' + R() + '.copyName()">'
       + '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path></svg>'
-      + '</button></div>' + pathHtml + '</div>';
+      + '</button></div></div>';
+    var folderCard = '<div class="fng-ex"><div class="h">Folder</div>' + locationBlock(folder) + '</div>';
+    return '<div id="fng-ex">' + fileCard + folderCard + '</div>';
   }
 
   ROOT.useLab = function (id) { ROOT.ui.labId = id; ROOT.ui.tplId = null; ROOT.ui.values = {}; rerender(); };
@@ -948,6 +1061,7 @@
     }
     if (!window.confirm || window.confirm('“' + v + '” will be the default name for the device on this machine.')) {
       try { localStorage.setItem(LS_DEVICE, v); } catch (e) {}
+      addFav(v);   // a default device is also a favorite
       toast('“' + v + '” is now the default device on this machine.'); rerender();
     }
   };
@@ -1059,9 +1173,8 @@
     // location & storage: the name is the durable identifier; paths are mutable
     var _subtree = folder ? buildName(folder, L, ROOT.ui.values, ctx) : '';
     if (_subtree) h.relPath = _subtree + '/' + (h.fileName || '');          // relative, location-independent
+    var _fp = fullLocalPath(); if (_fp) h.fullPath = _fp;   // relative -> full once the data folder's absolute path is set
     var _root = (folder && folder.basePath) ? normPath(folder.basePath) : '';
-    if (_root) h.archiveTarget = _root;                                      // intended NAS destination (planned, not verified)
-    h.storage = storageStatus();                                             // controlled: Local / Transferred / Both
     if (showLiteralPath()) { var _lit = [_root, _subtree].filter(Boolean).join('/'); h.literalPath = (_lit ? _lit + '/' : '') + (h.fileName || ''); }
     // Department is bound to the lab — always recorded in the metadata, even if it
     // isn't part of the naming template.
@@ -1098,10 +1211,8 @@
     var md = [];
     md.push('## File metadata', '');
     md.push('**File name:** `' + (h.fileName || '(empty)') + '`  ');
-    if (h.relPath && h.relPath !== h.fileName) md.push('**Relative path:** `' + h.relPath + '`  ');
-    if (h.archiveTarget) md.push('**Intended archive (NAS):** `' + h.archiveTarget + '` _(planned target \u2014 not verified)_  ');
-    if (h.storage) md.push('**Storage status:** ' + h.storage.status + (h.storage.date ? ' (as of ' + h.storage.date + ')' : '') + '  ');
-    if (h.literalPath) md.push('**Full path (as entered \u2014 not verified):** `' + h.literalPath + '`  ');
+    if (h.fullPath) md.push('**Full path:** `' + h.fullPath + '`  '); else if (h.relPath && h.relPath !== h.fileName) md.push('**Relative path:** `' + h.relPath + '`  ');
+    if (h.literalPath) md.push('**Recommended transfer path (NASAC):** `' + h.literalPath + '`  ');
     md.push('**Lab:** ' + h.lab + '  ');
     if (h.department) md.push('**Department:** ' + h.department + '  ');
     if (h.operatorEmail) md.push('**Operator email:** ' + h.operatorEmail + '  ');
@@ -1126,10 +1237,8 @@
     var h = headerObject(); if (!h) return '';
     var html = '<h3 class="fng-doc-h">File metadata</h3>'
       + '<p><b>File name:</b> <code>' + esc(h.fileName || '(empty)') + '</code><br>';
-    if (h.relPath && h.relPath !== h.fileName) html += '<b>Relative path:</b> <code>' + esc(h.relPath) + '</code><br>';
-    if (h.archiveTarget) html += '<b>Intended archive (NAS):</b> <code>' + esc(h.archiveTarget) + '</code> <span style="color:#6b7592">(planned target \u2014 not verified)</span><br>';
-    if (h.storage) html += '<b>Storage status:</b> ' + esc(h.storage.status) + (h.storage.date ? ' <span style="color:#6b7592">(as of ' + esc(h.storage.date) + ')</span>' : '') + '<br>';
-    if (h.literalPath) html += '<b>Full path:</b> <code>' + esc(h.literalPath) + '</code> <span style="color:#f0a860">(as entered \u2014 not verified)</span><br>';
+    if (h.fullPath) html += '<b>Full path:</b> <code>' + esc(h.fullPath) + '</code><br>'; else if (h.relPath && h.relPath !== h.fileName) html += '<b>Relative path:</b> <code>' + esc(h.relPath) + '</code><br>';
+    if (h.literalPath) html += '<b>Recommended transfer path (NASAC):</b> <code>' + esc(h.literalPath) + '</code><br>';
     html += '<b>Lab:</b> ' + esc(h.lab) + (h.department ? '<br><b>Department:</b> ' + esc(h.department) : '') + (h.operatorEmail ? '<br><b>Operator email:</b> ' + esc(h.operatorEmail) : '') + '<br><b>Template:</b> ' + esc(h.template)
       + '<br><b>Generated:</b> ' + fmtDate(new Date(), 'YYYY-MM-DD') + ' ' + fmtDate(new Date(), 'HH:MM') + '</p>'
       + '<table class="fng-doc-t"><thead><tr><th>Field</th><th>Value</th></tr></thead><tbody>';
@@ -1163,8 +1272,11 @@
     var fam = FONTS[ROOT.ui.docFont] || FONTS.sans, sz = SIZES[ROOT.ui.docSize] || SIZES.m;
     var copyBtn = '<button class="fng-copy fng-doccopy" id="fng-md-copybtn" title="Copy metadata &amp; notes" onclick="' + R() + '.copyDoc()">'
       + '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path></svg></button>';
+    var elab = '<a class="fng-elab" href="https://smartlab.unige.ch" target="_blank" rel="noopener" title="Copy the metadata and open eLabNext — reuses the eLabNext tab if this button already opened one" onclick="return ' + R() + '.openEln(event)">'
+      + '<img src="data:image/png;base64,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" alt="eLabNext">'
+      + '<span class="fng-elab-go">→</span></a>';
     var doc = '<div class="fng-doc" id="fng-doc" style="position:relative;font-family:' + fam + ';font-size:' + sz + '">'
-      + copyBtn
+      + copyBtn + elab
       + '<div id="fng-md-header">' + headerHtml() + '</div>'
       + '<hr class="fng-doc-hr">'
       + '<div class="fng-notes-edit" id="fng-md-notes" contenteditable="true" data-ph="Type your notes here…" '
@@ -1226,12 +1338,28 @@
   }
   function archiveRoot() { var lab = useLab(); if (!lab) return ''; var folder = defaultTpl(lab.folderTemplates); return (folder && folder.basePath) ? normPath(folder.basePath) : ''; }
   function relPath() { var sub = folderSubtree(), n = curName(); return sub ? (sub + '/' + n) : n; }
+  function localBase() { try { return localStorage.getItem(LS_FSPATH) || ''; } catch (e) { return ''; } }
+  // Join a user-entered absolute base with the relative subtree, honouring the base's
+  // own separator style (Windows backslashes vs forward slashes) so the result is a path
+  // the OS will actually accept. The browser hides the picked folder's absolute path, so
+  // the base must be supplied by the user once per machine.
+  function joinPath(base, rest) {
+    if (!base) return rest || '';
+    var BS = String.fromCharCode(92);
+    var win = base.indexOf(BS) !== -1 || /^[A-Za-z]:/.test(base), sep = win ? BS : '/';
+    while (base.length && (base.charAt(base.length - 1) === '/' || base.charAt(base.length - 1) === BS)) base = base.slice(0, -1);
+    rest = String(rest || '');
+    while (rest.length && (rest.charAt(0) === '/' || rest.charAt(0) === BS)) rest = rest.slice(1);
+    rest = win ? rest.split('/').join(BS) : rest.split(BS).join('/');
+    return rest ? (base + sep + rest) : base;
+  }
+  function fullLocalPath() { var b = localBase(); return b ? joinPath(b, relPath()) : ''; }
 
   var STORAGE_OPTS = ['Local (acquisition PC)', 'Transferred to NASAC', 'Both (local + NASAC)'];
   function storageStatusVal() { try { return localStorage.getItem(LS_STORAGE) || STORAGE_OPTS[0]; } catch (e) { return STORAGE_OPTS[0]; } }
   function storageStatusDate() { try { return localStorage.getItem(LS_STORAGE_DATE) || ''; } catch (e) { return ''; } }
   function storageStatus() { return { status: storageStatusVal(), date: storageStatusDate() || fmtDate(new Date(), 'YYYY-MM-DD') }; }
-  function showLiteralPath() { try { return localStorage.getItem(LS_SHOWPATH) === '1'; } catch (e) { return false; } }
+  function showLiteralPath() { try { var v = localStorage.getItem(LS_SHOWPATH); return v === null ? true : v === '1'; } catch (e) { return true; } }
   // a root that looks like a local disk rather than a NAS share (//server/share)
   function looksLocalRoot(p) { p = normPath(p); return /^[A-Za-z]:\//.test(p) || /^\/(Users|home|mnt|media|tmp|var|Desktop|Documents)\b/i.test(p); }
 
@@ -1245,27 +1373,33 @@
   function locationBlock(folder) {
     var html = '';
     if (folder) {
-      html += '<div class="fng-path" title="Relative path \u2014 travels with the file, independent of where it is stored">' + esc(relPath()) + '</div>';
-      var root = archiveRoot();
-      if (root) {
-        html += '<div class="fng-muted" style="font-size:11px;margin-top:3px">Intended archive (NAS): <code>' + esc(root) + '</code> \u2014 planned target, not verified</div>';
-        if (looksLocalRoot(root)) html += '<div style="font-size:11px;margin-top:2px;color:#f0a860">\u26a0 This looks like a local drive. Good practice is to archive raw data on NASAC (a //server/share path).</div>';
+      var b = localBase();
+      var rel = relPath();
+      var cs = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path></svg>';
+      var fp = fullLocalPath();
+      if (fp) {
+        html += '<div class="fng-pathrow"><div class="fng-path" title="Full path on this machine">' + esc(fp) + '</div>'
+          + '<button class="fng-copy" id="fng-localcopy" title="Copy full path" onclick="' + R() + '.copyLocalPath()">' + cs + '</button></div>';
+      } else {
+        html += '<div class="fng-pathrow"><div class="fng-path" title="Relative path">' + esc(rel) + '</div>'
+          + '<button class="fng-copy" id="fng-localcopy" title="Copy relative path" onclick="' + R() + '.copyLocalPath()">' + cs + '</button></div>';
+        html += '<div class="fng-muted" style="font-size:11px;margin-top:3px">Set your local root folder below to show the full path.</div>';
       }
+      html += '<div class="fng-f" style="margin-top:8px"><span class="fng-l">Local root folder <span class="fng-muted" style="font-weight:400">(the base folder where you save data on this machine — the browser can&rsquo;t read it, so set it once)</span></span>'
+        + '<div class="fng-row" style="margin-top:4px;gap:8px;align-items:center;flex-wrap:wrap">'
+        + '<input class="fng-in" id="fng-rootin" style="flex:1;min-width:170px" value="' + esc(b) + '" placeholder="C:/Users/ronch/Documents/" oninput="' + R() + '.rootDirty()">'
+        + '<button class="fng-btn sm" id="fng-rootset" disabled onclick="' + R() + '.setRootFromInput()">Set as default root for this machine</button>'
+        + '</div></div>';
     }
-    var cur = storageStatusVal();
-    html += '<div class="fng-row" style="margin-top:8px;align-items:flex-end">'
-      + '<div class="fng-f"><span class="fng-l">Raw-data storage</span>'
-      + '<select class="fng-sel" onchange="' + R() + '.setStorageStatus(this.value)">'
-      + STORAGE_OPTS.map(function (o) { return '<option value="' + esc(o) + '"' + (o === cur ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join('')
-      + '</select></div>'
-      + '<div class="fng-f"><span class="fng-l">As of</span>'
-      + '<input class="fng-in" type="date" value="' + esc(storageStatusDate() || fmtDate(new Date(), 'YYYY-MM-DD')) + '" onchange="' + R() + '.setStorageDate(this.value)"></div>'
-      + '</div>';
-    if (folder && archiveRoot()) {
+    html += fsSaveSection(folder);
+    var root = archiveRoot();
+    if (folder && root) {
+      html += '<div class="fng-muted" style="font-size:11px;margin-top:8px">Recommended transfer destination (NASAC): <code>' + esc(root) + '</code> — move the raw data here after acquisition (edit this path in Manage › Build templates).</div>';
+      if (looksLocalRoot(root)) html += '<div style="font-size:11px;margin-top:2px;color:#f0a860">⚠ This looks like a local drive. Raw data should be archived on NASAC (a //server/share path).</div>';
       html += '<label style="display:flex;gap:6px;align-items:center;font-size:11px;color:#8b95a9;margin-top:6px;cursor:pointer">'
         + '<input type="checkbox"' + (showLiteralPath() ? ' checked' : '') + ' onchange="' + R() + '.toggleLiteralPath(this.checked)"> '
-        + 'Also record the full literal path (as entered \u2014 not verified)</label>';
-      if (showLiteralPath()) html += '<div class="fng-path" style="opacity:.8;margin-top:4px" title="Absolute path as entered \u2014 the tool cannot check the file is actually there">' + esc(curPath()) + ' <span style="color:#f0a860">(not verified)</span></div>';
+        + 'Also record the full transfer path (NASAC) in the metadata</label>';
+      if (showLiteralPath()) html += '<div class="fng-path" style="opacity:.85;margin-top:4px" title="Full path after transferring to NASAC — recommended target, not verified">' + esc(curPath()) + '</div>';
     }
     return html;
   }
@@ -1283,6 +1417,112 @@
     return { header: h, notes: htmlToText(ROOT.ui.notesHtml || ''), notesHtml: ROOT.ui.notesHtml || '' };
   }
   function copyText(t) { if (t && navigator.clipboard) navigator.clipboard.writeText(t); }
+
+  /* ==========================================================================
+   * SAVE TO A FOLDER (File System Access API; Chromium desktop, HTTPS only).
+   * Per machine the user picks a "data folder" once (a folder handle kept in
+   * IndexedDB — like setting the default device). The folder template renders a
+   * subtree under it (editable). One button confirms which folders are MISSING,
+   * creates only those, and writes the metadata file into the leaf. The browser
+   * cannot open the OS file explorer, so we don't pretend to. Elsewhere
+   * (Firefox/Safari) it degrades to the existing Download .json.
+   * ======================================================================== */
+  function fsSupported() { return typeof window !== 'undefined' && typeof window.showDirectoryPicker === 'function'; }
+  function idbOpen() { return new Promise(function (res, rej) { var r = indexedDB.open('fng-fs', 1); r.onupgradeneeded = function () { r.result.createObjectStore('h'); }; r.onsuccess = function () { res(r.result); }; r.onerror = function () { rej(r.error); }; }); }
+  function idbGet(k) { return idbOpen().then(function (db) { return new Promise(function (res, rej) { var t = db.transaction('h', 'readonly').objectStore('h').get(k); t.onsuccess = function () { res(t.result); }; t.onerror = function () { rej(t.error); }; }); }); }
+  function idbSet(k, v) { return idbOpen().then(function (db) { return new Promise(function (res, rej) { var tx = db.transaction('h', 'readwrite'); tx.objectStore('h').put(v, k); tx.oncomplete = function () { res(); }; tx.onerror = function () { rej(tx.error); }; }); }); }
+  function idbDel(k) { return idbOpen().then(function (db) { return new Promise(function (res, rej) { var tx = db.transaction('h', 'readwrite'); tx.objectStore('h').delete(k); tx.oncomplete = function () { res(); }; tx.onerror = function () { rej(tx.error); }; }); }); }
+  function fsEnsurePerm(h) { if (!h || !h.queryPermission) return Promise.resolve(true); return h.queryPermission({ mode: 'readwrite' }).then(function (st) { if (st === 'granted') return true; return h.requestPermission({ mode: 'readwrite' }).then(function (s2) { return s2 === 'granted'; }); }); }
+  function fsProbe(root, segs) { var i = 0, cur = root, missing = []; function step() { if (i >= segs.length) return Promise.resolve(missing); return cur.getDirectoryHandle(segs[i]).then(function (h) { cur = h; i++; return step(); }).catch(function () { for (var j = i; j < segs.length; j++) missing.push(segs.slice(0, j + 1).join('/')); return missing; }); } return step(); }
+  function fsMkdirp(root, segs) { var cur = Promise.resolve(root); segs.forEach(function (sg) { cur = cur.then(function (h) { return h.getDirectoryHandle(sg, { create: true }); }); }); return cur; }
+  function fsWrite(dir, name, text) { return dir.getFileHandle(name, { create: true }).then(function (fh) { return fh.createWritable(); }).then(function (w) { return Promise.resolve(w.write(text)).then(function () { return w.close(); }); }); }
+  function fsSubSegs() { return (folderSubtree() || '').split('/').map(function (x) { return x.trim(); }).filter(Boolean); }
+  function fsNavigate(root, segs) { var i = 0, cur = root; function step() { if (i >= segs.length) return Promise.resolve(cur); return cur.getDirectoryHandle(segs[i]).then(function (h) { cur = h; i++; return step(); }).catch(function () { return null; }); } return step(); }
+  // Best-effort: write the LATEST metadata into the already-created leaf folder. Called
+  // from copy / eLabNext so the saved file is always current. Never creates folders.
+  function fsSaveMetadataQuietly() {
+    if (!fsSupported() || !ROOT._fsRoot) return;
+    var segs = fsSubSegs(), name = curName(); if (!name || !segs.length) return;
+    fsEnsurePerm(ROOT._fsRoot).then(function (ok) {
+      if (!ok) return;
+      return fsNavigate(ROOT._fsRoot, segs).then(function (leaf) {
+        if (!leaf) return;
+        return fsWrite(leaf, name + '.json', JSON.stringify(sidecar(), null, 2)).then(function () { toast('Latest metadata saved to the data folder.'); });
+      });
+    }).catch(function () {});
+  }
+
+  ROOT.pickDataFolder = function () {
+    if (!fsSupported()) { toast('Saving to a folder needs Chrome or Edge.'); return; }
+    window.showDirectoryPicker({ mode: 'readwrite' }).then(function (h) {
+      ROOT._fsRoot = h; try { localStorage.setItem(LS_FSROOT, h.name); } catch (e) {}
+      return idbSet('root', h);
+    }).then(function () { rerender(); toast('Data folder set: ' + (ROOT._fsRoot && ROOT._fsRoot.name)); })
+    .catch(function (e) { if (e && e.name !== 'AbortError') toast('Could not set the data folder.'); });
+  };
+  ROOT.clearDataFolder = function () { ROOT._fsRoot = null; try { localStorage.removeItem(LS_FSROOT); } catch (e) {} idbDel('root').then(function () { rerender(); toast('Data folder cleared.'); }).catch(function () { rerender(); }); };
+  ROOT.setFolderBase = function (v) { try { if (v) localStorage.setItem(LS_FSPATH, v); else localStorage.removeItem(LS_FSPATH); } catch (e) {} refreshUsePreview(); refreshHeader(); };
+  ROOT.setRootFromInput = function () { var el = document.getElementById('fng-rootin'); var v = el ? el.value.trim() : ''; ROOT.setFolderBase(v); toast(v ? 'Local root folder set for this machine.' : 'Local root folder cleared.'); };
+  ROOT.rootDirty = function () { var el = document.getElementById('fng-rootin'), btn = document.getElementById('fng-rootset'); if (el && btn) btn.disabled = ((el.value || '').trim() === localBase()); };
+  ROOT.createTree = function () {
+    if (!guard()) return;
+    if (!fsSupported()) { toast('Creating folders needs Chrome or Edge.'); return; }
+    var proceed = function () {
+      var root = ROOT._fsRoot, segs = fsSubSegs();
+      if (!segs.length) { toast('This template has no folder path to create.'); return; }
+      fsEnsurePerm(root).then(function (ok) {
+        if (!ok) { toast('Write permission was not granted.'); return; }
+        return fsProbe(root, segs).then(function (missing) { ROOT._fsPending = { segs: segs, missing: missing }; ROOT.ui.fsConfirm = true; rerender(); });
+      }).catch(function () { toast('Could not read the data folder — try setting it again.'); });
+    };
+    if (!ROOT._fsRoot) {
+      window.showDirectoryPicker({ mode: 'readwrite' }).then(function (h) { ROOT._fsRoot = h; try { localStorage.setItem(LS_FSROOT, h.name); } catch (e) {} return idbSet('root', h); }).then(proceed).catch(function (e) { if (e && e.name !== 'AbortError') toast('Could not set the data folder.'); });
+    } else proceed();
+  };
+  ROOT.fsConfirmNo = function () { ROOT.ui.fsConfirm = false; ROOT._fsPending = null; rerender(); };
+  ROOT.fsConfirmYes = function () {
+    var pend = ROOT._fsPending, root = ROOT._fsRoot;
+    if (!pend || !root) { ROOT.ui.fsConfirm = false; rerender(); return; }
+    fsEnsurePerm(root).then(function (ok) { if (!ok) throw new Error('perm'); return fsMkdirp(root, pend.segs); })
+      .then(function () { ROOT.ui.createdSubtree = pend.segs.join('/'); ROOT.ui.fsConfirm = false; ROOT._fsPending = null; rerender(); toast('Folder tree ready. Metadata is saved when you copy it or open eLabNext.'); })
+      .catch(function () { ROOT.ui.fsConfirm = false; rerender(); toast('Could not create the folder tree.'); });
+  };
+
+  function fsSaveSection(folder) {
+    if (!folder) return '';
+    if (!fsSupported()) {
+      return '<div class="fng-save"><div class="fng-l">Folder tree (this machine)</div>'
+        + '<p class="fng-muted" style="font-size:11px;margin:4px 0 0">Creating the folder tree needs Chrome or Edge. In this browser, use <b>Download .json</b> above and file it under the path shown.</p></div>';
+    }
+    var label = ''; try { label = localStorage.getItem(LS_FSROOT) || ''; } catch (e) {}
+    var rootRow = label
+      ? '<span class="fng-save-cur">Data folder: <b>' + esc(label) + '</b></span><button class="fng-btn sm" onclick="' + R() + '.pickDataFolder()">Change</button><button class="fng-btn sm" onclick="' + R() + '.clearDataFolder()">Clear</button>'
+      : '<button class="fng-btn sm" onclick="' + R() + '.pickDataFolder()">Set data folder for this machine…</button>';
+    return '<div class="fng-save"><div class="fng-l">Folder tree (this machine)</div>'
+      + '<div class="fng-row" style="margin-top:5px;align-items:center;gap:8px;flex-wrap:wrap">' + rootRow + '</div>'
+      + '<div class="fng-row" style="margin-top:8px"><button class="fng-btn pri" onclick="' + R() + '.createTree()">Create folder tree</button></div>'
+      + '<p class="fng-muted" style="font-size:11px;margin:6px 0 0">Creates only the missing folders for the path above (you confirm first). The metadata file is written when you <b>copy</b> it or open <b>eLabNext</b>, so it is always the latest. Save raw data locally during acquisition; transfer to NASAC afterwards.</p></div>';
+  }
+
+  function renderFsConfirm() {
+    if (!ROOT.ui.fsConfirm || !ROOT._fsPending) return '';
+    var pend = ROOT._fsPending, label = '';
+    try { label = localStorage.getItem(LS_FSROOT) || 'data folder'; } catch (e) { label = 'data folder'; }
+    var missing = pend.missing || [];
+    var mk = missing.length
+      ? '<p style="margin:8px 0 4px">These folders will be created (only the missing ones):</p><ul class="fng-fslist">' + missing.map(function (m) { return '<li>' + esc(m) + '</li>'; }).join('') + '</ul>'
+      : '<p class="fng-muted" style="margin:8px 0">All folders already exist — nothing new will be created.</p>';
+    return '<div class="fng-modal" onclick="if(event.target===this)' + R() + '.fsConfirmNo()">'
+      + '<div class="fng-modal-card"><div class="fng-modal-h"><h3 style="margin:0">Create folder tree</h3>'
+      + '<button class="fng-modal-x" title="Cancel" onclick="' + R() + '.fsConfirmNo()">✕</button></div>'
+      + '<p style="margin:0;font-size:13px">Inside your data folder <b>' + esc(label) + '</b>, target:</p>'
+      + '<div class="fng-path" style="margin:4px 0">' + esc(pend.segs.join('/') || '(root)') + '</div>' + mk
+      + '<p class="fng-muted" style="margin:6px 0 0;font-size:12px">No file is written now — the metadata is saved into this folder when you copy it or open eLabNext.</p>'
+      + '<div class="fng-acts" style="margin-top:12px"><button class="fng-btn" onclick="' + R() + '.fsConfirmNo()">Cancel</button>'
+      + '<button class="fng-btn pri" onclick="' + R() + '.fsConfirmYes()">Create folders</button></div></div></div>';
+  }
+
+  if (typeof indexedDB !== 'undefined') { try { idbGet('root').then(function (h) { if (h) ROOT._fsRoot = h; }).catch(function () {}); } catch (e) {} }
 
   /* --- usage analytics (event ping) ---------------------------------------
    * Opt-in and fire-and-forget: active ONLY when window.FNG_ANALYTICS_URL is
@@ -1331,7 +1571,8 @@
       operator: hashOperator(fieldValueBySource('operator')),
       deviceScope: currentDeviceScope(),
       template: (tpl && tpl.name) || '',
-      storage: storageStatusVal() };
+      storage: storageStatusVal(),
+      regUsers: (ROOT.library && ROOT.library.operators) ? ROOT.library.operators.length : 0 };
   }
   function aQueue() { try { return JSON.parse(localStorage.getItem(LS_ANALYTICS) || '[]'); } catch (e) { return []; } }
   function aQueueSet(a) { try { localStorage.setItem(LS_ANALYTICS, JSON.stringify(a.slice(-500))); } catch (e) {} }
@@ -1378,10 +1619,8 @@
     var h = headerObject(); if (!h) return '';
     var html = '<h3 style="margin:0 0 6px">File metadata</h3>'
       + '<p style="margin:0 0 8px"><strong>File name:</strong> <code>' + esc(h.fileName || '(empty)') + '</code><br>';
-    if (h.relPath && h.relPath !== h.fileName) html += '<strong>Relative path:</strong> <code>' + esc(h.relPath) + '</code><br>';
-    if (h.archiveTarget) html += '<strong>Intended archive (NAS):</strong> <code>' + esc(h.archiveTarget) + '</code> (planned target \u2014 not verified)<br>';
-    if (h.storage) html += '<strong>Storage status:</strong> ' + esc(h.storage.status) + (h.storage.date ? ' (as of ' + esc(h.storage.date) + ')' : '') + '<br>';
-    if (h.literalPath) html += '<strong>Full path (as entered \u2014 not verified):</strong> <code>' + esc(h.literalPath) + '</code><br>';
+    if (h.fullPath) html += '<strong>Full path:</strong> <code>' + esc(h.fullPath) + '</code><br>'; else if (h.relPath && h.relPath !== h.fileName) html += '<strong>Relative path:</strong> <code>' + esc(h.relPath) + '</code><br>';
+    if (h.literalPath) html += '<strong>Recommended transfer path (NASAC):</strong> <code>' + esc(h.literalPath) + '</code><br>';
     html += '<strong>Lab:</strong> ' + esc(h.lab);
     if (h.department) html += '<br><strong>Department:</strong> ' + esc(h.department);
     if (h.operatorEmail) html += '<br><strong>Operator email:</strong> ' + esc(h.operatorEmail);
@@ -1467,6 +1706,13 @@
     toast('File name copied.');
   };
   ROOT.copyPath = function () { if (!guard()) return; var lit = showLiteralPath(); copyText(lit ? curPath() : relPath()); toast(lit ? 'Full path copied (not verified).' : 'Relative path copied.'); };
+  ROOT.copyLocalPath = function () {
+    var fp = fullLocalPath();
+    copyText(fp || relPath());
+    var b = document.getElementById('fng-localcopy');
+    if (b) { var o = b.innerHTML; b.classList.add('ok'); b.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><polyline points="20 6 9 17 4 12"></polyline></svg>'; setTimeout(function () { b.classList.remove('ok'); b.innerHTML = o; }, 1300); }
+    toast(fp ? 'Full path copied.' : 'Relative path copied.');
+  };
   ROOT.downloadSidecar = function () { if (!guard()) return; var name = curName(); if (!name) return; pushHistory(name); saveFieldHistories(); download(name + '.json', JSON.stringify(sidecar(), null, 2), 'application/json'); logEvent('sidecar'); };
   ROOT.copyMarkdown = function () { copyText(notesMarkdown()); toast('Metadata (Markdown) copied.'); };
   // copy the whole metadata + notes block (the icon at the doc's top-right) as
@@ -1476,6 +1722,36 @@
     var b = document.getElementById('fng-md-copybtn');
     if (b) { var o = b.innerHTML; b.classList.add('ok'); b.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><polyline points="20 6 9 17 4 12"></polyline></svg>'; setTimeout(function () { b.classList.remove('ok'); b.innerHTML = o; }, 1300); }
     writeRichClipboard(p.html, p.text, function () { toast('Metadata & notes copied (formatted for the ELN).'); });
+    fsSaveMetadataQuietly();
+  };
+  // eLabNext "go" button. Copies the metadata first (within the click gesture), then
+  // opens eLabNext in a tab this button REUSES (named target 'elabnext'), so repeated
+  // clicks focus the same tab instead of piling up duplicates. We open the app root, so
+  // eLabNext's own session decides the landing page: already signed in -> dashboard,
+  // otherwise its login. We cannot read who is logged into eLabNext (that lives on a
+  // different origin), so that choice is made by eLabNext, not here.
+  // Optional email prefill: set window.FNG_ELN_URL to a URL containing the token {email}
+  // (e.g. a login URL your eLabNext instance accepts); the current operator's email is
+  // URL-encoded into it. Leave it unset to just open the root.
+  function currentOperatorEmail() {
+    try {
+      var lab = useLab(); if (!lab) return '';
+      var tpl = useFileTpl(lab); if (!tpl) return '';
+      var id = null;
+      (tpl.fieldIds || []).forEach(function (fid) { var f = fieldById(ROOT.library, fid); if (f && f.source === 'operator') id = fid; });
+      if (!id) return '';
+      var op = operatorByName(ROOT.ui.values[id] || '');
+      return (op && op.email) ? op.email : '';
+    } catch (e) { return ''; }
+  }
+  ROOT.openEln = function (ev) {
+    if (ev && ev.preventDefault) ev.preventDefault();
+    try { ROOT.copyDoc(); } catch (e) {}
+    var base = (typeof window !== 'undefined' && window.FNG_ELN_URL) || 'https://smartlab.unige.ch';
+    var dest = (base.indexOf('{email}') !== -1) ? base.replace('{email}', encodeURIComponent(currentOperatorEmail())) : base;
+    try { var w = window.open(dest, 'elabnext'); if (w && w.focus) w.focus(); }
+    catch (e) { try { window.open(dest, '_blank'); } catch (e2) {} }
+    return false;
   };
   ROOT.downloadMarkdown = function () { if (!guard()) return; var name = curName(); if (!name) return; pushHistory(name); saveFieldHistories(); download(name + '.md', notesMarkdown(), 'text/markdown'); logEvent('md'); };
 
@@ -1512,10 +1788,8 @@
     var o = sidecar(), h = o.header; if (!h || !h.fileName) return;
     pushHistory(h.fileName); saveFieldHistories();
     var rows = '<tr><td style="color:#6b7592;padding-right:10px">File name</td><td><strong>' + esc(h.fileName) + '</strong></td></tr>';
-    if (h.relPath) rows += '<tr><td style="color:#6b7592">Relative path</td><td>' + esc(h.relPath) + '</td></tr>';
-    if (h.archiveTarget) rows += '<tr><td style="color:#6b7592">Intended archive (NAS)</td><td>' + esc(h.archiveTarget) + ' (not verified)</td></tr>';
-    if (h.storage) rows += '<tr><td style="color:#6b7592">Storage status</td><td>' + esc(h.storage.status) + (h.storage.date ? ' (as of ' + esc(h.storage.date) + ')' : '') + '</td></tr>';
-    if (h.literalPath) rows += '<tr><td style="color:#6b7592">Full path (not verified)</td><td>' + esc(h.literalPath) + '</td></tr>';
+    if (h.fullPath) rows += '<tr><td style="color:#6b7592">Full path</td><td>' + esc(h.fullPath) + '</td></tr>'; else if (h.relPath) rows += '<tr><td style="color:#6b7592">Relative path</td><td>' + esc(h.relPath) + '</td></tr>';
+    if (h.literalPath) rows += '<tr><td style="color:#6b7592">Recommended transfer path (NASAC)</td><td>' + esc(h.literalPath) + '</td></tr>';
     rows += '<tr><td style="color:#6b7592">Lab</td><td>' + esc(h.lab) + '</td></tr>'
           + '<tr><td style="color:#6b7592">Template</td><td>' + esc(h.template) + '</td></tr>';
     Object.keys(h.fields || {}).forEach(function (k) {
@@ -1591,9 +1865,73 @@
 
     var warn = '<div class="fng-warn">⚠ Anyone can make changes for your lab here, but changes only take effect once a '
       + '<b>master user</b> in your lab publishes them to the lab repository. Click <b>Publish changes</b> for step‑by‑step instructions.</div>';
-    return warn + head + editor + saveBar + manageLists() + fieldDialog() + publishDialog();
+    return publishCard() + warn + manageTiles() + renderTplBuilder() + renderLabsOperators() + renderImportReview() + fieldDialog() + publishDialog();
   }
 
+  function publishCard() {
+    var col = hasCollisions(), pending = isDirty();
+    var pubBtn = col
+      ? '<button class="fng-btn" disabled title="Resolve the duplicate identifiers (flagged !) before publishing.">Publish changes</button>'
+      : (pending
+          ? '<button class="fng-btn pri" title="Download your updated library.json and get step-by-step GitLab instructions to publish it to the lab. Do this after making changes so they reach everyone." onclick="' + R() + '.publish()">Publish changes</button>'
+          : '<button class="fng-btn" disabled title="No unpublished changes yet. Edit a template, device, lab or operator and this button lights up.">Publish changes</button>');
+    var note = col
+      ? '<p style="margin-top:6px;color:#f0604a;font-size:12px">⚠ Resolve the duplicate identifiers flagged with <b>!</b> first.</p>'
+      : (pending
+          ? '<p class="fng-muted" style="margin-top:6px"><b>You have unpublished changes.</b> Click <b>Publish changes</b> to send them to the lab.</p>'
+          : '<p class="fng-muted" style="margin-top:6px">No unpublished changes.</p>');
+    return '<div class="fng-card"><h3 style="margin-top:0">Publishing</h3>'
+      + '<p class="fng-muted">Your edits are saved on this machine automatically. To share them with your lab, publish.</p>'
+      + '<div class="fng-row" style="margin-top:6px;gap:8px;flex-wrap:wrap">' + pubBtn
+      + '<button class="fng-btn" title="Load a library.json file (for example one a colleague exported, or a backup) and replace the current library on this machine." onclick="' + R() + '.importLib()">Import library JSON</button></div>'
+      + '<div class="fng-f" style="max-width:640px;margin-top:8px"><span class="fng-l">GitLab Web IDE link — derived automatically from this page&rsquo;s address</span>'
+      + '<input class="fng-in" readonly value="' + esc(publishLink() || 'set window.FNG_PUBLISH_BASE in index.html') + '"></div>'
+      + note + '</div>';
+  }
+  function tile(cls, icon, title, desc, onclick) {
+    return '<button type="button" class="fng-mtile ' + cls + '" title="' + desc + '" onclick="' + onclick + '">'
+      + '<span class="fng-mtile-i">' + icon + '</span>'
+      + '<span class="fng-mtile-t">' + title + '</span></button>';
+  }
+  function manageTiles() {
+    return '<div class="fng-mtiles">'
+      + tile('t-build', '<svg viewBox=\"0 0 160 120\" width=\"50\" height=\"38\" xmlns=\"http://www.w3.org/2000/svg\" aria-hidden=\"true\"><g fill=\"#3F7FD6\"><rect x=\"20\" y=\"84\" width=\"7\" height=\"6\" rx=\"1.5\"/><rect x=\"31\" y=\"84\" width=\"7\" height=\"6\" rx=\"1.5\"/><rect x=\"15\" y=\"90\" width=\"28\" height=\"24\" rx=\"4\"/></g><g fill=\"#7F77DD\"><rect x=\"54\" y=\"84\" width=\"7\" height=\"6\" rx=\"1.5\"/><rect x=\"65\" y=\"84\" width=\"7\" height=\"6\" rx=\"1.5\"/><rect x=\"49\" y=\"90\" width=\"28\" height=\"24\" rx=\"4\"/></g><g fill=\"#E06A3C\"><rect x=\"122\" y=\"84\" width=\"7\" height=\"6\" rx=\"1.5\"/><rect x=\"133\" y=\"84\" width=\"7\" height=\"6\" rx=\"1.5\"/><rect x=\"117\" y=\"90\" width=\"28\" height=\"24\" rx=\"4\"/></g><g fill=\"none\" stroke=\"#9AA3B2\" stroke-width=\"1.5\" stroke-dasharray=\"4 3\"><rect x=\"88\" y=\"84\" width=\"7\" height=\"6\" rx=\"1.5\"/><rect x=\"99\" y=\"84\" width=\"7\" height=\"6\" rx=\"1.5\"/><rect x=\"83\" y=\"90\" width=\"28\" height=\"24\" rx=\"4\" fill=\"rgba(154,163,178,0.12)\"/></g><g fill=\"#2CC98A\" transform=\"rotate(-14 106 36)\"><rect x=\"97\" y=\"18\" width=\"7\" height=\"6\" rx=\"1.5\"/><rect x=\"108\" y=\"18\" width=\"7\" height=\"6\" rx=\"1.5\"/><rect x=\"92\" y=\"24\" width=\"28\" height=\"24\" rx=\"4\"/></g><path d=\"M116 46 C 110 62, 106 70, 98 81\" fill=\"none\" stroke=\"#2CC98A\" stroke-width=\"2.5\" stroke-linecap=\"round\"/><path d=\"M98 82 L105 75 L103 86 Z\" fill=\"#2CC98A\"/></svg>', 'Build templates', 'Create and edit file-name and folder templates, custom fields, and the live example.', R() + '.openTplBuilder()')
+      + tile('t-dev', '🔬', 'Manage devices', 'Add and edit lab acquisition devices, and browse the shared platform devices.', R() + '.openDevManager(true)')
+      + tile('t-labs', '👥', 'Edit labs and operators', 'Maintain the list of labs (with departments) and operators with their initials.', R() + '.openLabsOps()')
+      + '</div>';
+  }
+  function renderTplBuilder() {
+    if (!ROOT.ui.tplOpen || !labs().length) return '';
+    var lab = buildLab(); ROOT.build.labId = lab.id;
+    var labSel = '<div class="fng-f"><span class="fng-l">Lab</span><select class="fng-sel" onchange="' + R() + '.buildLab(this.value)">'
+      + labs().map(function (l) { return '<option value="' + esc(l.id) + '"' + (l.id === lab.id ? ' selected' : '') + '>' + esc(l.name) + '</option>'; }).join('') + '</select></div>';
+    var kindSel = '<div class="fng-f"><span class="fng-l">Template type</span><select class="fng-sel" onchange="' + R() + '.setKind(this.value)">'
+      + '<option value="file"' + (ROOT.build.kind === 'file' ? ' selected' : '') + '>File name</option>'
+      + '<option value="folder"' + (ROOT.build.kind === 'folder' ? ' selected' : '') + '>Folder path</option></select></div>';
+    var list = buildTpls(lab), tpl = buildTpl(lab);
+    var tplSel = list.length
+      ? '<div class="fng-f"><span class="fng-l">Template</span><select class="fng-sel" onchange="' + R() + '.pickTpl(this.value)">'
+        + list.map(function (t) { return '<option value="' + esc(t.id) + '"' + (tpl && t.id === tpl.id ? ' selected' : '') + '>' + esc(t.name) + (t.default ? ' (default)' : '') + '</option>'; }).join('') + '</select></div>'
+      : '<span class="fng-muted">no templates yet</span>';
+    var head = '<div class="fng-row">' + labSel + kindSel + tplSel
+      + '<button class="fng-btn sm" onclick="' + R() + '.addTpl()">+ New</button>'
+      + (tpl ? '<button class="fng-btn sm" onclick="' + R() + '.dupTpl()">Duplicate</button><button class="fng-btn sm" onclick="' + R() + '.delTpl()">Delete</button>' : '')
+      + '</div>';
+    var editor = tpl ? tileEditor(lab, tpl) : '<p class="fng-muted" style="margin-top:12px">Create a template to start.</p>';
+    return '<div class="fng-modal" onclick="if(event.target===this)' + R() + '.closeTplBuilder()">'
+      + '<div class="fng-modal-card fng-bigcard"><div class="fng-modal-h"><h3 style="margin:0">Building templates</h3>'
+      + '<button class="fng-modal-x" title="Close" onclick="' + R() + '.closeTplBuilder()">✕</button></div>'
+      + head + editor
+      + '<div class="fng-acts" style="margin-top:12px"><button class="fng-btn pri" onclick="' + R() + '.closeTplBuilder()">Close</button></div></div></div>';
+  }
+  function renderLabsOperators() {
+    if (!ROOT.ui.labsOpen) return '';
+    return '<div class="fng-modal" onclick="if(event.target===this)' + R() + '.closeLabsOps()">'
+      + '<div class="fng-modal-card fng-bigcard"><div class="fng-modal-h"><h3 style="margin:0">Edit labs and operators</h3>'
+      + '<button class="fng-modal-x" title="Close" onclick="' + R() + '.closeLabsOps()">✕</button></div>'
+      + manageLists()
+      + '<div class="fng-acts" style="margin-top:12px"><button class="fng-btn pri" onclick="' + R() + '.closeLabsOps()">Close</button></div></div></div>';
+  }
   // The simple part: tiles you drag + a live example.
   function tileEditor(lab, tpl) {
     var L = ROOT.library;
@@ -1607,7 +1945,7 @@
       + '</div>';
 
     var baseRow = ROOT.build.kind === 'folder'
-      ? '<div class="fng-f" style="margin:8px 0"><span class="fng-l">Intended archive root (NAS) — recorded as a planned target only; the tool never asserts where the file currently is</span>'
+      ? '<div class="fng-f" style="margin:8px 0"><span class="fng-l">Recommended transfer destination (NASAC) — written in the metadata as where to archive the raw data; the tool never asserts the file is already there</span>'
         + '<input class="fng-in" value="' + esc(tpl.basePath || '') + '" placeholder="//nasac-m2.isis.unige.ch/m-GHoltmaat/GHoltmaat/USERS/" oninput="' + R() + '.setBasePath(this.value)"></div>'
       : '';
 
@@ -1779,12 +2117,7 @@
         + '<textarea class="fng-ta" style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px" placeholder="Software: ScanImage" oninput="' + R() + '.setDeviceInfo(' + i + ',this.value)">' + esc(infoText) + '</textarea></div></div>';
     }).join('') || '<span class="fng-muted">no devices yet</span>';
 
-    return '<h3 style="margin-top:22px">Lists &amp; fields</h3>'
-      + '<div class="fng-card"><h3 style="margin-top:0">Acquisition devices</h3>'
-      + '<p class="fng-muted">Lab devices and the shared platform devices are managed in a dedicated window — browse and edit lab devices.</p>'
-      + '<div class="fng-row" style="margin-top:6px"><button class="fng-btn pri" onclick="' + R() + '.openDevManager(true)">Manage devices ▾</button></div></div>'
-
-      + '<div class="fng-card"><h3 style="margin-top:0">Labs</h3>'
+    return '<div class="fng-card"><h3 style="margin-top:0">Labs</h3>'
       + labsTable
       + '<div class="fng-row" style="margin-top:8px"><button class="fng-btn sm" onclick="' + R() + '.addLab()">+ Add lab</button></div></div>'
 
@@ -1984,9 +2317,14 @@
     var pretty = JSON.stringify(ROOT.library, null, 2);
     download('library.json', pretty);
     if (navigator.clipboard) { try { navigator.clipboard.writeText(pretty); } catch (e) {} }
+    ROOT._savedSnapshot = snapshot();   // published — greys the button until the next change
     ROOT.ui.publishOpen = true; rerender();
   };
   ROOT.closePublish = function () { ROOT.ui.publishOpen = false; rerender(); };
+  ROOT.openTplBuilder = function () { ROOT.ui.tplOpen = true; rerender(); };
+  ROOT.closeTplBuilder = function () { ROOT.ui.tplOpen = false; rerender(); };
+  ROOT.openLabsOps = function () { ROOT.ui.labsOpen = true; rerender(); };
+  ROOT.closeLabsOps = function () { ROOT.ui.labsOpen = false; rerender(); };
   ROOT.setPublishUrl = function (v) { ROOT.library.publishUrl = (v || '').trim(); dirty(); };
   // The lab slug the page was opened with — from ?cfg=/<slug>/library.json or ?lib=<slug>.
   // This is authoritative: it's how this very page was loaded, so it can't be stale.
@@ -2042,11 +2380,207 @@
       + '</ol>'
       + '<div class="fng-acts"><button class="fng-btn pri" onclick="' + R() + '.closePublish()">Done</button></div></div></div>';
   }
+  /* ==========================================================================
+   * IMPORT REVIEW — when a library.json is imported, diff it against the current
+   * library and let the master review by section (Lab members / Devices / Build
+   * templates), accept/reject/edit each change, then merge the accepted ones into
+   * the working library (so the normal Publish step shares them). Nothing is
+   * applied until "Apply reviewed changes".
+   * ======================================================================== */
+  var RV_SECTIONS = [{ id: 'members', label: 'Lab members' }, { id: 'devices', label: 'Devices' }, { id: 'templates', label: 'Build templates' }];
+  function rvFindi(a, pred) { for (var i = 0; i < a.length; i++) { if (pred(a[i], i)) return i; } return -1; }
+  function rvClone(x) { return JSON.parse(JSON.stringify(x)); }
+  function rvEq(a, b) { try { return JSON.stringify(a) === JSON.stringify(b); } catch (e) { return a === b; } }
+  function rvFieldNames(lib) { var m = {}; ((lib && lib.fields) || []).forEach(function (f) { m[f.id] = f.name; }); return m; }
+
+  // Ordered, human-readable property rows for one item; flags which are editable.
+  function rvProps(kind, obj, lib) {
+    if (!obj) return [];
+    if (kind === 'op') return [{ k: 'name', l: 'Full name', v: opName(obj), ro: true }, { k: 'initials', l: 'Initials', v: obj.initials || '' }, { k: 'first3', l: 'First 3', v: obj.first3 || '' }, { k: 'email', l: 'Email', v: obj.email || '' }];
+    if (kind === 'device') { var info = Object.keys(obj.info || {}).map(function (kk) { return kk + ': ' + obj.info[kk]; }).join('\n'); return [{ k: 'name', l: 'Name', v: obj.name || '' }, { k: 'info', l: 'Info', v: info, area: true }]; }
+    if (kind === 'field') { var meta = obj.source === 'list' ? ((obj.options || []).join(', ')) : obj.source === 'date' ? (obj.format || '') : ''; return [{ k: 'name', l: 'Name', v: obj.name || '' }, { k: 'source', l: 'Type', v: obj.source || '', ro: true }, { k: 'options', l: (obj.source === 'list' ? 'Options' : 'Details'), v: meta, ro: obj.source !== 'list' }]; }
+    if (kind === 'lab') return [{ k: 'name', l: 'Lab name', v: obj.name || '' }, { k: 'dept', l: 'Department', v: obj.dept || '' }, { k: 'initials', l: 'Initials', v: obj.initials || '' }, { k: 'first3', l: 'First 3', v: obj.first3 || '' }];
+    if (kind === 'tpl') { var fm = rvFieldNames(lib); var fl = (obj.fieldIds || []).map(function (id) { return fm[id] || id; }).join(' \u00b7 '); return [{ k: 'name', l: 'Name', v: obj.name || '' }, { k: 'default', l: 'Default for lab', v: obj.default ? 'yes' : 'no', sel: true }, { k: 'separator', l: 'Separator', v: obj.separator || '' }, { k: 'basePath', l: 'Base path', v: obj.basePath || '' }, { k: 'fields', l: 'Fields', v: fl, ro: true }]; }
+    return [];
+  }
+
+  // Flat list of changes between two normalized libraries.
+  function diffLibraries(oldL, newL) {
+    var items = [];
+    function push(o) { o.decision = 'accept'; o.editing = false; o.edited = null; items.push(o); }
+    function listDiff(oldArr, newArr, kind, section, keyOf, labelOf) {
+      var o = {}, n = {}, seen = {};
+      (oldArr || []).forEach(function (x) { o[keyOf(x)] = x; });
+      (newArr || []).forEach(function (x) { n[keyOf(x)] = x; });
+      Object.keys(o).forEach(function (k) { seen[k] = 1; }); Object.keys(n).forEach(function (k) { seen[k] = 1; });
+      Object.keys(seen).forEach(function (k) {
+        var a = o[k], b = n[k];
+        if (a && !b) push({ section: section, kind: kind, key: kind + '::' + k, status: 'removed', label: labelOf(a), current: a, incoming: null });
+        else if (!a && b) push({ section: section, kind: kind, key: kind + '::' + k, status: 'added', label: labelOf(b), current: null, incoming: b });
+        else if (!rvEq(a, b)) push({ section: section, kind: kind, key: kind + '::' + k, status: 'changed', label: labelOf(b), current: a, incoming: b });
+      });
+    }
+    listDiff(oldL.operators, newL.operators, 'op', 'members', function (x) { return opName(x); }, function (x) { return opName(x); });
+    listDiff(oldL.devices, newL.devices, 'device', 'devices', function (x) { return x.id || x.name; }, function (x) { return x.name || x.id; });
+    listDiff((oldL.fields || []).filter(function (f) { return !f.builtin; }), (newL.fields || []).filter(function (f) { return !f.builtin; }), 'field', 'templates', function (x) { return x.id; }, function (x) { return (x.name || x.id) + ' (custom field)'; });
+    // labs: identity under members, templates under build-templates
+    var oL = {}, nL = {}, seenL = {};
+    (oldL.labs || []).forEach(function (l) { oL[l.id] = l; });
+    (newL.labs || []).forEach(function (l) { nL[l.id] = l; });
+    Object.keys(oL).forEach(function (k) { seenL[k] = 1; }); Object.keys(nL).forEach(function (k) { seenL[k] = 1; });
+    Object.keys(seenL).forEach(function (id) {
+      var a = oL[id], b = nL[id];
+      if (a && !b) { push({ section: 'members', kind: 'lab', key: 'lab::' + id, status: 'removed', label: (a.name || id) + ' (whole lab)', current: a, incoming: null }); return; }
+      if (!a && b) { push({ section: 'members', kind: 'lab', key: 'lab::' + id, status: 'added', label: (b.name || id) + ' (whole lab)', current: null, incoming: b }); return; }
+      var idA = { name: a.name, dept: a.dept || '', initials: a.initials || '', first3: a.first3 || '' };
+      var idB = { name: b.name, dept: b.dept || '', initials: b.initials || '', first3: b.first3 || '' };
+      if (!rvEq(idA, idB)) push({ section: 'members', kind: 'lab', key: 'lab::' + id, status: 'changed', label: (b.name || id), current: a, incoming: b });
+      ['file', 'folder'].forEach(function (tk) {
+        var arrO = (tk === 'file' ? a.fileTemplates : a.folderTemplates) || [];
+        var arrN = (tk === 'file' ? b.fileTemplates : b.folderTemplates) || [];
+        var to = {}, tn = {}, seenT = {}; arrO.forEach(function (t) { to[t.id] = t; }); arrN.forEach(function (t) { tn[t.id] = t; });
+        Object.keys(to).forEach(function (k) { seenT[k] = 1; }); Object.keys(tn).forEach(function (k) { seenT[k] = 1; });
+        var lname = (b.name || a.name || id);
+        Object.keys(seenT).forEach(function (tid) {
+          var ta = to[tid], tb = tn[tid];
+          var label = (tk === 'file' ? 'File template ' : 'Folder template ') + ((tb || ta).name || tid) + ' \u2014 ' + lname;
+          var common = { section: 'templates', kind: 'tpl', key: 'tpl::' + id + '::' + tk + '::' + tid, labId: id, tkind: tk, label: label };
+          if (ta && !tb) push({ section: common.section, kind: common.kind, key: common.key, labId: id, tkind: tk, label: label, status: 'removed', current: ta, incoming: null });
+          else if (!ta && tb) push({ section: common.section, kind: common.kind, key: common.key, labId: id, tkind: tk, label: label, status: 'added', current: null, incoming: tb });
+          else if (!rvEq(ta, tb)) push({ section: common.section, kind: common.kind, key: common.key, labId: id, tkind: tk, label: label, status: 'changed', current: ta, incoming: tb });
+        });
+      });
+    });
+    return items;
+  }
+
+  function rvApply() {
+    var items = (ROOT._review && ROOT._review.items) || [];
+    var m = rvClone(ROOT.library);
+    m.operators = m.operators || []; m.devices = m.devices || []; m.fields = m.fields || []; m.labs = m.labs || [];
+    function valOf(it) { return it.edited != null ? it.edited : it.incoming; }
+    items.forEach(function (it) {
+      if (it.decision !== 'accept') return;
+      if (it.kind === 'op') {
+        var nm = opName(it.current || it.incoming);
+        var i = rvFindi(m.operators, function (o) { return opName(o) === nm; });
+        if (it.status === 'removed') { if (i >= 0) m.operators.splice(i, 1); }
+        else { var v = valOf(it); if (i >= 0) m.operators[i] = v; else m.operators.push(v); }
+      } else if (it.kind === 'device') {
+        var dk = (it.current || it.incoming).id || (it.current || it.incoming).name;
+        var di = rvFindi(m.devices, function (d) { return (d.id || d.name) === dk; });
+        if (it.status === 'removed') { if (di >= 0) m.devices.splice(di, 1); }
+        else { var dv = valOf(it); if (di >= 0) m.devices[di] = dv; else m.devices.push(dv); }
+      } else if (it.kind === 'field') {
+        var fid = (it.current || it.incoming).id;
+        var fi = rvFindi(m.fields, function (f) { return f.id === fid; });
+        if (it.status === 'removed') { if (fi >= 0) m.fields.splice(fi, 1); }
+        else { var fv = valOf(it); if (fi >= 0) m.fields[fi] = fv; else m.fields.push(fv); }
+      } else if (it.kind === 'lab') {
+        var id = (it.current || it.incoming).id;
+        var li = rvFindi(m.labs, function (l) { return l.id === id; });
+        if (it.status === 'removed') { if (li >= 0) m.labs.splice(li, 1); }
+        else if (it.status === 'added') { m.labs.push(valOf(it)); }
+        else if (li >= 0) { var nl = valOf(it); ['name', 'dept', 'initials', 'first3'].forEach(function (kk) { if (nl[kk] != null && nl[kk] !== '') m.labs[li][kk] = nl[kk]; else delete m.labs[li][kk]; }); }
+      } else if (it.kind === 'tpl') {
+        var lli = rvFindi(m.labs, function (l) { return l.id === it.labId; }); if (lli < 0) return; var lab = m.labs[lli];
+        var arr = it.tkind === 'file' ? (lab.fileTemplates = lab.fileTemplates || []) : (lab.folderTemplates = lab.folderTemplates || []);
+        var tid = (it.current || it.incoming).id;
+        var ti = rvFindi(arr, function (t) { return t.id === tid; });
+        if (it.status === 'removed') { if (ti >= 0) arr.splice(ti, 1); }
+        else { var tv = valOf(it); if (ti >= 0) arr[ti] = tv; else arr.push(tv); }
+      }
+    });
+    ROOT.library = normalize(m);
+    ROOT.ui.reviewOpen = false; ROOT._review = null;
+    rerender(); toast('Reviewed changes applied \u2014 use Publish changes to share them.');
+  }
+
+  ROOT.reviewSec = function (el) { if (ROOT._review) { ROOT._review.section = el.getAttribute('data-sec'); rerender(); } };
+  ROOT.reviewDecide = function (i, accept) { var it = ROOT._review && ROOT._review.items[i]; if (it) { it.decision = accept ? 'accept' : 'reject'; rerender(); } };
+  ROOT.reviewToggleEdit = function (i) { var it = ROOT._review && ROOT._review.items[i]; if (it) { it.editing = !it.editing; if (it.editing && it.edited == null) it.edited = rvClone(it.incoming || {}); rerender(); } };
+  ROOT.reviewAll = function (accept) { var rv = ROOT._review; if (!rv) return; rv.items.forEach(function (it) { if (it.section === rv.section) it.decision = accept ? 'accept' : 'reject'; }); rerender(); };
+  ROOT.reviewEdit = function (i, el) {
+    var it = ROOT._review && ROOT._review.items[i]; if (!it) return;
+    var key = el.getAttribute('data-k'), val = el.value;
+    if (it.edited == null) it.edited = rvClone(it.incoming || it.current || {});
+    if (it.kind === 'device' && key === 'info') { var info = {}; (val || '').split('\n').forEach(function (line) { var pp = line.indexOf(':'); if (pp > 0) { var a = line.slice(0, pp).trim(), b = line.slice(pp + 1).trim(); if (a) info[a] = b; } }); it.edited.info = info; }
+    else if (it.kind === 'field' && key === 'options') { it.edited.options = (val || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean); }
+    else if (it.kind === 'tpl' && key === 'default') { it.edited.default = (val === '1'); }
+    else { it.edited[key] = val; }
+  };
+  ROOT.reviewApply = function () { rvApply(); };
+  ROOT.reviewCancel = function () { ROOT.ui.reviewOpen = false; ROOT._review = null; rerender(); toast('Import cancelled \u2014 nothing changed.'); };
+
+  function rvCard(it, i) {
+    var st = it.status, rejected = it.decision !== 'accept';
+    var curP = rvProps(it.kind, it.current, ROOT.library);
+    var incObj = it.edited != null ? it.edited : it.incoming;
+    var incP = rvProps(it.kind, incObj, ROOT._review.incoming);
+    var curMap = {}; curP.forEach(function (pp) { curMap[pp.k] = pp.v; });
+    function rows(ps, editable) {
+      if (!ps.length) return '<div class="fng-rv-empty">\u2014</div>';
+      return ps.map(function (pp) {
+        var chg = (st === 'changed') && (curMap[pp.k] !== pp.v);
+        var valHtml;
+        if (editable && it.editing && !pp.ro) {
+          if (pp.sel) valHtml = '<select class="fng-sel" data-k="' + pp.k + '" onchange="' + R() + '.reviewEdit(' + i + ',this)"><option value="0"' + (pp.v === 'no' ? ' selected' : '') + '>no</option><option value="1"' + (pp.v === 'yes' ? ' selected' : '') + '>yes</option></select>';
+          else if (pp.area) valHtml = '<textarea class="fng-ta" data-k="' + pp.k + '" oninput="' + R() + '.reviewEdit(' + i + ',this)">' + esc(pp.v) + '</textarea>';
+          else valHtml = '<input class="fng-in" data-k="' + pp.k + '" value="' + esc(pp.v) + '" oninput="' + R() + '.reviewEdit(' + i + ',this)">';
+        } else { valHtml = '<span class="fng-rv-v">' + (pp.v ? esc(pp.v).replace(/\n/g, '<br>') : '<i class="fng-muted">\u2014</i>') + '</span>'; }
+        return '<div class="fng-rv-prop' + (chg ? ' chg' : '') + '"><span class="fng-rv-k">' + esc(pp.l) + '</span>' + valHtml + '</div>';
+      }).join('');
+    }
+    var sides;
+    if (st === 'added') sides = '<div class="fng-rv-side"><div class="fng-rv-sh">New</div>' + rows(incP, true) + '</div>';
+    else if (st === 'removed') sides = '<div class="fng-rv-side"><div class="fng-rv-sh">Will be removed</div>' + rows(curP, false) + '</div>';
+    else sides = '<div class="fng-rv-side"><div class="fng-rv-sh">Current</div>' + rows(curP, false) + '</div><div class="fng-rv-side"><div class="fng-rv-sh">Incoming</div>' + rows(incP, true) + '</div>';
+    var canEdit = (st !== 'removed') && incP.some(function (pp) { return !pp.ro; });
+    return '<div class="fng-rv-card s-' + st + (rejected ? ' rej' : '') + '">'
+      + '<div class="fng-rv-top"><span class="fng-rv-badge b-' + st + '">' + (st === 'added' ? 'Added' : st === 'removed' ? 'Removed' : 'Changed') + '</span>'
+      + '<span class="fng-rv-label">' + esc(it.label) + '</span><span class="fng-rv-dec">'
+      + (canEdit ? '<button class="fng-btn sm" onclick="' + R() + '.reviewToggleEdit(' + i + ')">' + (it.editing ? 'Done' : 'Edit') + '</button>' : '')
+      + '<button class="fng-btn sm' + (it.decision === 'accept' ? ' pri' : '') + '" onclick="' + R() + '.reviewDecide(' + i + ',true)">Accept</button>'
+      + '<button class="fng-btn sm' + (it.decision === 'reject' ? ' pri' : '') + '" onclick="' + R() + '.reviewDecide(' + i + ',false)">Reject</button>'
+      + '</span></div><div class="fng-rv-sides">' + sides + '</div></div>';
+  }
+
+  function renderImportReview() {
+    if (!ROOT.ui.reviewOpen || !ROOT._review) return '';
+    var rv = ROOT._review, items = rv.items;
+    var nav = RV_SECTIONS.map(function (sdef) {
+      var n = 0; items.forEach(function (it) { if (it.section === sdef.id) n++; });
+      if (!n) return '';
+      return '<button type="button" class="fng-rv-navb' + (rv.section === sdef.id ? ' on' : '') + '" data-sec="' + sdef.id + '" onclick="' + R() + '.reviewSec(this)">' + esc(sdef.label) + '<span class="fng-rv-count">' + n + '</span></button>';
+    }).join('');
+    var cards = ''; items.forEach(function (it, i) { if (it.section === rv.section) cards += rvCard(it, i); });
+    var accepted = 0; items.forEach(function (it) { if (it.decision === 'accept') accepted++; });
+    return '<div class="fng-modal" onclick="if(event.target===this)' + R() + '.reviewCancel()">'
+      + '<div class="fng-modal-card fng-rvcard"><div class="fng-modal-h"><h3 style="margin:0">Review imported changes</h3>'
+      + '<button class="fng-modal-x" title="Cancel" onclick="' + R() + '.reviewCancel()">\u2715</button></div>'
+      + '<p class="fng-muted" style="margin:0 0 10px">Accept, reject or edit each change. Accepted changes are merged into your working library; then use <b>Publish changes</b> to share them with the lab.</p>'
+      + '<div class="fng-rv"><div class="fng-rv-nav">' + nav + '</div><div class="fng-rv-body"><div class="fng-rv-bar">'
+      + '<button class="fng-btn sm" onclick="' + R() + '.reviewAll(true)">Accept all shown</button>'
+      + '<button class="fng-btn sm" onclick="' + R() + '.reviewAll(false)">Reject all shown</button></div>' + cards + '</div></div>'
+      + '<div class="fng-acts" style="margin-top:12px;justify-content:space-between;align-items:center"><span class="fng-muted">' + accepted + ' of ' + items.length + ' change' + (items.length === 1 ? '' : 's') + ' will be applied</span>'
+      + '<span style="display:flex;gap:8px"><button class="fng-btn" onclick="' + R() + '.reviewCancel()">Cancel</button><button class="fng-btn pri" onclick="' + R() + '.reviewApply()">Apply reviewed changes</button></span></div></div></div>';
+  }
+
   ROOT.importLib = function () {
     var inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.json,application/json';
     inp.onchange = function () {
       var f = inp.files[0]; if (!f) return; var r = new FileReader();
-      r.onload = function () { var lib = parseLib(r.result); if (lib) { ROOT.library = normalize(lib); rerender(); toast('Imported.'); } else toast('Could not parse that file.'); };
+      r.onload = function () {
+        var lib = parseLib(r.result);
+        if (!lib) { toast('Could not parse that file.'); return; }
+        var incoming = normalize(lib);
+        var items = diffLibraries(ROOT.library, incoming);
+        if (!items.length) { toast('That file matches the current library \u2014 no changes to review.'); return; }
+        var first = items[0].section;
+        for (var si = 0; si < RV_SECTIONS.length; si++) { var has = false; items.forEach(function (it) { if (it.section === RV_SECTIONS[si].id) has = true; }); if (has) { first = RV_SECTIONS[si].id; break; } }
+        ROOT._review = { incoming: incoming, items: items, section: first };
+        ROOT.ui.reviewOpen = true; rerender();
+      };
       r.readAsText(f);
     };
     inp.click();
@@ -2201,7 +2735,7 @@
       + '<button class="fng-tab' + (ROOT.ui.mode === 'manage' ? ' on' : '') + '" onclick="' + R() + '.go(\'manage\')">Manage</button>'
       + '</div>' : '';
     var body = (ROOT.ui.mode === 'manage' && master) ? renderManage() : renderUse();
-    return '<div class="fng">' + css() + tabs + body + renderDevManager() + renderConfigManager() + '</div>';
+    return '<div class="fng">' + css() + tabs + body + renderDevManager() + renderConfigManager() + renderFsConfirm() + '</div>';
   }
   ROOT.go = function (m) { ROOT.ui.mode = m; rerender(); };
 
@@ -2385,7 +2919,7 @@
       buildName: buildName, inputFields: inputFields, defaultLibrary: defaultLibrary, normalize: normalize,
       normalizeIndex: normalizeIndex, normalizePlatformFile: normalizePlatformFile,
       deviceGroups: deviceGroups, findDeviceByName: findDeviceByName, groupOfDevice: groupOfDevice,
-      headerObject: headerObject, sidecar: sidecar, relPath: relPath, folderSubtree: folderSubtree, archiveRoot: archiveRoot, curName: curName, curPath: curPath, storageStatus: storageStatus, looksLocalRoot: looksLocalRoot, showLiteralPath: showLiteralPath, locationBlock: locationBlock, headerMarkdown: headerMarkdown, ideUrl: ideUrl, cmpName: cmpName, notesMarkdown: notesMarkdown, clipboardHtml: clipboardHtml, notesNonEmpty: notesNonEmpty, buildAnalyticsEvent: buildAnalyticsEvent,
+      headerObject: headerObject, sidecar: sidecar, relPath: relPath, folderSubtree: folderSubtree, archiveRoot: archiveRoot, curName: curName, curPath: curPath, storageStatus: storageStatus, looksLocalRoot: looksLocalRoot, showLiteralPath: showLiteralPath, locationBlock: locationBlock, headerMarkdown: headerMarkdown, ideUrl: ideUrl, cmpName: cmpName, notesMarkdown: notesMarkdown, clipboardHtml: clipboardHtml, notesNonEmpty: notesNonEmpty, buildAnalyticsEvent: buildAnalyticsEvent, favDevices: favDevices, isFav: isFav, addFav: addFav, removeFav: removeFav, devmgrTree: devmgrTree, renderManage: renderManage, isDirty: isDirty, diffLibraries: diffLibraries, fsProbe: fsProbe, fsMkdirp: fsMkdirp, fsWrite: fsWrite, openEln: function(){return ROOT.openEln.apply(ROOT,arguments);}, currentOperatorEmail: currentOperatorEmail,
       _setState: function (s) { s = s || {}; if (s.library) ROOT.library = s.library; if (s.platforms) ROOT.platforms = s.platforms; if (s.ui) ROOT.ui = s.ui; } };
   }
 
