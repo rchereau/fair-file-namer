@@ -423,34 +423,34 @@
 
   function css() {
     return '<style>'
-      + '.fng{font-family:inherit;color:#cdd5e3;--ac:#4af0a0;--bd:#222838;--pn:#171b26;--sf:#10131b;--dim:#79839c;line-height:1.5;}'
+      + '.fng{font-family:inherit;color:#cdd5e3;--ac:#4af0a0;--bd:#222838;--pn:#171b26;--sf:#10131b;--dim:#919bb4;line-height:1.5;}'
       + '.fng *{box-sizing:border-box;}'
-      + '.fng h3{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);margin:18px 0 8px;font-weight:600;}'
-      + '.fng .lead{font-size:12px;color:var(--dim);margin:2px 0 10px;}'
+      + '.fng h3{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);margin:18px 0 8px;font-weight:600;}'
+      + '.fng .lead{font-size:13px;color:var(--dim);margin:2px 0 10px;}'
       + '.fng-tabs{display:flex;gap:4px;border-bottom:1px solid var(--bd);margin-bottom:16px;}'
-      + '.fng-tab{background:none;border:none;color:var(--dim);font-size:12px;padding:8px 12px;cursor:pointer;border-bottom:2px solid transparent;}'
+      + '.fng-tab{background:none;border:none;color:var(--dim);font-size:13px;padding:8px 12px;cursor:pointer;border-bottom:2px solid transparent;}'
       + '.fng-tab.on{color:var(--ac);border-bottom-color:var(--ac);}'
       + '.fng-help{max-width:820px;line-height:1.6;color:#c2cbe0;}'
-      + '.fng-help h2{font-size:16px;color:#fff;margin:26px 0 8px;border-bottom:1px solid var(--bd);padding-bottom:6px;}'
-      + '.fng-help h3{font-size:13px;color:var(--ac);margin:18px 0 6px;}'
-      + '.fng-help p{margin:8px 0;font-size:13px;}'
-      + '.fng-help ul,.fng-help ol{margin:8px 0 8px 20px;font-size:13px;}'
+      + '.fng-help h2{font-size:17px;color:#fff;margin:26px 0 8px;border-bottom:1px solid var(--bd);padding-bottom:6px;}'
+      + '.fng-help h3{font-size:14px;color:var(--ac);margin:18px 0 6px;}'
+      + '.fng-help p{margin:8px 0;font-size:14px;}'
+      + '.fng-help ul,.fng-help ol{margin:8px 0 8px 20px;font-size:14px;}'
       + '.fng-help li{margin:5px 0;}'
-      + '.fng-help code{background:rgba(255,255,255,.06);padding:1px 5px;border-radius:4px;font-size:12px;}'
-      + '.fng-help .lead{color:#9aa6bf;}'
+      + '.fng-help code{background:rgba(255,255,255,.06);padding:1px 5px;border-radius:4px;font-size:13px;}'
+      + '.fng-help .lead{color:#b2bed7;}'
       + '.fng-where{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0;}'
       + '.fng-where>div{border:1px solid var(--bd);border-radius:8px;padding:12px 14px;background:var(--sf);}'
-      + '.fng-where h4{margin:0 0 6px;font-size:12px;color:#fff;}'
+      + '.fng-where h4{margin:0 0 6px;font-size:13px;color:#fff;}'
       + '.fng-shot{margin:14px 0;border:1px solid var(--bd);border-radius:8px;overflow:hidden;background:var(--sf);}'
       + '.fng-shot img{display:block;width:100%;height:auto;}'
-      + '.fng-shot-ph{flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:130px;padding:22px;text-align:center;color:var(--dim);font-size:12px;background:repeating-linear-gradient(45deg,transparent,transparent 10px,rgba(255,255,255,.025) 10px,rgba(255,255,255,.025) 20px);}'
-      + '.fng-shot figcaption{padding:8px 12px;font-size:11px;color:#8b95a9;border-top:1px solid var(--bd);}'
+      + '.fng-shot-ph{flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:130px;padding:22px;text-align:center;color:var(--dim);font-size:13px;background:repeating-linear-gradient(45deg,transparent,transparent 10px,rgba(255,255,255,.025) 10px,rgba(255,255,255,.025) 20px);}'
+      + '.fng-shot figcaption{padding:8px 12px;font-size:12px;color:#a3adc1;border-top:1px solid var(--bd);}'
       + '@media(max-width:640px){.fng-where{grid-template-columns:1fr;}}'
       + '.fng-row{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;}'
       + '.fng-f{display:flex;flex-direction:column;gap:4px;}'
-      + '.fng-l{font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--dim);}'
+      + '.fng-l{font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--dim);}'
       + '.fng-l.req:after{content:" *";color:var(--ac);}'
-      + '.fng-in,.fng-sel,.fng-ta{background:var(--pn);border:1px solid var(--bd);border-radius:6px;color:#eaf0fa;font-size:13px;padding:7px 9px;outline:none;font-family:inherit;}'
+      + '.fng-in,.fng-sel,.fng-ta{background:var(--pn);border:1px solid var(--bd);border-radius:6px;color:#eaf0fa;font-size:14px;padding:7px 9px;outline:none;font-family:inherit;}'
       + '.fng-in:focus,.fng-sel:focus,.fng-ta:focus{border-color:var(--ac);}'
       + '.fng-ta{width:100%;min-height:58px;resize:vertical;}'
       + '.fng-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;}'
@@ -460,16 +460,16 @@
       + '.fng-fillrow .fng-sel,.fng-fillrow .fng-in,.fng-fillrow .fng-f>div{width:100%;}'
       + '.fng-devwrap{display:flex;gap:6px;align-items:center;}'
       + '.fng-devwrap .fng-sel{flex:1;width:auto;}'
-      + '.fng-star{flex:none;background:transparent;border:1px solid var(--bd);border-radius:6px;color:var(--dim);cursor:pointer;font-size:18px;line-height:1;padding:5px 10px;}'
+      + '.fng-star{flex:none;background:transparent;border:1px solid var(--bd);border-radius:6px;color:var(--dim);cursor:pointer;font-size:19px;line-height:1;padding:5px 10px;}'
       + '.fng-star:hover{border-color:var(--ac);color:var(--ac);}'
       + '.fng-star.on{color:var(--ac);border-color:var(--ac);}'
-      + '.fng-devwrap .fng-star{font-size:22px;padding:3px 11px;}'
+      + '.fng-devwrap .fng-star{font-size:23px;padding:3px 11px;}'
       + '.fng-mtiles{display:flex;gap:14px;margin-top:16px;align-items:stretch;}'
       + '@media (max-width:640px){.fng-mtiles{flex-direction:column;}}'
       + '.fng-mtile{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:10px;border:1px solid transparent;border-radius:16px;padding:26px 16px;cursor:pointer;transition:background .15s,border-color .15s,transform .1s,box-shadow .15s;}'
       + '.fng-mtile:hover{transform:translateY(-2px);}'
-      + '.fng-mtile-i{font-size:34px;line-height:1;filter:drop-shadow(0 2px 6px rgba(0,0,0,.35));}'
-      + '.fng-mtile-t{font-size:15px;font-weight:600;color:#eef3fb;}'
+      + '.fng-mtile-i{font-size:35px;line-height:1;filter:drop-shadow(0 2px 6px rgba(0,0,0,.35));}'
+      + '.fng-mtile-t{font-size:16px;font-weight:600;color:#eef3fb;}'
       + '.fng-mtile.t-build{background:linear-gradient(140deg,rgba(74,240,160,.22),rgba(74,240,160,.04));border-color:rgba(74,240,160,.35);}'
       + '.fng-mtile.t-build:hover{background:linear-gradient(140deg,rgba(74,240,160,.34),rgba(74,240,160,.08));border-color:rgba(74,240,160,.7);box-shadow:0 8px 22px rgba(74,240,160,.12);}'
       + '.fng-mtile.t-dev{background:linear-gradient(140deg,rgba(126,184,247,.22),rgba(126,184,247,.04));border-color:rgba(126,184,247,.35);}'
@@ -478,15 +478,15 @@
       + '.fng-mtile.t-labs:hover{background:linear-gradient(140deg,rgba(199,146,234,.34),rgba(199,146,234,.08));border-color:rgba(199,146,234,.7);box-shadow:0 8px 22px rgba(199,146,234,.12);}'
       + '.fng-modal-card.fng-bigcard{width:92vw;max-width:900px;}'
       + '.fng-modal-card.fng-rvcard{width:94vw;max-width:1000px;}'
-      + '.fng-save{margin-top:12px;padding:10px 12px;border:1px solid var(--bd);border-radius:10px;background:rgba(255,255,255,.02);}'
-      + '.fng-save-cur{font-size:12.5px;color:#dbe3f0;}'
-      + '.fng-fslist{margin:4px 0 0;padding-left:18px;font-size:12.5px;color:#dbe3f0;}'
+      + '.fng-save{margin-top:8px;padding:8px 10px;border:1px solid var(--bd);border-radius:10px;background:rgba(255,255,255,.02);}'
+      + '.fng-save-cur{font-size:13.5px;color:#dbe3f0;}'
+      + '.fng-fslist{margin:4px 0 0;padding-left:18px;font-size:13.5px;color:#dbe3f0;}'
       + '.fng-fslist li{margin:2px 0;}'
       + '.fng-rv{display:flex;gap:14px;align-items:flex-start;}'
       + '.fng-rv-nav{flex:none;width:172px;display:flex;flex-direction:column;gap:6px;}'
-      + '.fng-rv-navb{display:flex;justify-content:space-between;align-items:center;gap:8px;background:var(--pn);border:1px solid var(--bd);border-radius:8px;color:#cdd6e6;padding:9px 11px;cursor:pointer;font-size:13px;text-align:left;}'
+      + '.fng-rv-navb{display:flex;justify-content:space-between;align-items:center;gap:8px;background:var(--pn);border:1px solid var(--bd);border-radius:8px;color:#cdd6e6;padding:9px 11px;cursor:pointer;font-size:14px;text-align:left;}'
       + '.fng-rv-navb.on{border-color:var(--ac);color:#fff;background:rgba(74,240,160,.08);}'
-      + '.fng-rv-count{flex:none;background:rgba(255,255,255,.1);border-radius:10px;padding:1px 8px;font-size:11px;}'
+      + '.fng-rv-count{flex:none;background:rgba(255,255,255,.1);border-radius:10px;padding:1px 8px;font-size:12px;}'
       + '.fng-rv-body{flex:1;min-width:0;max-height:60vh;overflow:auto;display:flex;flex-direction:column;gap:10px;}'
       + '.fng-rv-bar{display:flex;gap:8px;}'
       + '.fng-rv-card{border:1px solid var(--bd);border-radius:10px;padding:10px 12px;border-left:3px solid var(--bd);}'
@@ -495,7 +495,7 @@
       + '.fng-rv-card.s-changed{border-left-color:#e0b341;}'
       + '.fng-rv-card.rej{opacity:.45;}'
       + '.fng-rv-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}'
-      + '.fng-rv-badge{flex:none;font-size:11px;font-weight:700;border-radius:5px;padding:2px 7px;}'
+      + '.fng-rv-badge{flex:none;font-size:12px;font-weight:700;border-radius:5px;padding:2px 7px;}'
       + '.fng-rv-badge.b-added{background:rgba(74,240,160,.16);color:#4af0a0;}'
       + '.fng-rv-badge.b-removed{background:rgba(240,96,74,.16);color:#f0815a;}'
       + '.fng-rv-badge.b-changed{background:rgba(224,179,65,.16);color:#e0b341;}'
@@ -504,112 +504,112 @@
       + '.fng-rv-sides{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;}'
       + '.fng-rv-card.s-added .fng-rv-sides,.fng-rv-card.s-removed .fng-rv-sides{grid-template-columns:1fr;}'
       + '.fng-rv-side{background:rgba(255,255,255,.02);border:1px solid var(--bd);border-radius:8px;padding:8px 10px;}'
-      + '.fng-rv-sh{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--dim);margin-bottom:6px;}'
-      + '.fng-rv-prop{display:flex;gap:8px;padding:3px 0;font-size:12.5px;align-items:baseline;}'
+      + '.fng-rv-sh{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--dim);margin-bottom:6px;}'
+      + '.fng-rv-prop{display:flex;gap:8px;padding:3px 0;font-size:13.5px;align-items:baseline;}'
       + '.fng-rv-prop.chg{background:rgba(224,179,65,.1);border-radius:4px;}'
       + '.fng-rv-k{flex:none;width:92px;color:var(--dim);}'
       + '.fng-rv-v{color:#dbe3f0;word-break:break-word;}'
       + '.fng-rv-prop .fng-in,.fng-rv-prop .fng-sel,.fng-rv-prop .fng-ta{flex:1;min-width:0;}'
-      + '.fng-rv-empty{color:var(--dim);font-style:italic;font-size:12.5px;}'
+      + '.fng-rv-empty{color:var(--dim);font-style:italic;font-size:13.5px;}'
       + '@media (max-width:640px){.fng-rv{flex-direction:column;}.fng-rv-nav{width:100%;flex-direction:row;flex-wrap:wrap;}.fng-rv-sides{grid-template-columns:1fr;}}'
       + '.fng-devpick{display:flex;flex-direction:column;gap:6px;}'
       + '.fng-devtabs{display:flex;flex-wrap:wrap;gap:4px;}'
-      + '.fng-devtab{background:var(--pn);border:1px solid var(--bd);border-radius:6px;color:var(--dim);font-size:11px;padding:5px 10px;cursor:pointer;}'
+      + '.fng-devtab{background:var(--pn);border:1px solid var(--bd);border-radius:6px;color:var(--dim);font-size:12px;padding:5px 10px;cursor:pointer;}'
       + '.fng-devtab:hover{border-color:var(--ac);color:var(--ac);}'
       + '.fng-devtab.on{color:var(--ac);border-color:var(--ac);background:rgba(74,240,160,.08);}'
       + '.fng-devrow{display:flex;gap:6px;align-items:flex-start;}'
       + '.fng-devlist{flex:1;display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-height:34px;}'
-      + '.fng-devopt{background:var(--pn);border:1px solid var(--bd);border-radius:6px;color:#eaf0fa;font-size:12px;padding:6px 11px;cursor:pointer;}'
+      + '.fng-devopt{background:var(--pn);border:1px solid var(--bd);border-radius:6px;color:#eaf0fa;font-size:13px;padding:6px 11px;cursor:pointer;}'
       + '.fng-devopt:hover{border-color:var(--ac);}'
       + '.fng-devopt.on{border-color:var(--ac);color:var(--ac);background:rgba(74,240,160,.12);}'
-      + '.fng-devbtn{width:100%;text-align:left;padding:7px 9px;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
+      + '.fng-devbtn{width:100%;text-align:left;padding:7px 9px;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
       + '.fng-ph{color:#5b647d;font-style:italic;}'
       + '.fng-doccopy{position:absolute;top:8px;right:8px;z-index:2;}'
       + '.fng-elab{position:absolute;top:42px;right:8px;z-index:2;display:inline-flex;align-items:center;gap:6px;background:#007782;border:1px solid rgba(255,255,255,.18);border-radius:7px;padding:4px 8px 4px 6px;text-decoration:none;box-shadow:0 2px 8px rgba(0,0,0,.32);transition:transform .1s,box-shadow .15s,filter .15s;}'
       + '.fng-elab:hover{transform:translateY(-1px);box-shadow:0 5px 14px rgba(0,0,0,.42);filter:brightness(1.08);}'
       + '.fng-elab img{height:22px;display:block;}'
-      + '.fng-elab-go{color:#fff;font-size:15px;line-height:1;font-weight:700;}'
+      + '.fng-elab-go{color:#fff;font-size:16px;line-height:1;font-weight:700;}'
       + '.fng-modal-card.fng-dmcard{width:92vw;max-width:880px;height:min(80vh,640px);display:flex;flex-direction:column;overflow:hidden;}'
       + '.fng-dmcard .fng-dmbody{flex:1 1 auto;min-height:0;align-items:stretch;overflow:hidden;}'
       + '.fng-dmcard .fng-dmleft{max-height:none;min-height:0;}'
       + '.fng-dmcard .fng-dmmid{max-height:none;min-height:0;}'
-      + '.fng-warn{background:rgba(247,201,72,.08);border:1px solid #6b5a1f;border-left:3px solid #f7c948;border-radius:6px;color:#e7d9a8;font-size:12.5px;line-height:1.55;padding:9px 12px;margin:0 0 16px;}'
+      + '.fng-warn{background:rgba(247,201,72,.08);border:1px solid #6b5a1f;border-left:3px solid #f7c948;border-radius:6px;color:#e7d9a8;font-size:13.5px;line-height:1.55;padding:9px 12px;margin:0 0 16px;}'
       + '.fng-warn b{color:#f7c948;}'
       + '.fng-dmbody{display:flex;gap:12px;align-items:flex-start;flex-wrap:nowrap;}'
       + '.fng-dmleft{flex:0 0 180px;border:1px solid var(--bd);border-radius:8px;padding:8px;max-height:62vh;overflow:auto;}'
       + '.fng-dmmid{flex:1 1 0;min-width:0;max-height:62vh;overflow:auto;}'
       + '.fng-dmright{flex:1 1 0;min-width:0;max-height:62vh;overflow:auto;}'
       + '.fng-tree{display:flex;flex-direction:column;gap:2px;}'
-      + '.fng-treefolder{text-align:left;background:transparent;border:none;color:#cdd5e3;font-size:13px;font-weight:600;padding:6px 8px;cursor:pointer;border-radius:6px;}'
-      + '.fng-treefolder.sub{font-weight:500;font-size:12px;color:#aab4cc;}'
+      + '.fng-treefolder{text-align:left;background:transparent;border:none;color:#cdd5e3;font-size:14px;font-weight:600;padding:6px 8px;cursor:pointer;border-radius:6px;}'
+      + '.fng-treefolder.sub{font-weight:500;font-size:13px;color:#c2cce4;}'
       + '.fng-treefolder:hover{background:var(--pn);}'
       + '.fng-treekids{display:flex;flex-direction:column;gap:2px;margin-left:10px;border-left:1px solid var(--bd);padding-left:6px;}'
-      + '.fng-treeitem{text-align:left;background:transparent;border:none;color:#aab4cc;font-size:12px;padding:5px 8px;cursor:pointer;border-radius:6px;}'
+      + '.fng-treeitem{text-align:left;background:transparent;border:none;color:#c2cce4;font-size:13px;padding:5px 8px;cursor:pointer;border-radius:6px;}'
       + '.fng-treeitem:hover{background:var(--pn);color:#eaf0fa;}'
       + '.fng-treeitem.on{background:rgba(74,240,160,.12);color:var(--ac);}'
-      + '.fng-treeadd{text-align:left;background:transparent;border:none;color:var(--dim);font-size:11px;padding:5px 8px;cursor:pointer;}'
+      + '.fng-treeadd{text-align:left;background:transparent;border:none;color:var(--dim);font-size:12px;padding:5px 8px;cursor:pointer;}'
       + '.fng-treeadd:hover{color:var(--ac);}'
       + '.fng-favrow{display:flex;align-items:center;gap:2px;border-radius:6px;}'
       + '.fng-favrow.on{background:rgba(74,240,160,.12);}'
-      + '.fng-favname{flex:1;text-align:left;background:transparent;border:none;color:#aab4cc;font-size:12px;padding:5px 8px;cursor:pointer;border-radius:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}'
+      + '.fng-favname{flex:1;text-align:left;background:transparent;border:none;color:#c2cce4;font-size:13px;padding:5px 8px;cursor:pointer;border-radius:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}'
       + '.fng-favname:hover{color:#eaf0fa;}'
       + '.fng-favrow.on .fng-favname{color:var(--ac);}'
-      + '.fng-favstar{background:transparent;border:none;color:#f0c419;font-size:13px;line-height:1;cursor:pointer;padding:4px 7px;border-radius:6px;}'
+      + '.fng-favstar{background:transparent;border:none;color:#f0c419;font-size:14px;line-height:1;cursor:pointer;padding:4px 7px;border-radius:6px;}'
       + '.fng-favstar:hover{background:var(--pn);}'
       + '.fng-devpickgrid{display:flex;gap:10px;flex-wrap:wrap;}'
-      + '.fng-pickcard{flex:1 1 200px;display:flex;flex-direction:column;gap:4px;align-items:flex-start;background:var(--pn);border:1px solid var(--bd);border-radius:8px;color:#eaf0fa;font-size:14px;padding:14px;cursor:pointer;text-align:left;}'
+      + '.fng-pickcard{flex:1 1 200px;display:flex;flex-direction:column;gap:4px;align-items:flex-start;background:var(--pn);border:1px solid var(--bd);border-radius:8px;color:#eaf0fa;font-size:15px;padding:14px;cursor:pointer;text-align:left;}'
       + '.fng-pickcard:hover{border-color:var(--ac);}'
-      + '.fng-pickcard .fng-muted{font-size:11px;}'
+      + '.fng-pickcard .fng-muted{font-size:12px;}'
       + '.fng-devpicklist{display:flex;flex-direction:column;gap:6px;max-height:340px;overflow:auto;margin-top:4px;}'
-      + '.fng-pickrow{text-align:left;background:var(--pn);border:1px solid var(--bd);border-radius:6px;color:#eaf0fa;font-size:13px;padding:9px 12px;cursor:pointer;}'
+      + '.fng-pickrow{text-align:left;background:var(--pn);border:1px solid var(--bd);border-radius:6px;color:#eaf0fa;font-size:14px;padding:9px 12px;cursor:pointer;}'
       + '.fng-pickrow:hover{border-color:var(--ac);}'
       + '.fng-pickrow.on{border-color:var(--ac);color:var(--ac);background:rgba(74,240,160,.12);}'
-      + '.fng-btn{background:transparent;border:1px solid var(--bd);border-radius:6px;color:#aab4cc;font-size:12px;padding:7px 12px;cursor:pointer;}'
+      + '.fng-btn{background:transparent;border:1px solid var(--bd);border-radius:6px;color:#c2cce4;font-size:13px;padding:7px 12px;cursor:pointer;}'
       + '.fng-btn:hover{border-color:var(--ac);color:var(--ac);}'
       + '.fng-btn.pri{border-color:var(--ac);color:var(--ac);}'
-      + '.fng-btn.sm{padding:4px 9px;font-size:11px;}'
+      + '.fng-btn.sm{padding:4px 9px;font-size:12px;}'
       + '.fng-btn:disabled,.fng-btn.saved{opacity:.45;cursor:default;border-color:var(--bd);color:var(--dim);}'
       + '.fng-acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;}'
       // example/preview box
       + '.fng-ex{background:var(--sf);border:1px solid var(--ac);border-radius:8px;padding:12px 14px;margin-top:12px;}'
-      + '.fng-ex .h{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--ac);margin-bottom:6px;}'
-      + '.fng-name{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:16px;color:#fff;word-break:break-all;min-height:20px;}'
+      + '.fng-ex .h{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ac);margin-bottom:6px;}'
+      + '.fng-name{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:17px;color:#fff;word-break:break-all;min-height:20px;}'
       + '.fng-name .sep{color:#465}'
       + '.fng-namerow{display:flex;align-items:flex-start;gap:10px;}'
       + '.fng-namerow .fng-name{flex:1;min-width:0;}'
       + '.fng-copy{flex:none;background:transparent;border:1px solid var(--bd);border-radius:6px;color:var(--dim);cursor:pointer;padding:5px 7px;line-height:0;}'
       + '.fng-copy:hover{border-color:var(--ac);color:var(--ac);}'
-      + '.fng-path{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;color:#9fb0cf;margin-top:7px;word-break:break-all;}'
+      + '.fng-path{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;color:#b7c8e7;margin-top:7px;word-break:break-all;}'
       + '.fng-pathrow{display:flex;align-items:center;gap:8px;margin-top:7px;}'
       + '.fng-pathrow .fng-path{flex:1;min-width:0;margin-top:0;}'
       // tiles
       + '.fng-tiles{display:flex;flex-wrap:wrap;gap:7px;min-height:38px;padding:8px;border:1px dashed var(--bd);border-radius:8px;background:rgba(255,255,255,.012);}'
-      + '.fng-tile{display:inline-flex;align-items:center;gap:7px;background:var(--pn);border:1px solid var(--bd);border-radius:7px;padding:6px 9px;font-size:12px;color:#eaf0fa;cursor:grab;user-select:none;}'
+      + '.fng-tile{display:inline-flex;align-items:center;gap:7px;background:var(--pn);border:1px solid var(--bd);border-radius:7px;padding:6px 9px;font-size:13px;color:#eaf0fa;cursor:grab;user-select:none;}'
       + '.fng-tile .dot{width:7px;height:7px;border-radius:2px;flex:none;}'
       + '.fng-tile{transition:background .1s ease,border-color .1s ease;}'
       + '.fng-tile.dragging{opacity:.4;border-style:dashed;border-color:var(--ac);}'
-      + '.fng-tile .rm{border:none;background:none;color:var(--dim);cursor:pointer;font-size:13px;padding:0;line-height:1;}'
+      + '.fng-tile .rm{border:none;background:none;color:var(--dim);cursor:pointer;font-size:14px;padding:0;line-height:1;}'
       + '.fng-tile .rm:hover{color:#f07080;}'
-      + '.fng-avail .fng-tile{cursor:pointer;border-style:dashed;color:#aab4cc;}'
+      + '.fng-avail .fng-tile{cursor:pointer;border-style:dashed;color:#c2cce4;}'
       + '.fng-avail .fng-tile:hover{border-color:var(--ac);color:var(--ac);}'
       + '.fng-mini{display:flex;flex-wrap:wrap;gap:6px;align-items:center;}'
-      + '.fng-chiprm{display:inline-flex;align-items:center;gap:6px;background:var(--pn);border:1px solid var(--bd);border-radius:14px;padding:4px 6px 4px 11px;font-size:12px;}'
+      + '.fng-chiprm{display:inline-flex;align-items:center;gap:6px;background:var(--pn);border:1px solid var(--bd);border-radius:14px;padding:4px 6px 4px 11px;font-size:13px;}'
       + '.fng-chiprm button{border:none;background:none;color:var(--dim);cursor:pointer;}'
       + '.fng-chiprm button:hover{color:#f07080;}'
       + '.fng-card{border:1px solid var(--bd);border-radius:8px;padding:12px;margin-top:8px;background:rgba(255,255,255,.012);}'
-      + '.fng-adv summary{cursor:pointer;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);margin-top:18px;}'
+      + '.fng-adv summary{cursor:pointer;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);margin-top:18px;}'
       + '.fng-adv[open] summary{color:var(--ac);}'
-      + '.fng-muted{color:var(--dim);font-size:12px;}'
+      + '.fng-muted{color:var(--dim);font-size:13px;}'
       + '.fng-sep{width:46px;text-align:center;}'
-      + '.fng-auto{font-size:9px;letter-spacing:.05em;color:#0d0f12;background:var(--ac);border-radius:3px;padding:1px 5px;text-transform:none;}'
-      + '.fng-ro{background:var(--sf);border:1px dashed var(--bd);border-radius:6px;color:#9fb0cf;font-size:13px;padding:7px 9px;}'
-      + '.fng-hint{margin-top:5px;font-size:11px;}'
+      + '.fng-auto{font-size:10px;letter-spacing:.05em;color:#0d0f12;background:var(--ac);border-radius:3px;padding:1px 5px;text-transform:none;}'
+      + '.fng-ro{background:var(--sf);border:1px dashed var(--bd);border-radius:6px;color:#b7c8e7;font-size:14px;padding:7px 9px;}'
+      + '.fng-hint{margin-top:5px;font-size:12px;}'
       + '.fng-x2{color:var(--dim);cursor:pointer;text-decoration:underline;}'
       + '.fng-x2:hover{color:#f07080;}'
       // rendered metadata document + toolbar
       + '.fng-toolbar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;background:var(--pn);border:1px solid var(--bd);border-bottom:none;border-radius:8px 8px 0 0;padding:6px 8px;}'
-      + '.fng-tsel{background:var(--sf);border:1px solid var(--bd);border-radius:5px;color:#eaf0fa;font-size:12px;padding:3px 6px;}'
-      + '.fng-tb{background:var(--sf);border:1px solid var(--bd);border-radius:5px;color:#cdd5e3;font-size:12px;min-width:28px;padding:3px 7px;cursor:pointer;}'
+      + '.fng-tsel{background:var(--sf);border:1px solid var(--bd);border-radius:5px;color:#eaf0fa;font-size:13px;padding:3px 6px;}'
+      + '.fng-tb{background:var(--sf);border:1px solid var(--bd);border-radius:5px;color:#cdd5e3;font-size:13px;min-width:28px;padding:3px 7px;cursor:pointer;}'
       + '.fng-tb:hover{border-color:var(--ac);color:var(--ac);}'
       + '.fng-tdiv{width:1px;align-self:stretch;background:var(--bd);margin:0 3px;}'
       + '.fng-doc{background:var(--sf);border:1px solid var(--bd);border-radius:0 0 8px 8px;padding:14px 16px;line-height:1.6;}'
@@ -627,7 +627,7 @@
       + '.fng-modal{position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:9999;}'
       + '.fng-modal-card{background:var(--pn);border:1px solid var(--bd);border-radius:10px;padding:18px;width:min(440px,92vw);max-height:85vh;overflow:auto;box-shadow:0 12px 40px rgba(0,0,0,.5);}'
       + '.fng-modal-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}'
-      + '.fng-modal-x{background:none;border:none;color:var(--dim);font-size:16px;cursor:pointer;}'
+      + '.fng-modal-x{background:none;border:none;color:var(--dim);font-size:17px;cursor:pointer;}'
       + '.fng-modal-x:hover{color:#f07080;}'
       // required / validation / copy feedback / recent
       + '.fng-l.req:after{content:" *";color:var(--ac);}'
@@ -635,7 +635,7 @@
       + '.fng-devempty{border-color:#e0533a !important;}'
       + '.fng-copy.ok{border-color:var(--ac);color:var(--ac);}'
       + '.fng-recent{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:3px 0;}'
-      + '.fng-recent code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;color:#ffd9a0;word-break:break-all;}'
+      + '.fng-recent code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;color:#ffd9a0;word-break:break-all;}'
       + '.fng-bang{color:#f0604a;font-weight:700;}'
       + '.fng-dupcell{color:#f0604a;}'
       + '.fng-dupin{border-color:#f0604a !important;}'
@@ -822,7 +822,7 @@
       + list.map(function (c) { return '<option value="' + esc(c.id) + '"' + (c.id === actId ? ' selected' : '') + '>' + esc(c.name) + '</option>'; }).join('') + '</select>';
     var editor = active
       ? '<div class="fng-f" style="margin-top:8px"><span class="fng-l">Settings — one "Key: value" per line (saved on this machine; added to the metadata when this device is in use)</span>'
-        + '<textarea class="fng-ta" style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px" oninput="' + R() + '.editConfig(this.value)">' + esc(active.text || '') + '</textarea></div>'
+        + '<textarea class="fng-ta" style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px" oninput="' + R() + '.editConfig(this.value)">' + esc(active.text || '') + '</textarea></div>'
       : '<p class="fng-muted" style="margin-top:6px">No configuration selected — create one with <b>New</b>.</p>';
     return '<div class="fng-card" style="margin-top:10px"><h3 style="margin-top:0">My configurations <span class="fng-muted" style="text-transform:none;letter-spacing:0">· ' + esc(op) + ' · this machine</span></h3>'
       + '<div class="fng-row" style="align-items:flex-end"><div class="fng-f" style="flex:1;max-width:280px"><span class="fng-l">Saved configurations</span>' + sel + '</div>'
@@ -855,7 +855,7 @@
         desc = '<div class="fng-card" style="margin-top:10px"><h3 style="margin-top:0">Description <span class="fng-muted" style="text-transform:none;letter-spacing:0">· shared library · editable</span></h3>'
           + '<div class="fng-f"><span class="fng-l">Device name (used in the file name)</span><input class="fng-in" value="' + esc(d.name) + '" onchange="' + R() + '.devmgrSetLabName(\'' + p.id + '\',this.value)"></div>'
           + '<div class="fng-f" style="margin-top:6px"><span class="fng-l">Generic info — one "Key: value" per line (added to metadata)</span>'
-          + '<textarea class="fng-ta" style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;min-height:240px" oninput="' + R() + '.devmgrSetLabInfo(\'' + p.id + '\',this.value)">' + esc(infoText) + '</textarea></div>'
+          + '<textarea class="fng-ta" style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;min-height:240px" oninput="' + R() + '.devmgrSetLabInfo(\'' + p.id + '\',this.value)">' + esc(infoText) + '</textarea></div>'
           + '<div class="fng-row" style="margin-top:8px;align-items:center"><button class="fng-btn sm" onclick="' + R() + '.devmgrDelLabDevice(\'' + p.id + '\')">Remove device</button>'
           + '<span class="fng-muted">Edits are kept on this machine; use <b>Publish changes</b> in Manage to send them to a master.</span></div></div>';
       }
@@ -949,7 +949,7 @@
         + list.map(function (c) { return '<option value="' + esc(c.id) + '"' + (c.id === actId ? ' selected' : '') + '>' + esc(c.name) + '</option>'; }).join('') + '</select>';
       var editor = active
         ? '<div class="fng-f" style="margin-top:8px"><span class="fng-l">Settings — one "Key: value" per line (saved on this machine; added to the metadata when this device is in use)</span>'
-          + '<textarea class="fng-ta" style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;min-height:120px" oninput="' + R() + '.editConfig(this.value)">' + esc(active.text || '') + '</textarea></div>'
+          + '<textarea class="fng-ta" style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;min-height:120px" oninput="' + R() + '.editConfig(this.value)">' + esc(active.text || '') + '</textarea></div>'
         : '<p class="fng-muted" style="margin-top:6px">No configuration selected — create one with <b>New</b>.</p>';
       body = '<p class="fng-muted" style="margin-top:0">Operator <b>' + esc(op) + '</b> · device <b>' + esc(dev) + '</b> · this machine.</p>'
         + '<div class="fng-row" style="align-items:flex-end"><div class="fng-f" style="flex:1;max-width:280px"><span class="fng-l">Saved configurations</span>' + sel + '</div>'
@@ -1239,6 +1239,9 @@
     // attach the operator's active experiment configuration (local to this machine)
     var cfg = activeConfig();
     if (cfg) { var cs = parseSettings(cfg.text); if (Object.keys(cs).length) h.config = { name: cfg.name, settings: cs }; }
+    // paths in the metadata are recorded OS-agnostically (forward slashes), independent of the
+    // separator the user typed for their local root. The Folder card keeps native separators.
+    ['relPath', 'fullPath', 'literalPath'].forEach(function (k) { if (h[k]) h[k] = String(h[k]).replace(/\\/g, '/'); });
     return h;
   }
   // The metadata header as Markdown — renders nicely in any Markdown viewer / ELN.
@@ -1287,7 +1290,7 @@
       html += '</tbody></table>';
     }
     if (h.config) {
-      html += '<p style="margin-top:10px"><b>Configuration — ' + esc(h.config.name) + '</b> <span style="color:#6b7592">(this machine)</span></p><table class="fng-doc-t"><tbody>';
+      html += '<p style="margin-top:10px"><b>Configuration — ' + esc(h.config.name) + '</b> <span style="color:#838daa">(this machine)</span></p><table class="fng-doc-t"><tbody>';
       Object.keys(h.config.settings).forEach(function (k) { html += '<tr><td>' + esc(k) + '</td><td>' + esc(h.config.settings[k]) + '</td></tr>'; });
       html += '</tbody></table>';
     }
@@ -1425,17 +1428,17 @@
       } else {
         html += '<div class="fng-pathrow"><div class="fng-path" title="Folder (relative)">' + esc(relDir || '(your local root folder)') + '</div>'
           + '<button class="fng-copy" id="fng-localcopy" title="Copy folder path" onclick="' + R() + '.copyLocalPath()">' + cs + '</button></div>';
-        html += '<div class="fng-muted" style="font-size:11px;margin-top:3px">Set your local root folder below to show the full folder path.</div>';
+        html += '<div class="fng-muted" style="font-size:12px;margin-top:3px">Set your local root folder below to show the full folder path.</div>';
       }
-      if (ROOT.ui.createdSubtree && ROOT.ui.createdSubtree === folderSubtree()) html += '<div style="font-size:11px;margin-top:3px;color:#2CC98A">✓ Subfolders created on this machine.</div>';
+      if (ROOT.ui.createdSubtree && ROOT.ui.createdSubtree === folderSubtree()) html += '<div style="font-size:12px;margin-top:3px;color:#2CC98A">✓ Subfolders created on this machine.</div>';
       var editing = !b || ROOT.ui.rootEdit;
-      html += '<div class="fng-f" style="margin-top:8px"><span class="fng-l">Local root folder <span class="fng-muted" style="font-weight:400">(the full path where you save data on this machine — type or paste it once)</span></span>';
+      html += '<div class="fng-f" style="margin-top:6px"><span class="fng-l">Local root folder <span class="fng-muted" style="font-weight:400">(the full path where you save data on this machine — type or paste it once)</span></span>';
       if (editing) {
         html += '<div class="fng-row" style="margin-top:4px;gap:8px;align-items:center;flex-wrap:wrap">'
           + '<input class="fng-in" id="fng-rootin" style="flex:1;min-width:200px" value="' + esc(b) + '" placeholder="full path incl. drive, e.g. A:&#92;DATA" oninput="' + R() + '.rootDirty()">'
           + '<button class="fng-btn sm" id="fng-rootset"' + (b ? '' : ' disabled') + ' onclick="' + R() + '.setRootFromInput()">' + (b ? 'Close' : 'Set') + '</button>'
           + '</div>'
-          + '<p class="fng-muted" style="font-size:11px;margin:4px 0 0">Type the <b>full path including the drive letter</b> (e.g. <code>A:&#92;DATA</code>). On <b>Set</b>, Chrome/Edge asks you to confirm access to that folder once, so the tool can create the subfolders there.</p>';
+          + '<p class="fng-muted" style="font-size:12px;margin:4px 0 0">Type the <b>full path including the drive letter</b> (e.g. <code>A:&#92;DATA</code>). On <b>Set</b>, Chrome/Edge asks you to confirm access to that folder once, so the tool can create the subfolders there.</p>';
       } else {
         html += '<div class="fng-row" style="margin-top:4px;gap:8px;align-items:center;flex-wrap:wrap">'
           + '<span class="fng-path" style="flex:1;min-width:0;margin-top:0;word-break:break-all">' + esc(b) + '</span>'
@@ -1448,9 +1451,9 @@
     html += fsSaveSection(folder);
     var root = archiveRoot();
     if (folder && root) {
-      html += '<div class="fng-muted" style="font-size:11px;margin-top:8px">Recommended transfer destination (NASAC): <code>' + esc(root) + '</code> — move the raw data here after acquisition (edit this path in Manage › Build templates).</div>';
-      if (looksLocalRoot(root)) html += '<div style="font-size:11px;margin-top:2px;color:#f0a860">⚠ This looks like a local drive. Raw data should be archived on NASAC (a //server/share path).</div>';
-      html += '<label style="display:flex;gap:6px;align-items:center;font-size:11px;color:#8b95a9;margin-top:6px;cursor:pointer">'
+      html += '<div class="fng-muted" style="font-size:12px;margin-top:8px">Recommended transfer destination (NASAC): <code>' + esc(root) + '</code> — move the raw data here after acquisition (edit this path in Manage › Build templates).</div>';
+      if (looksLocalRoot(root)) html += '<div style="font-size:12px;margin-top:2px;color:#f0a860">⚠ This looks like a local drive. Raw data should be archived on NASAC (a //server/share path).</div>';
+      html += '<label style="display:flex;gap:6px;align-items:center;font-size:12px;color:#a3adc1;margin-top:6px;cursor:pointer">'
         + '<input type="checkbox"' + (showLiteralPath() ? ' checked' : '') + ' onchange="' + R() + '.toggleLiteralPath(this.checked)"> '
         + 'Also record the full transfer path (NASAC) in the metadata</label>';
       if (showLiteralPath()) html += '<div class="fng-path" style="opacity:.85;margin-top:4px" title="Full path after transferring to NASAC — recommended target, not verified">' + esc(curPath()) + '</div>';
@@ -1582,11 +1585,12 @@
     if (!folder) return '';
     if (!fsSupported()) {
       return '<div class="fng-save"><div class="fng-l">Folder tree (this machine)</div>'
-        + '<p class="fng-muted" style="font-size:11px;margin:4px 0 0">Creating the folder tree needs Chrome or Edge. In this browser, use <b>Download .json</b> above and file it under the path shown.</p></div>';
+        + '<p class="fng-muted" style="font-size:12px;margin:4px 0 0">Creating the folder tree needs Chrome or Edge. In this browser, use <b>Download .json</b> above and file it under the path shown.</p></div>';
     }
-    return '<div class="fng-save"><div class="fng-l">Folder tree (this machine)</div>'
-      + '<div class="fng-row" style="margin-top:8px"><button class="fng-btn pri" onclick="' + R() + '.createTree()">Create folder tree</button></div>'
-      + '<p class="fng-muted" style="font-size:11px;margin:6px 0 0">Creates the subfolders under your <b>local root folder</b> on this machine (only the missing ones), and the metadata path switches from <i>Recommended local full path</i> to <i>Full path</i>. Save raw data locally during acquisition; transfer to NASAC afterwards.</p></div>';
+    return '<div class="fng-save"><div class="fng-row" style="justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">'
+      + '<span class="fng-l" style="margin:0">Folder tree (this machine)</span>'
+      + '<button class="fng-btn pri" onclick="' + R() + '.createTree()">Create folder tree</button></div>'
+      + '<p class="fng-muted" style="font-size:12px;margin:5px 0 0">Creates the missing subfolders under your <b>local root folder</b>; the metadata path then switches from <i>Recommended local full path</i> to <i>Full path</i>.</p></div>';
   }
 
   function renderFsConfirm() {
@@ -1600,9 +1604,9 @@
     return '<div class="fng-modal" onclick="if(event.target===this)' + R() + '.fsConfirmNo()">'
       + '<div class="fng-modal-card"><div class="fng-modal-h"><h3 style="margin:0">Create folder tree</h3>'
       + '<button class="fng-modal-x" title="Cancel" onclick="' + R() + '.fsConfirmNo()">✕</button></div>'
-      + '<p style="margin:0;font-size:13px">Inside your local root folder <b>' + esc(label) + '</b>, target:</p>'
+      + '<p style="margin:0;font-size:14px">Inside your local root folder <b>' + esc(label) + '</b>, target:</p>'
       + '<div class="fng-path" style="margin:4px 0">' + esc(pend.segs.join('/') || '(root)') + '</div>' + mk
-      + '<p class="fng-muted" style="margin:6px 0 0;font-size:12px">No file is written now — the metadata is saved into this folder when you copy it or open eLabNext.</p>'
+      + '<p class="fng-muted" style="margin:6px 0 0;font-size:13px">No file is written now — the metadata is saved into this folder when you copy it or open eLabNext.</p>'
       + '<div class="fng-acts" style="margin-top:12px"><button class="fng-btn" onclick="' + R() + '.fsConfirmNo()">Cancel</button>'
       + '<button class="fng-btn pri" onclick="' + R() + '.fsConfirmYes()">Create folders</button></div></div></div>';
   }
@@ -1874,27 +1878,27 @@
     if (!guard()) return;
     var o = sidecar(), h = o.header; if (!h || !h.fileName) return;
     pushHistory(h.fileName); saveFieldHistories();
-    var rows = '<tr><td style="color:#6b7592;padding-right:10px">File name</td><td><strong>' + esc(h.fileName) + '</strong></td></tr>';
-    if (h.fullPath) rows += '<tr><td style="color:#6b7592">' + esc(localPathLabel()) + '</td><td>' + esc(h.fullPath) + '</td></tr>'; else if (h.relPath) rows += '<tr><td style="color:#6b7592">Relative path</td><td>' + esc(h.relPath) + '</td></tr>';
-    if (h.literalPath) rows += '<tr><td style="color:#6b7592">Recommended transfer path (NASAC)</td><td>' + esc(h.literalPath) + '</td></tr>';
-    rows += '<tr><td style="color:#6b7592">Lab</td><td>' + esc(h.lab) + '</td></tr>'
-          + '<tr><td style="color:#6b7592">Template</td><td>' + esc(h.template) + '</td></tr>';
-    if (h.operatorEmail) rows += '<tr><td style="color:#6b7592">Operator email</td><td>' + esc(h.operatorEmail) + '</td></tr>';
-    if (h.operatorOrcid) rows += '<tr><td style="color:#6b7592">Operator ORCID iD</td><td>' + esc(h.operatorOrcid) + '</td></tr>';
+    var rows = '<tr><td style="color:#838daa;padding-right:10px">File name</td><td><strong>' + esc(h.fileName) + '</strong></td></tr>';
+    if (h.fullPath) rows += '<tr><td style="color:#838daa">' + esc(localPathLabel()) + '</td><td>' + esc(h.fullPath) + '</td></tr>'; else if (h.relPath) rows += '<tr><td style="color:#838daa">Relative path</td><td>' + esc(h.relPath) + '</td></tr>';
+    if (h.literalPath) rows += '<tr><td style="color:#838daa">Recommended transfer path (NASAC)</td><td>' + esc(h.literalPath) + '</td></tr>';
+    rows += '<tr><td style="color:#838daa">Lab</td><td>' + esc(h.lab) + '</td></tr>'
+          + '<tr><td style="color:#838daa">Template</td><td>' + esc(h.template) + '</td></tr>';
+    if (h.operatorEmail) rows += '<tr><td style="color:#838daa">Operator email</td><td>' + esc(h.operatorEmail) + '</td></tr>';
+    if (h.operatorOrcid) rows += '<tr><td style="color:#838daa">Operator ORCID iD</td><td>' + esc(h.operatorOrcid) + '</td></tr>';
     Object.keys(h.fields || {}).forEach(function (k) {
-      rows += '<tr><td style="color:#6b7592">' + esc(k) + '</td><td>' + esc(h.fields[k] || '—') + '</td></tr>';
+      rows += '<tr><td style="color:#838daa">' + esc(k) + '</td><td>' + esc(h.fields[k] || '—') + '</td></tr>';
     });
     if (h.device) {
-      rows += '<tr><td style="color:#6b7592">Device info</td><td><strong>' + esc(h.device.name) + '</strong></td></tr>';
+      rows += '<tr><td style="color:#838daa">Device info</td><td><strong>' + esc(h.device.name) + '</strong></td></tr>';
       Object.keys(h.device.info).forEach(function (k) {
-        rows += '<tr><td style="color:#6b7592;padding-left:14px">↳ ' + esc(k) + '</td><td>' + esc(h.device.info[k]) + '</td></tr>';
+        rows += '<tr><td style="color:#838daa;padding-left:14px">↳ ' + esc(k) + '</td><td>' + esc(h.device.info[k]) + '</td></tr>';
       });
     }
-    var html = '<div style="font-family:monospace;font-size:13px;color:#e8edf5;">'
-      + '<div style="color:#4af0a0;font-size:11px;letter-spacing:.1em;margin-bottom:6px;">FAIR FILE NAMER · FILE METADATA</div>'
-      + '<table style="border-collapse:collapse;font-size:13px;">' + rows + '</table>'
-      + '<div style="font-size:11px;color:#6b7592;margin-top:6px;">generated ' + esc(h.generatedAt) + '</div>'
-      + (htmlToText(o.notesHtml || '').replace(/\u00a0/g, '').trim() ? '<div style="font-size:12px;color:#9fb0cf;margin-top:6px;"><b>Notes:</b><br>' + o.notesHtml + '</div>' : '') + '</div>';
+    var html = '<div style="font-family:monospace;font-size:14px;color:#e8edf5;">'
+      + '<div style="color:#4af0a0;font-size:12px;letter-spacing:.1em;margin-bottom:6px;">FAIR FILE NAMER · FILE METADATA</div>'
+      + '<table style="border-collapse:collapse;font-size:14px;">' + rows + '</table>'
+      + '<div style="font-size:12px;color:#838daa;margin-top:6px;">generated ' + esc(h.generatedAt) + '</div>'
+      + (htmlToText(o.notesHtml || '').replace(/\u00a0/g, '').trim() ? '<div style="font-size:13px;color:#b7c8e7;margin-top:6px;"><b>Notes:</b><br>' + o.notesHtml + '</div>' : '') + '</div>';
     var sec = section || (ROOT._sectionData && ROOT._sectionData.section);
     try { if (sec && sec.setContent) sec.setContent(html); } catch (e) {}
     try { if (sec && sec.saveHtmlContent) sec.saveHtmlContent(html, expJournalID || (ROOT._sectionData && ROOT._sectionData.expJournalID)); } catch (e) {}
@@ -1949,7 +1953,7 @@
       + '</div>'
       + '<div class="fng-f" style="max-width:640px;margin-top:8px"><span class="fng-l">GitLab Web IDE link — derived automatically from this page&rsquo;s address</span>'
       + '<input class="fng-in" readonly value="' + esc(publishLink() || 'set window.FNG_PUBLISH_BASE in index.html') + '"></div>'
-      + (col ? '<p style="margin-top:6px;color:#f0604a;font-size:12px">⚠ Resolve the duplicate identifiers flagged with <b>!</b> below before publishing.</p>'
+      + (col ? '<p style="margin-top:6px;color:#f0604a;font-size:13px">⚠ Resolve the duplicate identifiers flagged with <b>!</b> below before publishing.</p>'
              : '<p class="fng-muted" style="margin-top:6px">Your edits are kept on this machine automatically. <b>Publish changes</b> downloads <code>library.json</code> and copies it — send it to a master to commit, or commit it yourself if you have GitLab access.</p>');
 
     var warn = '<div class="fng-warn">⚠ Anyone can make changes for your lab here, but changes only take effect once a '
@@ -1965,7 +1969,7 @@
           ? '<button class="fng-btn pri" title="Download your updated library.json and get step-by-step GitLab instructions to publish it to the lab. Do this after making changes so they reach everyone." onclick="' + R() + '.publish()">Publish changes</button>'
           : '<button class="fng-btn" disabled title="No unpublished changes yet. Edit a template, device, lab or operator and this button lights up.">Publish changes</button>');
     var note = col
-      ? '<p style="margin-top:6px;color:#f0604a;font-size:12px">⚠ Resolve the duplicate identifiers flagged with <b>!</b> first.</p>'
+      ? '<p style="margin-top:6px;color:#f0604a;font-size:13px">⚠ Resolve the duplicate identifiers flagged with <b>!</b> first.</p>'
       : (pending
           ? '<p class="fng-muted" style="margin-top:6px"><b>You have unpublished changes.</b> Click <b>Publish changes</b> to send them to the lab.</p>'
           : '<p class="fng-muted" style="margin-top:6px">No unpublished changes.</p>');
@@ -2208,7 +2212,7 @@
         + '<input class="fng-in' + (dDup ? ' fng-dupin' : '') + '" value="' + esc(d.name) + '" onchange="' + R() + '.setDeviceName(' + i + ',this.value)"></div>'
         + '<button class="fng-btn sm" onclick="' + R() + '.delDevice(' + i + ')">Remove</button></div>'
         + '<div class="fng-f" style="margin-top:6px"><span class="fng-l">Generic info — one "Key: value" per line (added to metadata)</span>'
-        + '<textarea class="fng-ta" style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px" placeholder="Software: ScanImage" oninput="' + R() + '.setDeviceInfo(' + i + ',this.value)">' + esc(infoText) + '</textarea></div></div>';
+        + '<textarea class="fng-ta" style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px" placeholder="Software: ScanImage" oninput="' + R() + '.setDeviceInfo(' + i + ',this.value)">' + esc(infoText) + '</textarea></div></div>';
     }).join('') || '<span class="fng-muted">no devices yet</span>';
 
     return '<div class="fng-card"><h3 style="margin-top:0">Labs</h3>'
@@ -2464,10 +2468,10 @@
       + '<div class="fng-modal-card"><div class="fng-modal-h"><h3 style="margin:0">Publish to the lab</h3>'
       + '<button class="fng-modal-x" title="Close" onclick="' + R() + '.closePublish()">✕</button></div>'
       + '<p class="fng-muted">✓ <code>library.json</code> downloaded &nbsp;·&nbsp; ✓ contents copied to your clipboard.</p>'
-      + '<p style="font-size:13px;margin:4px 0"><b>If you are not a master user:</b> send the downloaded <code>library.json</code> '
+      + '<p style="font-size:14px;margin:4px 0"><b>If you are not a master user:</b> send the downloaded <code>library.json</code> '
       + 'to your lab master and tell them what you changed. A master commits it (only masters have GitLab access).</p>'
-      + '<p style="font-size:13px;margin:10px 0 4px"><b>If you are a master user</b>, commit it now:</p>'
-      + '<ol style="font-size:13px;line-height:1.8;padding-left:20px;margin:6px 0">'
+      + '<p style="font-size:14px;margin:10px 0 4px"><b>If you are a master user</b>, commit it now:</p>'
+      + '<ol style="font-size:14px;line-height:1.8;padding-left:20px;margin:6px 0">'
       + '<li>' + step1 + ' — opens <code>library.json</code> in the editor.</li>'
       + '<li><b>Replace the contents.</b> The new JSON is already on your clipboard: click inside <code>library.json</code>, select all (Ctrl/Cmd+A) and paste (Ctrl/Cmd+V). <span class="fng-muted">Or drag the downloaded <code>library.json</code> onto it in the file tree to overwrite it.</span></li>'
       + '<li>Open <b>Source control</b> in the left sidebar, type a short message, and <b>Commit to <code>main</code></b>.</li>'
@@ -2743,7 +2747,7 @@
       + '<div class="fng-f"><span class="fng-l">Device name (used in the file name)' + (dDup ? ' <span class="fng-bang" title="Another device in this platform has this name — make it unique">!</span>' : '') + '</span>'
       + '<input class="fng-in' + (dDup ? ' fng-dupin' : '') + '" value="' + esc(d.name) + '" onchange="' + R() + '.setPDeviceName(' + di + ',this.value)"></div>'
       + '<div class="fng-f" style="margin-top:6px"><span class="fng-l">Generic info — one "Key: value" per line (added to metadata)</span>'
-      + '<textarea class="fng-ta" style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;min-height:120px" placeholder="Software: Aurora" oninput="' + R() + '.setPDeviceInfo(' + di + ',this.value)">' + esc(infoText) + '</textarea></div></div>';
+      + '<textarea class="fng-ta" style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;min-height:120px" placeholder="Software: Aurora" oninput="' + R() + '.setPDeviceInfo(' + di + ',this.value)">' + esc(infoText) + '</textarea></div></div>';
     return '<div class="fng-dmmid">' + head + desc + '</div>';
   }
   function renderPlatformAdmin() {
@@ -2810,7 +2814,7 @@
       + '<div class="fng-modal-card"><div class="fng-modal-h"><h3 style="margin:0">Publish platform devices</h3>'
       + '<button class="fng-modal-x" title="Close" onclick="' + R() + '.closePlatPublish()">✕</button></div>'
       + '<p class="fng-muted">✓ <code>platform.json</code> downloaded &nbsp;·&nbsp; ✓ contents copied to your clipboard.</p>'
-      + '<ol style="font-size:13px;line-height:1.8;padding-left:20px;margin:6px 0">'
+      + '<ol style="font-size:14px;line-height:1.8;padding-left:20px;margin:6px 0">'
       + '<li><a class="fng-btn pri" href="' + esc(url) + '" target="_blank" rel="noopener">Open platform.json in the Web IDE ▸</a></li>'
       + '<li><b>Replace the contents.</b> The new JSON is already on your clipboard: click inside <code>platform.json</code>, select all (Ctrl/Cmd+A) and paste (Ctrl/Cmd+V). <span class="fng-muted">Or drag the downloaded <code>platform.json</code> onto it in the file tree to overwrite it.</span></li>'
       + '<li>Open <b>Source control</b> in the left sidebar, type a short message, and <b>Commit to <code>main</code></b>. All labs pick it up within minutes.</li>'
@@ -2855,7 +2859,7 @@
     var hint = (typeof HELP_IMG !== 'undefined' && HELP_IMG[file]) ? file : (base + file);
     return '<figure class="fng-shot">'
       + '<img src="' + esc(src) + '" alt="' + esc(caption) + '" loading="lazy" onerror="' + R() + '.shotFail(this)">'
-      + '<div class="fng-shot-ph" style="display:none"><span style="font-size:22px">📷</span><span>Screenshot placeholder</span><span class="fng-muted">image: <code>' + esc(hint) + '</code></span></div>'
+      + '<div class="fng-shot-ph" style="display:none"><span style="font-size:23px">📷</span><span>Screenshot placeholder</span><span class="fng-muted">image: <code>' + esc(hint) + '</code></span></div>'
       + '<figcaption>' + esc(caption) + '</figcaption></figure>';
   }
   function renderHelp() {
@@ -3059,7 +3063,7 @@
           } catch (e2) {
             host.innerHTML = '<div style="padding:16px;font-family:system-ui;line-height:1.5;color:#f0604a">'
               + '<b>FAIR File Namer failed to start.</b><br>' + esc((e2 && e2.message) || 'Unknown error')
-              + '<br><span style="color:#9fb0cf">Reload the page. If it persists, the shared '
+              + '<br><span style="color:#b7c8e7">Reload the page. If it persists, the shared '
               + '<code>library.json</code> may be invalid — check the latest commit.</span></div>';
           }
         }
