@@ -1395,16 +1395,16 @@
     var html = '';
     if (folder) {
       var b = localBase();
-      var rel = relPath();
       var cs = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path></svg>';
-      var fp = fullLocalPath();
-      if (fp) {
-        html += '<div class="fng-pathrow"><div class="fng-path" title="Full path on this machine">' + esc(fp) + '</div>'
-          + '<button class="fng-copy" id="fng-localcopy" title="Copy full path" onclick="' + R() + '.copyLocalPath()">' + cs + '</button></div>';
+      var relDir = folderSubtree();
+      var fullDir = b ? joinPath(b, relDir) : '';
+      if (fullDir) {
+        html += '<div class="fng-pathrow"><div class="fng-path" title="Folder on this machine — paste this into your file explorer to open it">' + esc(fullDir) + '</div>'
+          + '<button class="fng-copy" id="fng-localcopy" title="Copy folder path" onclick="' + R() + '.copyLocalPath()">' + cs + '</button></div>';
       } else {
-        html += '<div class="fng-pathrow"><div class="fng-path" title="Relative path">' + esc(rel) + '</div>'
-          + '<button class="fng-copy" id="fng-localcopy" title="Copy relative path" onclick="' + R() + '.copyLocalPath()">' + cs + '</button></div>';
-        html += '<div class="fng-muted" style="font-size:11px;margin-top:3px">Set your local root folder below to show the full path.</div>';
+        html += '<div class="fng-pathrow"><div class="fng-path" title="Folder (relative)">' + esc(relDir || '(your local root folder)') + '</div>'
+          + '<button class="fng-copy" id="fng-localcopy" title="Copy folder path" onclick="' + R() + '.copyLocalPath()">' + cs + '</button></div>';
+        html += '<div class="fng-muted" style="font-size:11px;margin-top:3px">Set your local root folder below to show the full folder path.</div>';
       }
       if (ROOT.ui.createdSubtree && ROOT.ui.createdSubtree === folderSubtree()) html += '<div style="font-size:11px;margin-top:3px;color:#2CC98A">✓ Folder tree created on this machine.</div>';
       var editing = !b || ROOT.ui.rootEdit;
@@ -1498,7 +1498,15 @@
     .catch(function (e) { if (e && e.name !== 'AbortError') toast('Could not select the folder.'); });
   };
   ROOT.clearLocalRoot = function () { ROOT._fsRoot = null; ROOT.ui.rootSeed = ''; ROOT.ui.rootEdit = false; try { localStorage.removeItem(LS_FSPATH); localStorage.removeItem(LS_FSROOT); } catch (e) {} idbDel('root').then(function () { rerender(); toast('Local root folder cleared.'); }).catch(function () { rerender(); }); };
-  ROOT.setFolderBase = function (v) { try { if (v) localStorage.setItem(LS_FSPATH, v); else localStorage.removeItem(LS_FSPATH); } catch (e) {} refreshUsePreview(); refreshHeader(); };
+  ROOT.setFolderBase = function (v) {
+    try { if (v) localStorage.setItem(LS_FSPATH, v); else localStorage.removeItem(LS_FSPATH); } catch (e) {}
+    // A remembered write-handle that no longer matches the root would create the tree in the
+    // OLD folder; drop it so createTree asks for the folder the user now means.
+    if (ROOT._fsRoot && ROOT._fsRoot.name && pathLeaf(v || '').toLowerCase() !== ROOT._fsRoot.name.toLowerCase()) {
+      ROOT._fsRoot = null; try { localStorage.removeItem(LS_FSROOT); } catch (e) {} idbDel('root').catch(function () {});
+    }
+    refreshUsePreview(); refreshHeader();
+  };
   ROOT.setRootFromInput = function () { var el = document.getElementById('fng-rootin'); var v = el ? el.value.trim() : ''; ROOT.ui.rootSeed = ''; ROOT.ui.rootEdit = false; ROOT.setFolderBase(v); toast(v ? 'Local root folder set for this machine.' : 'Local root folder cleared.'); };
   ROOT.rootDirty = function () { var el = document.getElementById('fng-rootin'), btn = document.getElementById('fng-rootset'); if (el && btn) btn.disabled = ((el.value || '').trim() === localBase()); };
   ROOT.rootEditOn = function () { ROOT.ui.rootEdit = true; refreshUsePreview(); var el = (typeof document !== 'undefined') && document.getElementById('fng-rootin'); if (el) { try { el.focus(); } catch (e) {} } };
@@ -1513,16 +1521,27 @@
         return fsProbe(root, segs).then(function (missing) { ROOT._fsPending = { segs: segs, missing: missing }; ROOT.ui.fsConfirm = true; rerender(); });
       }).catch(function () { toast('Could not read the folder — try choosing it again.'); });
     };
-    if (!ROOT._fsRoot) {
-      window.showDirectoryPicker({ mode: 'readwrite' }).then(function (h) { ROOT._fsRoot = h; try { localStorage.setItem(LS_FSROOT, h.name); } catch (e) {} return idbSet('root', h); }).then(proceed).catch(function (e) { if (e && e.name !== 'AbortError') toast('Could not set the data folder.'); });
+    // The tree must be created in the folder that IS the local root. A browser can't turn a
+    // typed path into a writable handle, so if there is no handle yet, or the remembered one
+    // no longer matches the local root folder, ask the user to point at it.
+    var lb = localBase();
+    var needPick = !ROOT._fsRoot || (lb && ROOT._fsRoot.name && pathLeaf(lb).toLowerCase() !== ROOT._fsRoot.name.toLowerCase());
+    if (needPick) {
+      if (lb) toast('Select your local root folder (' + pathLeaf(lb) + ') so the tree is created there.');
+      window.showDirectoryPicker({ mode: 'readwrite' }).then(function (h) { ROOT._fsRoot = h; try { localStorage.setItem(LS_FSROOT, h.name); } catch (e) {} return idbSet('root', h); }).then(proceed).catch(function (e) { if (e && e.name !== 'AbortError') toast('Could not select the folder.'); });
     } else proceed();
   };
   ROOT.fsConfirmNo = function () { ROOT.ui.fsConfirm = false; ROOT._fsPending = null; rerender(); };
   ROOT.fsConfirmYes = function () {
     var pend = ROOT._fsPending, root = ROOT._fsRoot;
     if (!pend || !root) { ROOT.ui.fsConfirm = false; rerender(); return; }
+    // A browser can't open the OS file explorer, so the next best thing: copy the absolute
+    // folder path NOW (while the click's activation is still live, so the clipboard write is
+    // allowed) — the user pastes it into Explorer / Finder to jump straight to the folder.
+    var folderAbs = localBase() ? joinPath(localBase(), pend.segs.join('/')) : '';
+    if (folderAbs) copyText(folderAbs);
     fsEnsurePerm(root).then(function (ok) { if (!ok) throw new Error('perm'); return fsMkdirp(root, pend.segs); })
-      .then(function () { ROOT.ui.createdSubtree = pend.segs.join('/'); ROOT.ui.fsConfirm = false; ROOT._fsPending = null; if (!localBase()) ROOT.ui.rootSeed = dataFolderName(); rerender(); var el = (typeof document !== 'undefined') && document.getElementById('fng-rootin'); if (el && !localBase()) { try { el.focus(); } catch (e) {} } toast(localBase() ? 'Folder tree ready. Metadata is saved when you copy it or open eLabNext.' : 'Folder tree ready — set your Local root folder to record the full path.'); })
+      .then(function () { ROOT.ui.createdSubtree = pend.segs.join('/'); ROOT.ui.fsConfirm = false; ROOT._fsPending = null; if (!localBase()) ROOT.ui.rootSeed = dataFolderName(); rerender(); var el = (typeof document !== 'undefined') && document.getElementById('fng-rootin'); if (el && !localBase()) { try { el.focus(); } catch (e) {} } toast(folderAbs ? 'Folder tree created — folder path copied. Paste it into your file explorer to open it (Windows: Ctrl+L in Explorer; macOS: ⌘⇧G in Finder).' : 'Folder tree ready — set your Local root folder so the folder path can be copied.'); })
       .catch(function () { ROOT.ui.fsConfirm = false; rerender(); toast('Could not create the folder tree.'); });
   };
 
@@ -1740,11 +1759,12 @@
   };
   ROOT.copyPath = function () { if (!guard()) return; var lit = showLiteralPath(); copyText(lit ? curPath() : relPath()); toast(lit ? 'Full path copied (not verified).' : 'Relative path copied.'); };
   ROOT.copyLocalPath = function () {
-    var fp = fullLocalPath();
-    copyText(fp || relPath());
+    var base = localBase();
+    var dir = base ? joinPath(base, folderSubtree()) : folderSubtree();
+    copyText(dir);
     var b = document.getElementById('fng-localcopy');
     if (b) { var o = b.innerHTML; b.classList.add('ok'); b.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><polyline points="20 6 9 17 4 12"></polyline></svg>'; setTimeout(function () { b.classList.remove('ok'); b.innerHTML = o; }, 1300); }
-    toast(fp ? 'Full path copied.' : 'Relative path copied.');
+    toast(base ? 'Folder path copied.' : 'Relative folder path copied.');
   };
   ROOT.downloadSidecar = function () { if (!guard()) return; var name = curName(); if (!name) return; pushHistory(name); saveFieldHistories(); download(name + '.json', JSON.stringify(sidecar(), null, 2), 'application/json'); logEvent('sidecar'); };
   ROOT.copyMarkdown = function () { copyText(notesMarkdown()); toast('Metadata (Markdown) copied.'); };
