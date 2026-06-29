@@ -1407,14 +1407,25 @@
         html += '<div class="fng-muted" style="font-size:11px;margin-top:3px">Set your local root folder below to show the full path.</div>';
       }
       if (ROOT.ui.createdSubtree && ROOT.ui.createdSubtree === folderSubtree()) html += '<div style="font-size:11px;margin-top:3px;color:#2CC98A">✓ Folder tree created on this machine.</div>';
+      var editing = !b || ROOT.ui.rootEdit;
       var seedVal = b || (ROOT.ui.rootSeed || '');
       var mism = rootMismatch();
-      html += '<div class="fng-f" style="margin-top:8px"><span class="fng-l">Local root folder' + (mism ? ' <span title="The picked data folder differs from this root" style="color:#f0a860">⚠</span>' : '') + ' <span class="fng-muted" style="font-weight:400">(the base folder where you save data on this machine — the browser can&rsquo;t read it, so set it once)</span></span>'
-        + '<div class="fng-row" style="margin-top:4px;gap:8px;align-items:center;flex-wrap:wrap">'
-        + '<input class="fng-in" id="fng-rootin" style="flex:1;min-width:170px" value="' + esc(seedVal) + '" placeholder="C:/Users/ronch/Documents/" oninput="' + R() + '.rootDirty()">'
-        + '<button class="fng-btn sm" id="fng-rootset"' + (seedVal.trim() === b ? ' disabled' : '') + ' onclick="' + R() + '.setRootFromInput()">Set as default root for this machine</button>'
-        + '</div>'
-        + (mism ? '<div style="font-size:11px;margin-top:4px;color:#f0a860">⚠ The data folder you picked (<b>' + esc(dataFolderName()) + '</b>) is not this root&rsquo;s last folder (<b>' + esc(pathLeaf(b)) + '</b>). Files still save to the data folder, but the recorded path may not match — update the root, or carry on.</div>' : '')
+      html += '<div class="fng-f" style="margin-top:8px"><span class="fng-l">Local root folder' + (mism ? ' <span title="The folder picked for writing differs from this root" style="color:#f0a860">⚠</span>' : '') + ' <span class="fng-muted" style="font-weight:400">(the folder where you save data on this machine — the browser can&rsquo;t read its full path, so set it once)</span></span>';
+      if (editing) {
+        html += '<div class="fng-row" style="margin-top:4px;gap:8px;align-items:center;flex-wrap:wrap">'
+          + '<input class="fng-in" id="fng-rootin" style="flex:1;min-width:170px" value="' + esc(seedVal) + '" placeholder="C:/Users/ronch/Documents/DATA" oninput="' + R() + '.rootDirty()">'
+          + (fsSupported() ? '<button class="fng-btn sm" onclick="' + R() + '.pickRootFolder()">Choose folder…</button>' : '')
+          + '<button class="fng-btn sm" id="fng-rootset"' + (seedVal.trim() === b ? ' disabled' : '') + ' onclick="' + R() + '.setRootFromInput()">Set</button>'
+          + '</div>'
+          + '<p class="fng-muted" style="font-size:11px;margin:4px 0 0">' + (fsSupported() ? 'Type the full path, or <b>Choose folder</b> to pick it (then complete the full path — the browser hides it). ' : '') + 'This is also where the tool creates the folder tree and writes metadata.</p>';
+      } else {
+        html += '<div class="fng-row" style="margin-top:4px;gap:8px;align-items:center;flex-wrap:wrap">'
+          + '<span class="fng-path" style="flex:1;min-width:0;margin-top:0;word-break:break-all">' + esc(b) + '</span>'
+          + '<button class="fng-btn sm" onclick="' + R() + '.rootEditOn()">Change</button>'
+          + '<button class="fng-btn sm" onclick="' + R() + '.clearLocalRoot()">Clear</button>'
+          + '</div>';
+      }
+      html += (mism ? '<div style="font-size:11px;margin-top:4px;color:#f0a860">⚠ The folder picked for writing (<b>' + esc(dataFolderName()) + '</b>) is not this root&rsquo;s last folder (<b>' + esc(pathLeaf(b)) + '</b>). Files still save there, but the recorded path may not match — update the root, or carry on.</div>' : '')
         + '</div>';
     }
     html += fsSaveSection(folder);
@@ -1473,23 +1484,24 @@
       if (!ok) return;
       return fsNavigate(ROOT._fsRoot, segs).then(function (leaf) {
         if (!leaf) return;
-        return fsWrite(leaf, name + '.json', JSON.stringify(sidecar(), null, 2)).then(function () { toast('Latest metadata saved to the data folder.'); });
+        return fsWrite(leaf, name + '.json', JSON.stringify(sidecar(), null, 2)).then(function () { toast('Latest metadata saved to your local root folder.'); });
       });
     }).catch(function () {});
   }
 
-  ROOT.pickDataFolder = function () {
-    if (!fsSupported()) { toast('Saving to a folder needs Chrome or Edge.'); return; }
+  ROOT.pickRootFolder = function () {
+    if (!fsSupported()) { toast('Picking a folder needs Chrome or Edge.'); return; }
     window.showDirectoryPicker({ mode: 'readwrite' }).then(function (h) {
       ROOT._fsRoot = h; try { localStorage.setItem(LS_FSROOT, h.name); } catch (e) {}
       return idbSet('root', h);
-    }).then(function () { if (!localBase()) ROOT.ui.rootSeed = ROOT._fsRoot.name; rerender(); var el = (typeof document !== 'undefined') && document.getElementById('fng-rootin'); if (el && !localBase()) { try { el.focus(); } catch (e) {} } toast('Data folder set: ' + (ROOT._fsRoot && ROOT._fsRoot.name) + (localBase() ? '' : ' — now finish its full path in "Local root folder".')); })
-    .catch(function (e) { if (e && e.name !== 'AbortError') toast('Could not set the data folder.'); });
+    }).then(function () { if (!localBase()) ROOT.ui.rootSeed = ROOT._fsRoot.name; ROOT.ui.rootEdit = true; rerender(); var el = (typeof document !== 'undefined') && document.getElementById('fng-rootin'); if (el) { try { el.focus(); } catch (e) {} } toast(localBase() ? ('Folder selected for writing: ' + (ROOT._fsRoot && ROOT._fsRoot.name)) : 'Folder selected — now complete its full path, then Set.'); })
+    .catch(function (e) { if (e && e.name !== 'AbortError') toast('Could not select the folder.'); });
   };
-  ROOT.clearDataFolder = function () { ROOT._fsRoot = null; ROOT.ui.rootSeed = ''; try { localStorage.removeItem(LS_FSROOT); } catch (e) {} idbDel('root').then(function () { rerender(); toast('Data folder cleared.'); }).catch(function () { rerender(); }); };
+  ROOT.clearLocalRoot = function () { ROOT._fsRoot = null; ROOT.ui.rootSeed = ''; ROOT.ui.rootEdit = false; try { localStorage.removeItem(LS_FSPATH); localStorage.removeItem(LS_FSROOT); } catch (e) {} idbDel('root').then(function () { rerender(); toast('Local root folder cleared.'); }).catch(function () { rerender(); }); };
   ROOT.setFolderBase = function (v) { try { if (v) localStorage.setItem(LS_FSPATH, v); else localStorage.removeItem(LS_FSPATH); } catch (e) {} refreshUsePreview(); refreshHeader(); };
-  ROOT.setRootFromInput = function () { var el = document.getElementById('fng-rootin'); var v = el ? el.value.trim() : ''; ROOT.ui.rootSeed = ''; ROOT.setFolderBase(v); toast(v ? 'Local root folder set for this machine.' : 'Local root folder cleared.'); };
+  ROOT.setRootFromInput = function () { var el = document.getElementById('fng-rootin'); var v = el ? el.value.trim() : ''; ROOT.ui.rootSeed = ''; ROOT.ui.rootEdit = false; ROOT.setFolderBase(v); toast(v ? 'Local root folder set for this machine.' : 'Local root folder cleared.'); };
   ROOT.rootDirty = function () { var el = document.getElementById('fng-rootin'), btn = document.getElementById('fng-rootset'); if (el && btn) btn.disabled = ((el.value || '').trim() === localBase()); };
+  ROOT.rootEditOn = function () { ROOT.ui.rootEdit = true; refreshUsePreview(); var el = (typeof document !== 'undefined') && document.getElementById('fng-rootin'); if (el) { try { el.focus(); } catch (e) {} } };
   ROOT.createTree = function () {
     if (!guard()) return;
     if (!fsSupported()) { toast('Creating folders needs Chrome or Edge.'); return; }
@@ -1499,7 +1511,7 @@
       fsEnsurePerm(root).then(function (ok) {
         if (!ok) { toast('Write permission was not granted.'); return; }
         return fsProbe(root, segs).then(function (missing) { ROOT._fsPending = { segs: segs, missing: missing }; ROOT.ui.fsConfirm = true; rerender(); });
-      }).catch(function () { toast('Could not read the data folder — try setting it again.'); });
+      }).catch(function () { toast('Could not read the folder — try choosing it again.'); });
     };
     if (!ROOT._fsRoot) {
       window.showDirectoryPicker({ mode: 'readwrite' }).then(function (h) { ROOT._fsRoot = h; try { localStorage.setItem(LS_FSROOT, h.name); } catch (e) {} return idbSet('root', h); }).then(proceed).catch(function (e) { if (e && e.name !== 'AbortError') toast('Could not set the data folder.'); });
@@ -1520,20 +1532,15 @@
       return '<div class="fng-save"><div class="fng-l">Folder tree (this machine)</div>'
         + '<p class="fng-muted" style="font-size:11px;margin:4px 0 0">Creating the folder tree needs Chrome or Edge. In this browser, use <b>Download .json</b> above and file it under the path shown.</p></div>';
     }
-    var label = ''; try { label = localStorage.getItem(LS_FSROOT) || ''; } catch (e) {}
-    var rootRow = label
-      ? '<span class="fng-save-cur">Data folder: <b>' + esc(label) + '</b></span><button class="fng-btn sm" onclick="' + R() + '.pickDataFolder()">Change</button><button class="fng-btn sm" onclick="' + R() + '.clearDataFolder()">Clear</button>'
-      : '<button class="fng-btn sm" onclick="' + R() + '.pickDataFolder()">Set data folder for this machine…</button>';
     return '<div class="fng-save"><div class="fng-l">Folder tree (this machine)</div>'
-      + '<div class="fng-row" style="margin-top:5px;align-items:center;gap:8px;flex-wrap:wrap">' + rootRow + '</div>'
       + '<div class="fng-row" style="margin-top:8px"><button class="fng-btn pri" onclick="' + R() + '.createTree()">Create folder tree</button></div>'
-      + '<p class="fng-muted" style="font-size:11px;margin:6px 0 0">Creates only the missing folders for the path above (you confirm first). The metadata file is written when you <b>copy</b> it or open <b>eLabNext</b>, so it is always the latest. Save raw data locally during acquisition; transfer to NASAC afterwards.</p></div>';
+      + '<p class="fng-muted" style="font-size:11px;margin:6px 0 0">Creates only the missing folders under your <b>local root folder</b> (you confirm first); if you haven&rsquo;t picked it yet, you&rsquo;ll be asked to. The metadata file is written when you <b>copy</b> it or open <b>eLabNext</b>, so it is always the latest. Save raw data locally during acquisition; transfer to NASAC afterwards.</p></div>';
   }
 
   function renderFsConfirm() {
     if (!ROOT.ui.fsConfirm || !ROOT._fsPending) return '';
     var pend = ROOT._fsPending, label = '';
-    try { label = localStorage.getItem(LS_FSROOT) || 'data folder'; } catch (e) { label = 'data folder'; }
+    try { label = localStorage.getItem(LS_FSROOT) || 'local root folder'; } catch (e) { label = 'local root folder'; }
     var missing = pend.missing || [];
     var mk = missing.length
       ? '<p style="margin:8px 0 4px">These folders will be created (only the missing ones):</p><ul class="fng-fslist">' + missing.map(function (m) { return '<li>' + esc(m) + '</li>'; }).join('') + '</ul>'
@@ -1541,7 +1548,7 @@
     return '<div class="fng-modal" onclick="if(event.target===this)' + R() + '.fsConfirmNo()">'
       + '<div class="fng-modal-card"><div class="fng-modal-h"><h3 style="margin:0">Create folder tree</h3>'
       + '<button class="fng-modal-x" title="Cancel" onclick="' + R() + '.fsConfirmNo()">✕</button></div>'
-      + '<p style="margin:0;font-size:13px">Inside your data folder <b>' + esc(label) + '</b>, target:</p>'
+      + '<p style="margin:0;font-size:13px">Inside your local root folder <b>' + esc(label) + '</b>, target:</p>'
       + '<div class="fng-path" style="margin:4px 0">' + esc(pend.segs.join('/') || '(root)') + '</div>' + mk
       + '<p class="fng-muted" style="margin:6px 0 0;font-size:12px">No file is written now — the metadata is saved into this folder when you copy it or open eLabNext.</p>'
       + '<div class="fng-acts" style="margin-top:12px"><button class="fng-btn" onclick="' + R() + '.fsConfirmNo()">Cancel</button>'
