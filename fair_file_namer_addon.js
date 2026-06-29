@@ -82,6 +82,8 @@
       { id: 'f-oper', name: 'Operator',   source: 'operator',   builtin: true },
       { id: 'f-dev',  name: 'Device',     source: 'device',     builtin: true },
       { id: 'f-proj', name: 'Project',    source: 'freetext',   builtin: true },
+      { id: 'f-study', name: 'Study',      source: 'freetext',   builtin: true },
+      { id: 'f-exp',   name: 'Experiment', source: 'freetext',   builtin: true },
       { id: 'f-samp', name: 'Sample',     source: 'freetext',   builtin: true },
       { id: 'f-cond', name: 'Condition',  source: 'freetext',   builtin: true },
       { id: 'f-run',  name: 'Run',        source: 'counter', pad: 2, scope: 'daily', builtin: true },
@@ -169,6 +171,23 @@
   function counterBump(field, ctx) { try { localStorage.setItem(counterKey(field, ctx), String(counterRead(field, ctx) + 1)); } catch (e) {} }
 
   function opName(o) { return typeof o === 'string' ? o : ((o && o.name) || ''); }
+  function normOrcid(v) {
+    v = String(v == null ? '' : v).trim(); if (!v) return '';
+    v = v.replace(/^https?:\/\/orcid\.org\//i, '').replace(/\s+/g, '');
+    var bare = v.replace(/-/g, '');
+    if (/^[0-9]{15}[0-9Xx]$/.test(bare)) return (bare.slice(0, 4) + '-' + bare.slice(4, 8) + '-' + bare.slice(8, 12) + '-' + bare.slice(12, 16)).toUpperCase();
+    return v;
+  }
+  // ORCID iD validity: canonical 0000-0000-0000-000X format plus ISO 7064 mod 11-2 check digit.
+  // Empty is treated as valid (nothing entered to flag).
+  function orcidValid(v) {
+    v = normOrcid(v); if (!v) return true;
+    if (!/^[0-9]{4}-[0-9]{4}-[0-9]{4}-[0-9]{3}[0-9X]$/.test(v)) return false;
+    var d = v.replace(/-/g, ''), total = 0, i;
+    for (i = 0; i < 15; i++) total = (total + parseInt(d.charAt(i), 10)) * 2;
+    var r = (12 - (total % 11)) % 11, ch = r === 10 ? 'X' : String(r);
+    return ch === d.charAt(15).toUpperCase();
+  }
   // entity = operator or lab { name, initials?, first3? }; the manager may edit
   // the initials / first-3 directly to disambiguate, otherwise they're computed.
   function abbrIni(e) { return (e && e.initials != null && String(e.initials) !== '') ? sanitizeVal(e.initials) : applyFmt(opName(e), 'acronym'); }
@@ -1201,7 +1220,7 @@
     // operator's email — kept in the metadata for contact, never put in the file name
     (tpl.fieldIds || []).forEach(function (id) {
       var ef = fieldById(L, id);
-      if (ef && ef.source === 'operator') { var op = operatorByName(ROOT.ui.values[id] || ''); if (op && op.email) h.operatorEmail = op.email; }
+      if (ef && ef.source === 'operator') { var op = operatorByName(ROOT.ui.values[id] || ''); if (op) { if (op.email) h.operatorEmail = op.email; if (op.orcid) h.operatorOrcid = op.orcid; } }
     });
     // attach the selected device's generic info (software, version, …)
     (tpl.fieldIds || []).forEach(function (id) {
@@ -1215,7 +1234,7 @@
     // operator email (from the managed operator list) — always recorded in metadata
     (tpl.fieldIds || []).forEach(function (id) {
       var f = fieldById(L, id);
-      if (f && f.source === 'operator') { var op = operatorByName(ROOT.ui.values[id] || ''); if (op && op.email) h.operatorEmail = op.email; }
+      if (f && f.source === 'operator') { var op = operatorByName(ROOT.ui.values[id] || ''); if (op) { if (op.email) h.operatorEmail = op.email; if (op.orcid) h.operatorOrcid = op.orcid; } }
     });
     // attach the operator's active experiment configuration (local to this machine)
     var cfg = activeConfig();
@@ -1233,6 +1252,7 @@
     md.push('**Lab:** ' + h.lab + '  ');
     if (h.department) md.push('**Department:** ' + h.department + '  ');
     if (h.operatorEmail) md.push('**Operator email:** ' + h.operatorEmail + '  ');
+    if (h.operatorOrcid) md.push('**Operator ORCID iD:** ' + h.operatorOrcid + '  ');
     md.push('**Template:** ' + h.template + '  ');
     md.push('**Generated:** ' + fmtDate(new Date(), 'YYYY-MM-DD') + ' ' + fmtDate(new Date(), 'HH:MM'));
     md.push('', '| Field | Value |', '| --- | --- |');
@@ -1256,7 +1276,7 @@
       + '<p><b>File name:</b> <code>' + esc(h.fileName || '(empty)') + '</code><br>';
     if (h.fullPath) html += '<b>' + esc(localPathLabel()) + ':</b> <code>' + esc(h.fullPath) + '</code><br>'; else if (h.relPath && h.relPath !== h.fileName) html += '<b>Relative path:</b> <code>' + esc(h.relPath) + '</code><br>';
     if (h.literalPath) html += '<b>Recommended transfer path (NASAC):</b> <code>' + esc(h.literalPath) + '</code><br>';
-    html += '<b>Lab:</b> ' + esc(h.lab) + (h.department ? '<br><b>Department:</b> ' + esc(h.department) : '') + (h.operatorEmail ? '<br><b>Operator email:</b> ' + esc(h.operatorEmail) : '') + '<br><b>Template:</b> ' + esc(h.template)
+    html += '<b>Lab:</b> ' + esc(h.lab) + (h.department ? '<br><b>Department:</b> ' + esc(h.department) : '') + (h.operatorEmail ? '<br><b>Operator email:</b> ' + esc(h.operatorEmail) : '') + (h.operatorOrcid ? '<br><b>Operator ORCID iD:</b> ' + esc(h.operatorOrcid) : '') + '<br><b>Template:</b> ' + esc(h.template)
       + '<br><b>Generated:</b> ' + fmtDate(new Date(), 'YYYY-MM-DD') + ' ' + fmtDate(new Date(), 'HH:MM') + '</p>'
       + '<table class="fng-doc-t"><thead><tr><th>Field</th><th>Value</th></tr></thead><tbody>';
     Object.keys(h.fields).forEach(function (k) { html += '<tr><td>' + esc(k) + '</td><td>' + esc(h.fields[k] || '—') + '</td></tr>'; });
@@ -1689,6 +1709,7 @@
     html += '<strong>Lab:</strong> ' + esc(h.lab);
     if (h.department) html += '<br><strong>Department:</strong> ' + esc(h.department);
     if (h.operatorEmail) html += '<br><strong>Operator email:</strong> ' + esc(h.operatorEmail);
+    if (h.operatorOrcid) html += '<br><strong>Operator ORCID iD:</strong> ' + esc(h.operatorOrcid);
     html += '<br><strong>Template:</strong> ' + esc(h.template)
       + '<br><strong>Generated:</strong> ' + fmtDate(new Date(), 'YYYY-MM-DD') + ' ' + fmtDate(new Date(), 'HH:MM') + '</p>';
     html += clipTable(Object.keys(h.fields).map(function (k) { return [k, h.fields[k]]; }), 'Field', 'Value');
@@ -1858,6 +1879,8 @@
     if (h.literalPath) rows += '<tr><td style="color:#6b7592">Recommended transfer path (NASAC)</td><td>' + esc(h.literalPath) + '</td></tr>';
     rows += '<tr><td style="color:#6b7592">Lab</td><td>' + esc(h.lab) + '</td></tr>'
           + '<tr><td style="color:#6b7592">Template</td><td>' + esc(h.template) + '</td></tr>';
+    if (h.operatorEmail) rows += '<tr><td style="color:#6b7592">Operator email</td><td>' + esc(h.operatorEmail) + '</td></tr>';
+    if (h.operatorOrcid) rows += '<tr><td style="color:#6b7592">Operator ORCID iD</td><td>' + esc(h.operatorOrcid) + '</td></tr>';
     Object.keys(h.fields || {}).forEach(function (k) {
       rows += '<tr><td style="color:#6b7592">' + esc(k) + '</td><td>' + esc(h.fields[k] || '—') + '</td></tr>';
     });
@@ -2144,6 +2167,11 @@
     function emailCell(e, i) {
       return '<td><input class="fng-in" type="email" style="width:190px" placeholder="name@unige.ch" value="' + esc(e.email || '') + '" onchange="' + R() + '.setOperatorEmail(' + i + ',this.value)"></td>';
     }
+    function orcidCell(e, i) {
+      var v = e.orcid || '', bad = v && !orcidValid(v);
+      return '<td><input class="fng-in' + (bad ? ' fng-dupin' : '') + '" style="width:175px" placeholder="0000-0002-1825-0097"' + (bad ? ' title="This doesn&rsquo;t look like a valid ORCID iD (expected 0000-0000-0000-000X with a valid check digit)"' : '') + ' value="' + esc(v) + '" onchange="' + R() + '.setOperatorOrcid(' + i + ',this.value)">' + (bad ? '<span class="fng-bang" title="Invalid ORCID iD \u2014 check for typos"> !</span>' : '') + '</td>';
+    }
+    function operExtraCells(e, i) { return emailCell(e, i) + orcidCell(e, i); }
     function abbrTable(list, keyOf, fns, extraCell) {
       var fullV = list.map(function (e) { return applyFmt(opName(e), 'full'); });
       var iniV = list.map(abbrIni), f3V = list.map(abbrF3);
@@ -2157,19 +2185,19 @@
         return '<tr>' + cellInput(R() + '.' + fns.name + '(' + k + ',this.value)', opName(e), fb, 150)
           + cellInput(R() + '.' + fns.ini + '(' + k + ',this.value)', iniDisp, ib, 80)
           + cellInput(R() + '.' + fns.f3 + '(' + k + ',this.value)', f3Disp, tb, 80)
-          + (extraCell ? extraCell(e, i) : '')
+          + (extraCell ? extraCell(e, k) : '')
           + '<td><button class="fng-btn sm" title="remove" onclick="' + R() + '.' + fns.del + '(' + k + ')">✕</button></td></tr>';
       }).join('');
       return { rows: rows, any: any };
     }
     function abbrTableHtml(t, emptyMsg, kind, head, extraHead) {
       return t.rows
-        ? '<table class="fng-doc-t"><thead><tr><th>' + head + '</th><th>Initials</th><th>First 3</th>' + (extraHead ? '<th>' + extraHead + '</th>' : '') + '<th></th></tr></thead><tbody>' + t.rows + '</tbody></table>'
+        ? '<table class="fng-doc-t"><thead><tr><th>' + head + '</th><th>Initials</th><th>First 3</th>' + (extraHead || '') + '<th></th></tr></thead><tbody>' + t.rows + '</tbody></table>'
           + (t.any ? '<p class="fng-muted" style="margin-top:6px">Fields flagged <span class="fng-bang">!</span> match another ' + kind + ' — edit them to make each unique.</p>' : '')
         : '<span class="fng-muted">' + emptyMsg + '</span>';
     }
-    var ops = abbrTableHtml(abbrTable(opList.slice().sort(function (a, b) { return cmpName(opName(a), opName(b)); }), function (e) { return '' + opList.indexOf(e); }, { name: 'setOperatorName', ini: 'setOperatorInitials', f3: 'setOperatorFirst3', del: 'delOperator' }, emailCell), 'no operators yet', 'operator', 'Full name', 'Email');
-    var labsTable = abbrTableHtml(abbrTable(labs(), function (l) { return '\'' + l.id + '\''; }, { name: 'setLabName', ini: 'setLabInitials', f3: 'setLabFirst3', del: 'delLab' }, deptCell), 'no labs yet', 'lab', 'Lab name', 'Department');
+    var ops = abbrTableHtml(abbrTable(opList.slice().sort(function (a, b) { return cmpName(opName(a), opName(b)); }), function (e) { return '' + opList.indexOf(e); }, { name: 'setOperatorName', ini: 'setOperatorInitials', f3: 'setOperatorFirst3', del: 'delOperator' }, operExtraCells), 'no operators yet', 'operator', 'Full name', '<th>Email</th><th>ORCID iD</th>');
+    var labsTable = abbrTableHtml(abbrTable(labs(), function (l) { return '\'' + l.id + '\''; }, { name: 'setLabName', ini: 'setLabInitials', f3: 'setLabFirst3', del: 'delLab' }, deptCell), 'no labs yet', 'lab', 'Lab name', '<th>Department</th>');
     var devDup = countMap((L.devices || []).map(function (d) { return d.name; }));
 
     var devs = (L.devices || []).map(function (d, i) {
@@ -2321,6 +2349,7 @@
   ROOT.setOperatorInitials = function (i, v) { var o = ROOT.library.operators[i]; if (o) setOverride(o, 'initials', 'acronym', v); rerender(); };
   ROOT.setOperatorFirst3 = function (i, v) { var o = ROOT.library.operators[i]; if (o) setOverride(o, 'first3', 'first3', v); rerender(); };
   ROOT.setOperatorEmail = function (i, v) { var o = ROOT.library.operators[i]; if (o) o.email = (v || '').trim(); dirty(); };   // no rerender (keep focus)
+  ROOT.setOperatorOrcid = function (i, v) { var o = ROOT.library.operators[i]; if (o) o.orcid = normOrcid(v); dirty(); };   // no rerender (keep focus)
 
   // devices (master-maintained). Name change / info edit do NOT rerender (keep cursor).
   ROOT.addDevice = function () {
@@ -2462,7 +2491,7 @@
   // Ordered, human-readable property rows for one item; flags which are editable.
   function rvProps(kind, obj, lib) {
     if (!obj) return [];
-    if (kind === 'op') return [{ k: 'name', l: 'Full name', v: opName(obj), ro: true }, { k: 'initials', l: 'Initials', v: obj.initials || '' }, { k: 'first3', l: 'First 3', v: obj.first3 || '' }, { k: 'email', l: 'Email', v: obj.email || '' }];
+    if (kind === 'op') return [{ k: 'name', l: 'Full name', v: opName(obj), ro: true }, { k: 'initials', l: 'Initials', v: obj.initials || '' }, { k: 'first3', l: 'First 3', v: obj.first3 || '' }, { k: 'email', l: 'Email', v: obj.email || '' }, { k: 'orcid', l: 'ORCID iD', v: obj.orcid || '' }];
     if (kind === 'device') { var info = Object.keys(obj.info || {}).map(function (kk) { return kk + ': ' + obj.info[kk]; }).join('\n'); return [{ k: 'name', l: 'Name', v: obj.name || '' }, { k: 'info', l: 'Info', v: info, area: true }]; }
     if (kind === 'field') { var meta = obj.source === 'list' ? ((obj.options || []).join(', ')) : obj.source === 'date' ? (obj.format || '') : ''; return [{ k: 'name', l: 'Name', v: obj.name || '' }, { k: 'source', l: 'Type', v: obj.source || '', ro: true }, { k: 'options', l: (obj.source === 'list' ? 'Options' : 'Details'), v: meta, ro: obj.source !== 'list' }]; }
     if (kind === 'lab') return [{ k: 'name', l: 'Lab name', v: obj.name || '' }, { k: 'dept', l: 'Department', v: obj.dept || '' }, { k: 'initials', l: 'Initials', v: obj.initials || '' }, { k: 'first3', l: 'First 3', v: obj.first3 || '' }];
