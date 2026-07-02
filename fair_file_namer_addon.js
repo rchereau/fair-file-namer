@@ -2396,7 +2396,7 @@
       var v = e.orcid || '', bad = v && !orcidValid(v);
       return '<td><input class="fng-in' + (bad ? ' fng-dupin' : '') + '" style="width:175px" placeholder="0000-0002-1825-0097"' + (bad ? ' title="This doesn&rsquo;t look like a valid ORCID iD (expected 0000-0000-0000-000X with a valid check digit)"' : '') + ' value="' + esc(v) + '" onchange="' + R() + '.' + (setter || 'setOperatorOrcid') + '(' + i + ',this.value)">' + (bad ? '<span class="fng-bang" title="Invalid ORCID iD \u2014 check for typos"> !</span>' : '') + '</td>';
     }
-    function moveCell(i, fn, label) { return '<td><button class="fng-btn sm" title="' + esc(label) + '" onclick="' + R() + '.' + fn + '(' + i + ')">' + esc(label) + '</button></td>'; }
+    function moveCell(i, fn, label) { return '<td style="white-space:nowrap"><button class="fng-btn sm" style="white-space:nowrap" title="' + esc(label) + '" onclick="' + R() + '.' + fn + '(' + i + ')">' + esc(label) + '</button></td>'; }
     function operExtraCells(e, i) { return emailCell(e, i, 'setOperatorEmail') + orcidCell(e, i, 'setOperatorOrcid') + moveCell(i, 'toAlumni', '\u2192 Alumni'); }
     function alumExtraCells(e, i) { return emailCell(e, i, 'setAlumniEmail') + orcidCell(e, i, 'setAlumniOrcid') + moveCell(i, 'fromAlumni', '\u2192 Operators'); }
     function abbrTable(list, keyOf, fns, extraCell, universe) {
