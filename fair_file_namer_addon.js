@@ -786,7 +786,7 @@
         ctrl = '<div class="fng-devwrap">'
           + '<button type="button" class="fng-btn fng-devbtn' + (v ? ' pri' : ' fng-devempty') + '" style="flex:1" title="Browse and choose a device" onclick="' + R() + '.openDevManager()">'
           + (v ? esc(v) : 'Choose device ▾') + '</button>'
-          + '<button type="button" class="fng-btn fng-star" title="User configurations for this operator + device" onclick="' + R() + '.openConfigMgr()">⚙</button>'
+          + '<button type="button" class="fng-btn" style="flex:none;white-space:nowrap" title="Your configurations for this operator + device" onclick="' + R() + '.openConfigMgr()">My Configs</button>'
           + '</div>';
       } else if (f.source === 'list') {
         ctrl = '<select class="fng-sel" required onchange="' + R() + '.setVal(\'' + f.id + '\',this.value)"><option value="">— select —</option>'
