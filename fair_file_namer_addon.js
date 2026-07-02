@@ -2380,21 +2380,24 @@
     var opList = L.operators || [];
     // an editable cell: input + (when duplicated) a red ! after it
     function cellInput(jsCall, val, bad, w) {
-      return '<td><input class="fng-in' + (bad ? ' fng-dupin' : '') + '" style="width:' + (w || 120) + 'px" value="' + esc(val) + '" onchange="' + jsCall + '">' + (bad ? '<span class="fng-bang" title="Duplicate — make it unique"> !</span>' : '') + '</td>';
+      return '<td><div style="display:flex;align-items:center;gap:3px">'
+        + '<input class="fng-in' + (bad ? ' fng-dupin' : '') + '" style="flex:1;min-width:0" value="' + esc(val) + '" onchange="' + jsCall + '">'
+        + (bad ? '<span class="fng-bang" title="Duplicate — make it unique">!</span>' : '')
+        + '</div></td>';
     }
     // Full name | Initials | First 3 table shared by operators and labs; flags any
     // column whose value matches another row, and lets the manager edit it.
     function deptCell(l) {
-      return '<td><select class="fng-sel" style="min-width:160px" onchange="' + R() + '.setLabDept(\'' + l.id + '\',this.value)"><option value="">— none —</option>'
+      return '<td><select class="fng-sel" style="width:100%;box-sizing:border-box" onchange="' + R() + '.setLabDept(\'' + l.id + '\',this.value)"><option value="">— none —</option>'
         + DEPARTMENTS.map(function (d) { return '<option value="' + esc(d.code) + '"' + (l.dept === d.code ? ' selected' : '') + '>' + esc(d.code) + ' — ' + esc(d.label) + '</option>'; }).join('')
         + '</select></td>';
     }
     function emailCell(e, i, setter) {
-      return '<td><input class="fng-in" type="email" style="width:190px" placeholder="name@unige.ch" value="' + esc(e.email || '') + '" onchange="' + R() + '.' + (setter || 'setOperatorEmail') + '(' + i + ',this.value)"></td>';
+      return '<td><input class="fng-in" type="email" style="width:100%;box-sizing:border-box" placeholder="name@unige.ch" value="' + esc(e.email || '') + '" onchange="' + R() + '.' + (setter || 'setOperatorEmail') + '(' + i + ',this.value)"></td>';
     }
     function orcidCell(e, i, setter) {
       var v = e.orcid || '', bad = v && !orcidValid(v);
-      return '<td><input class="fng-in' + (bad ? ' fng-dupin' : '') + '" style="width:175px" placeholder="0000-0002-1825-0097"' + (bad ? ' title="This doesn&rsquo;t look like a valid ORCID iD (expected 0000-0000-0000-000X with a valid check digit)"' : '') + ' value="' + esc(v) + '" onchange="' + R() + '.' + (setter || 'setOperatorOrcid') + '(' + i + ',this.value)">' + (bad ? '<span class="fng-bang" title="Invalid ORCID iD \u2014 check for typos"> !</span>' : '') + '</td>';
+      return '<td><div style="display:flex;align-items:center;gap:3px"><input class="fng-in' + (bad ? ' fng-dupin' : '') + '" style="flex:1;min-width:0" placeholder="0000-0002-1825-0097"' + (bad ? ' title="This doesn&rsquo;t look like a valid ORCID iD (expected 0000-0000-0000-000X with a valid check digit)"' : '') + ' value="' + esc(v) + '" onchange="' + R() + '.' + (setter || 'setOperatorOrcid') + '(' + i + ',this.value)">' + (bad ? '<span class="fng-bang" title="Invalid ORCID iD \u2014 check for typos">!</span>' : '') + '</div></td>';
     }
     function moveCell(i, fn, label) { return '<td style="white-space:nowrap"><button class="fng-btn sm" style="white-space:nowrap" title="' + esc(label) + '" onclick="' + R() + '.' + fn + '(' + i + ')">' + esc(label) + '</button></td>'; }
     function operExtraCells(e, i) { return emailCell(e, i, 'setOperatorEmail') + orcidCell(e, i, 'setOperatorOrcid') + moveCell(i, 'toAlumni', '\u2192 Alumni'); }
@@ -2418,17 +2421,19 @@
       }).join('');
       return { rows: rows, any: any };
     }
-    function abbrTableHtml(t, emptyMsg, kind, head, extraHead) {
+    function abbrTableHtml(t, emptyMsg, kind, head, extraHead, cols) {
       return t.rows
-        ? '<table class="fng-doc-t"><thead><tr><th>' + head + '</th><th>Initials</th><th>First 3</th>' + (extraHead || '') + '<th></th></tr></thead><tbody>' + t.rows + '</tbody></table>'
+        ? '<table class="fng-doc-t" style="table-layout:fixed;width:100%">' + (cols || '') + '<thead><tr><th>' + head + '</th><th>Initials</th><th>First 3</th>' + (extraHead || '') + '<th></th></tr></thead><tbody>' + t.rows + '</tbody></table>'
           + (t.any ? '<p class="fng-muted" style="margin-top:6px">Fields flagged <span class="fng-bang">!</span> match another ' + kind + ' — edit them to make each unique.</p>' : '')
         : '<span class="fng-muted">' + emptyMsg + '</span>';
     }
     var alumList = L.alumni || [];
     var opUniverse = opList.concat(alumList);   // uniqueness spans operators + alumni
-    var ops = abbrTableHtml(abbrTable(opList.slice().sort(function (a, b) { return cmpName(opName(a), opName(b)); }), function (e) { return '' + opList.indexOf(e); }, { name: 'setOperatorName', ini: 'setOperatorInitials', f3: 'setOperatorFirst3', del: 'delOperator' }, operExtraCells, opUniverse), 'no operators yet', 'operator or alumnus', 'Full name', '<th>Email</th><th>ORCID iD</th><th></th>');
-    var alum = abbrTableHtml(abbrTable(alumList.slice().sort(function (a, b) { return cmpName(opName(a), opName(b)); }), function (e) { return '' + alumList.indexOf(e); }, { name: 'setAlumniName', ini: 'setAlumniInitials', f3: 'setAlumniFirst3', del: 'delAlumni' }, alumExtraCells, opUniverse), 'no alumni yet', 'operator or alumnus', 'Full name', '<th>Email</th><th>ORCID iD</th><th></th>');
-    var labsTable = abbrTableHtml(abbrTable(labs(), function (l) { return '\'' + l.id + '\''; }, { name: 'setLabName', ini: 'setLabInitials', f3: 'setLabFirst3', del: 'delLab' }, deptCell), 'no labs yet', 'lab', 'Lab name', '<th>Department</th>');
+    var opCols = '<colgroup><col style="width:20%"><col style="width:9%"><col style="width:9%"><col style="width:25%"><col style="width:20%"><col style="width:12%"><col style="width:5%"></colgroup>';
+    var ops = abbrTableHtml(abbrTable(opList.slice().sort(function (a, b) { return cmpName(opName(a), opName(b)); }), function (e) { return '' + opList.indexOf(e); }, { name: 'setOperatorName', ini: 'setOperatorInitials', f3: 'setOperatorFirst3', del: 'delOperator' }, operExtraCells, opUniverse), 'no operators yet', 'operator or alumnus', 'Full name', '<th>Email</th><th>ORCID iD</th><th></th>', opCols);
+    var alum = abbrTableHtml(abbrTable(alumList.slice().sort(function (a, b) { return cmpName(opName(a), opName(b)); }), function (e) { return '' + alumList.indexOf(e); }, { name: 'setAlumniName', ini: 'setAlumniInitials', f3: 'setAlumniFirst3', del: 'delAlumni' }, alumExtraCells, opUniverse), 'no alumni yet', 'operator or alumnus', 'Full name', '<th>Email</th><th>ORCID iD</th><th></th>', opCols);
+    var labCols = '<colgroup><col style="width:26%"><col style="width:11%"><col style="width:11%"><col style="width:42%"><col style="width:10%"></colgroup>';
+    var labsTable = abbrTableHtml(abbrTable(labs(), function (l) { return '\'' + l.id + '\''; }, { name: 'setLabName', ini: 'setLabInitials', f3: 'setLabFirst3', del: 'delLab' }, deptCell), 'no labs yet', 'lab', 'Lab name', '<th>Department</th>', labCols);
     var devDup = countMap((L.devices || []).map(function (d) { return d.name; }));
 
     var devs = (L.devices || []).map(function (d, i) {
