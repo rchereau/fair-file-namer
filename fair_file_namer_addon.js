@@ -705,6 +705,11 @@
       if (av) { ROOT.ui.values[f.id] = av; return; }   // ELN context wins when present
       if (f.source === 'device') {
         var md = machineDevice();
+        if (!(md && findDeviceByName(md))) {   // no machine default — fall back so a device is selected
+          var favs = favDevices().filter(findDeviceByName);
+          var devs = (ROOT.library.devices || []);
+          md = favs[0] || (devs.length === 1 ? devs[0].name : '');
+        }
         if (md && findDeviceByName(md)) { ROOT.ui.values[f.id] = md; if (ROOT.ui.devGroup == null) ROOT.ui.devGroup = groupOfDevice(md); }
       } else if (f.source === 'department') {
         if (lab && lab.dept) ROOT.ui.values[f.id] = lab.dept;   // bound to the selected lab
@@ -738,6 +743,10 @@
     var list = lab.fileTemplates;
     return list.filter(function (t) { return t.id === ROOT.ui.tplId; })[0] || defaultTpl(list);
   }
+  function useFolderTpl(lab) {
+    var list = (lab && lab.folderTemplates) || [];
+    return list.filter(function (t) { return t.id === ROOT.ui.folderTplId; })[0] || defaultTpl(list);
+  }
 
   function renderUse() {
     var L = ROOT.library;
@@ -751,9 +760,16 @@
 
     if (!tpl) return '<div class="fng-row">' + labSel + '</div><p class="fng-muted" style="margin-top:12px">This lab has no templates yet.</p>';
 
-    var tplSel = '<div class="fng-f"><span class="fng-l">Template</span><select class="fng-sel" onchange="' + R() + '.useTpl(this.value)">'
+    var tplSel = '<div class="fng-f"><span class="fng-l">File template</span><select class="fng-sel" onchange="' + R() + '.useTpl(this.value)">'
       + lab.fileTemplates.map(function (t) { return '<option value="' + esc(t.id) + '"' + (t.id === tpl.id ? ' selected' : '') + '>' + esc(t.name) + '</option>'; }).join('')
       + '</select></div>';
+
+    var folderTpl = useFolderTpl(lab); if (folderTpl) ROOT.ui.folderTplId = folderTpl.id;
+    var folderSel = (lab.folderTemplates && lab.folderTemplates.length)
+      ? '<div class="fng-f"><span class="fng-l">Folder template</span><select class="fng-sel" onchange="' + R() + '.useFolderTpl(this.value)">'
+        + lab.folderTemplates.map(function (t) { return '<option value="' + esc(t.id) + '"' + (folderTpl && t.id === folderTpl.id ? ' selected' : '') + '>' + esc(t.name) + '</option>'; }).join('')
+        + '</select></div>'
+      : '';
 
     applyDefaults(lab, tpl);
     var inputs = inputFields(tpl, L).map(function (f) {
@@ -781,13 +797,7 @@
           + (alumSorted.length ? '<optgroup label="Alumni">' + alumSorted.map(opOpt).join('') + '</optgroup>' : '')
           + '</select>';
       } else if (f.source === 'device') {
-        // Opens a read-only device browser to choose a device; the gear opens the
-        // user's own configurations for the chosen operator + device.
-        ctrl = '<div class="fng-devwrap">'
-          + '<button type="button" class="fng-btn fng-devbtn' + (v ? ' pri' : ' fng-devempty') + '" style="flex:1" title="Browse and choose a device" onclick="' + R() + '.openDevManager()">'
-          + (v ? esc(v) : 'Choose device ▾') + '</button>'
-          + '<button type="button" class="fng-btn" style="flex:none;white-space:nowrap" title="Your configurations for this operator + device" onclick="' + R() + '.openConfigMgr()">My Configs</button>'
-          + '</div>';
+        return '';   // Device is rendered on its own line above, with My Configs
       } else if (f.source === 'list') {
         ctrl = '<select class="fng-sel" required onchange="' + R() + '.setVal(\'' + f.id + '\',this.value)"><option value="">— select —</option>'
           + (f.options || []).map(function (o) { return '<option value="' + esc(o) + '"' + (o === v ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join('') + '</select>';
@@ -807,7 +817,23 @@
     var dateCtl = hasDate ? '<div class="fng-f"><span class="fng-l">Acquisition date</span>'
       + '<input class="fng-in" type="date" value="' + esc(ROOT.ui.dateOverride || fmtDate(new Date(), 'YYYY-MM-DD')) + '" title="Defaults to today — pick another if needed" onchange="' + R() + '.setDateOverride(this.value)"></div>' : '';
 
-    return '<div class="fng-row">' + labSel + tplSel + dateCtl + '</div>'
+    // Device + My Configs on their own line between the selectors and Fill in.
+    var devFid = deviceFieldId(tpl);
+    var devVal = devFid ? (ROOT.ui.values[devFid] || '') : '';
+    var _acfg = activeConfig();
+    var cfgLabel = _acfg ? _acfg.name : 'Configs';
+    var deviceLine = devFid
+      ? '<div class="fng-row">'
+        + '<div class="fng-f"><span class="fng-l req">Device</span><div>'
+        + '<button type="button" class="fng-btn fng-devbtn' + (devVal ? ' pri' : ' fng-devempty') + '" style="width:100%" title="Browse and choose a device" onclick="' + R() + '.openDevManager()">'
+        + (devVal ? esc(devVal) : 'Choose device ▾') + '</button></div></div>'
+        + '<div class="fng-f"><span class="fng-l">My Configs</span><div>'
+        + '<button type="button" class="fng-btn" style="width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="Your configurations for this operator + device" onclick="' + R() + '.openConfigMgr()">' + esc(cfgLabel) + '</button></div></div>'
+        + '</div>'
+      : '';
+
+    return '<div class="fng-row">' + labSel + tplSel + folderSel + dateCtl + '</div>'
+      + deviceLine
       + '<h3>Fill in</h3><div class="fng-fillrow">' + inputs + '</div>'
       + usePreview()
       + '<h3>Metadata &amp; notes</h3>'
@@ -1094,7 +1120,7 @@
     });
     var sepc = '<span class="sep">' + esc(tpl.separator || '_') + '</span>';
     var nameHtml = segs.length ? segs.join(sepc) : '<span class="fng-muted">add fields to this template…</span>';
-    var folder = defaultTpl(lab.folderTemplates);
+    var folder = useFolderTpl(lab);
     var fileCard = '<div class="fng-ex"><div class="h">File name</div>'
       + '<div class="fng-namerow"><div class="fng-name">' + nameHtml + '</div>'
       + '<button class="fng-copy" id="fng-copybtn" title="Copy file name" onclick="' + R() + '.copyName()">'
@@ -1106,6 +1132,7 @@
 
   ROOT.useLab = function (id) { ROOT.ui.labId = id; ROOT.ui.tplId = null; ROOT.ui.values = {}; rerender(); };
   ROOT.useTpl = function (id) { ROOT.ui.tplId = id; ROOT.ui.values = {}; rerender(); };
+  ROOT.useFolderTpl = function (id) { ROOT.ui.folderTplId = id; rerender(); };
 
   function deviceFieldId(tpl) {
     var r = null; (tpl ? tpl.fieldIds : []).forEach(function (id) { var f = fieldById(ROOT.library, id); if (f && f.source === 'device') r = id; });
@@ -1236,7 +1263,7 @@
       // metadata keeps the FULL value (lab/operator names), the file name abbreviates
       fields[f.name] = f.source === 'lab' ? lab.name : (isAuto(f) ? encodeField(f, {}, ctx, effFmt(tpl, f)) : (ROOT.ui.values[id] || ''));
     });
-    var folder = defaultTpl(lab.folderTemplates);
+    var folder = useFolderTpl(lab);
     var sepc = tpl.separator || '_';
     var pattern = (tpl.fieldIds || []).map(function (id) { var ff = fieldById(L, id); return ff ? ff.name : id; }).join(sepc);
     var h = { fileName: curName(), lab: lab.name, template: tpl.name, separator: sepc, pattern: pattern, fields: fields };
@@ -1430,11 +1457,11 @@
    * The full literal path is opt-in and always labelled "not verified". */
   function folderSubtree() {
     var lab = useLab(); if (!lab) return '';
-    var folder = defaultTpl(lab.folderTemplates); if (!folder) return '';
+    var folder = useFolderTpl(lab); if (!folder) return '';
     var tpl = useFileTpl(lab);
     return buildName(folder, ROOT.library, ROOT.ui.values, { now: nowDate(), tplId: tpl ? tpl.id : '', lab: lab });
   }
-  function archiveRoot() { var lab = useLab(); if (!lab) return ''; var folder = defaultTpl(lab.folderTemplates); return (folder && folder.basePath) ? normPath(folder.basePath) : ''; }
+  function archiveRoot() { var lab = useLab(); if (!lab) return ''; var folder = useFolderTpl(lab); return (folder && folder.basePath) ? normPath(folder.basePath) : ''; }
   function relPath() { var sub = folderSubtree(), n = curName(); return sub ? (sub + '/' + n) : n; }
   function localBase() { try { return localStorage.getItem(LS_FSPATH) || ''; } catch (e) { return ''; } }
   // Join a user-entered absolute base with the relative subtree, honouring the base's
@@ -1520,7 +1547,7 @@
   }
   function curPath() {
     var lab = useLab(); if (!lab) return '';
-    var tpl = useFileTpl(lab), folder = defaultTpl(lab.folderTemplates);
+    var tpl = useFileTpl(lab), folder = useFolderTpl(lab);
     var segs = folder ? buildName(folder, ROOT.library, ROOT.ui.values, { now: nowDate(), tplId: tpl ? tpl.id : '', lab: lab }) : '';
     var base = (folder && folder.basePath) ? normPath(folder.basePath) : '';
     var dir = [base, segs].filter(Boolean).join('/');
