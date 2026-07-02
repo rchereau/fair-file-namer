@@ -94,6 +94,7 @@
     return {
       version: 3,
       operators: ['Marie Curie', 'Jean Dupont'],
+      alumni: [],
       devices: [
         { id: 'dev1', name: '2P-B',      info: { Microscope: 'Two-photon', Software: 'ScanImage', Version: '2023.1', Laser: 'MaiTai DeepSee' } },
         { id: 'dev2', name: 'Confocal1', info: { Microscope: 'Confocal', Software: 'ZEN', Version: '3.5' } }
@@ -192,36 +193,47 @@
   // the initials / first-3 directly to disambiguate, otherwise they're computed.
   function abbrIni(e) { return (e && e.initials != null && String(e.initials) !== '') ? sanitizeVal(e.initials) : applyFmt(opName(e), 'acronym'); }
   function abbrF3(e)  { return (e && e.first3   != null && String(e.first3)   !== '') ? sanitizeVal(e.first3)   : applyFmt(opName(e), 'first3'); }
-  function encodeField(field, values, ctx) {
+  function encodeField(field, values, ctx, fmtOverride) {
     if (!field) return '';
-    if (field.source === 'date') return fmtDate((ctx && ctx.now) || new Date(), field.format || 'YYYYMMDD');
+    var ffmt = (fmtOverride != null && fmtOverride !== '') ? fmtOverride : field.format;
+    if (field.source === 'date') return fmtDate((ctx && ctx.now) || new Date(), ffmt || 'YYYYMMDD');
     if (field.source === 'counter') return pad(counterNext(field, ctx), field.pad || 2);
     if (field.source === 'operator') {
-      var nm = values[field.id] || '', fmt = field.format || 'full', op = operatorByName(nm);
+      var nm = values[field.id] || '', fmt = ffmt || 'full', op = operatorByName(nm);
       if (fmt === 'acronym' || fmt === 'initials') return op ? abbrIni(op) : applyFmt(nm, 'acronym');
       if (fmt === 'first3') return op ? abbrF3(op) : applyFmt(nm, 'first3');
       return applyFmt(nm, fmt);
     }
     if (field.source === 'lab') {
       var lab = ctx && ctx.lab; if (!lab) return '';
-      var lf = field.format || 'full';
+      var lf = ffmt || 'full';
       if (lf === 'acronym' || lf === 'initials') return abbrIni(lab);
       if (lf === 'first3') return abbrF3(lab);
       return applyFmt(lab.name, lf);
     }
-    return applyFmt(values[field.id], field.format);
+    return applyFmt(values[field.id], ffmt);
+  }
+  // Effective format for a field WITHIN a given template: a per-template override
+  // (tpl.formats[fieldId]) wins, otherwise the field's own default format. This is
+  // what lets the same field format independently in the file name vs the folder path.
+  function effFmt(tpl, field) {
+    if (tpl && tpl.formats && field &&
+        Object.prototype.hasOwnProperty.call(tpl.formats, field.id)) {
+      return tpl.formats[field.id];
+    }
+    return field ? field.format : undefined;
   }
   function fieldById(lib, id) { return (lib.fields || []).filter(function (f) { return f.id === id; })[0]; }
   // Case-insensitive, natural (numeric-aware) name compare for alphabetical display
   // ordering of operators and devices, e.g. "Rig2" before "Rig10".
   function cmpName(a, b) { return String(a == null ? '' : a).localeCompare(String(b == null ? '' : b), undefined, { sensitivity: 'base', numeric: true }); }
-  function operatorByName(name) { var ops = (ROOT.library && ROOT.library.operators) || []; for (var i = 0; i < ops.length; i++) { if (opName(ops[i]) === name) return ops[i]; } return null; }
+  function operatorByName(name) { var L = ROOT.library || {}; var ops = (L.operators || []).concat(L.alumni || []); for (var i = 0; i < ops.length; i++) { if (opName(ops[i]) === name) return ops[i]; } return null; }
   function countMap(arr) { var m = {}; (arr || []).forEach(function (v) { v = String(v == null ? '' : v); if (v) m[v] = (m[v] || 0) + 1; }); return m; }
   function anyDup(arr) { var m = countMap(arr); for (var k in m) { if (m[k] > 1) return true; } return false; }
   // duplicate full name / initials / first-3 among operators OR labs, or duplicate device name
   function hasCollisions() {
     var L = ROOT.library; if (!L) return false;
-    var groups = [L.operators || [], L.labs || []];
+    var groups = [(L.operators || []).concat(L.alumni || []), L.labs || []];
     for (var g = 0; g < groups.length; g++) {
       var arr = groups[g];
       if (anyDup(arr.map(function (e) { return applyFmt(opName(e), 'full'); }))) return true;
@@ -234,7 +246,7 @@
     if (!tpl) return '';
     var sep = tpl.separator || '_';
     return (tpl.fieldIds || [])
-      .map(function (id) { return encodeField(fieldById(lib, id), values || {}, ctx); })
+      .map(function (id) { var f = fieldById(lib, id); return encodeField(f, values || {}, ctx, effFmt(tpl, f)); })
       .filter(function (s) { return s !== '' && s != null; })
       .join(sep);
   }
@@ -260,6 +272,12 @@
       if (typeof o === 'string') return { name: o };
       o = o || { name: '' };
       if (o.id && o.initials == null) { o.initials = o.id; delete o.id; }   // migrate old single override
+      return o;
+    });
+    lib.alumni = (lib.alumni || []).map(function (o) {
+      if (typeof o === 'string') return { name: o };
+      o = o || { name: '' };
+      if (o.id && o.initials == null) { o.initials = o.id; delete o.id; }
       return o;
     });
     lib.devices = lib.devices || [];
@@ -616,7 +634,7 @@
       + '.fng-doc-h{font-size:1.15em;color:var(--ac);margin:0 0 8px;letter-spacing:0;text-transform:none;}'
       + '.fng-doc code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.92em;color:#ffd9a0;word-break:break-all;}'
       + '.fng-doc-t{border-collapse:collapse;width:100%;margin:4px 0;}'
-      + '.fng-doc-t th,.fng-doc-t td{border:1px solid var(--bd);padding:4px 9px;text-align:left;}'
+      + '.fng-doc-t th,.fng-doc-t td{border:1px solid var(--bd);padding:4px 9px;text-align:left;word-break:break-word;}'
       + '.fng-doc-t th{color:var(--dim);font-weight:600;font-size:.85em;text-transform:uppercase;letter-spacing:.04em;}'
       + '.fng-doc-hr{border:none;border-top:1px solid var(--bd);margin:14px 0;}'
       + '.fng-notes-edit{min-height:90px;outline:none;}'
@@ -693,7 +711,7 @@
         else { var dd = machineDept(); if (dd && DEPARTMENTS.some(function (x) { return x.code === dd; })) ROOT.ui.values[f.id] = dd; }
       } else if (f.source === 'operator') {
         var oo = machineOperator();
-        if (oo && (ROOT.library.operators || []).some(function (op) { return opName(op) === oo; })) ROOT.ui.values[f.id] = oo;
+        if (oo && (ROOT.library.operators || []).concat(ROOT.library.alumni || []).some(function (op) { return opName(op) === oo; })) ROOT.ui.values[f.id] = oo;
       }
     });
   }
@@ -756,8 +774,12 @@
         ctrl = '<select class="fng-sel" required onchange="' + R() + '.setVal(\'' + f.id + '\',this.value)"><option value="">— select —</option>'
           + DEPARTMENTS.map(function (d) { return '<option value="' + esc(d.code) + '"' + (d.code === v ? ' selected' : '') + '>' + esc(d.code) + ' — ' + esc(d.label) + '</option>'; }).join('') + '</select>';
       } else if (f.source === 'operator') {
+        var opOpt = function (o) { var n = opName(o); return '<option value="' + esc(n) + '"' + (n === v ? ' selected' : '') + '>' + esc(n) + '</option>'; };
+        var alumSorted = (L.alumni || []).slice().sort(function (a, b) { return cmpName(opName(a), opName(b)); });
         ctrl = '<select class="fng-sel" required onchange="' + R() + '.setVal(\'' + f.id + '\',this.value)"><option value="">— select —</option>'
-          + (L.operators || []).slice().sort(function (a, b) { return cmpName(opName(a), opName(b)); }).map(function (o) { var n = opName(o); return '<option value="' + esc(n) + '"' + (n === v ? ' selected' : '') + '>' + esc(n) + '</option>'; }).join('') + '</select>';
+          + (L.operators || []).slice().sort(function (a, b) { return cmpName(opName(a), opName(b)); }).map(opOpt).join('')
+          + (alumSorted.length ? '<optgroup label="Alumni">' + alumSorted.map(opOpt).join('') + '</optgroup>' : '')
+          + '</select>';
       } else if (f.source === 'device') {
         // Opens a read-only device browser to choose a device; the gear opens the
         // user's own configurations for the chosen operator + device.
@@ -794,6 +816,7 @@
       + '<div class="fng-acts">'
       + (hasCounter ? '<button class="fng-btn pri" onclick="' + R() + '.nextRun()">Next run ▸</button>' : '')
       + '<button class="fng-btn" onclick="' + R() + '.copyPath()">Copy path</button>'
+      + '<button class="fng-btn pri" onclick="' + R() + '.openSafeTransfer()">Transfer with SafeTransfer \u25B8</button>'
       + '<button class="fng-btn" onclick="' + R() + '.copyMarkdown()">Copy metadata (Markdown)</button>'
       + '<button class="fng-btn" onclick="' + R() + '.downloadMarkdown()">Download .md</button>'
       + '<button class="fng-btn" onclick="' + R() + '.downloadSidecar()">Download .json</button>'
@@ -820,8 +843,13 @@
     var active = list.filter(function (c) { return c.id === actId; })[0];
     var sel = '<select class="fng-sel" onchange="' + R() + '.selectConfig(this.value)"><option value="">— none —</option>'
       + list.map(function (c) { return '<option value="' + esc(c.id) + '"' + (c.id === actId ? ' selected' : '') + '>' + esc(c.name) + '</option>'; }).join('') + '</select>';
+    var typeSel = active
+      ? '<div class="fng-f" style="margin-top:8px;max-width:220px"><span class="fng-l">Format</span><select class="fng-sel" onchange="' + R() + '.setConfigType(this.value)">'
+        + '<option value="kv"' + (cfgType(active) === 'kv' ? ' selected' : '') + '>Key-value pairs</option>'
+        + '<option value="text"' + (cfgType(active) === 'text' ? ' selected' : '') + '>Free text</option></select></div>'
+      : '';
     var editor = active
-      ? '<div class="fng-f" style="margin-top:8px"><span class="fng-l">Settings — one "Key: value" per line (saved on this machine; added to the metadata when this device is in use)</span>'
+      ? typeSel + '<div class="fng-f" style="margin-top:8px"><span class="fng-l">' + (cfgType(active) === 'text' ? 'Text (saved on this machine; added to the metadata when this device is in use)' : 'Settings — one "Key: value" per line (saved on this machine; added to the metadata when this device is in use)') + '</span>'
         + '<textarea class="fng-ta" style="font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px" oninput="' + R() + '.editConfig(this.value)">' + esc(active.text || '') + '</textarea></div>'
       : '<p class="fng-muted" style="margin-top:6px">No configuration selected — create one with <b>New</b>.</p>';
     return '<div class="fng-card" style="margin-top:10px"><h3 style="margin-top:0">My configurations <span class="fng-muted" style="text-transform:none;letter-spacing:0">· ' + esc(op) + ' · this machine</span></h3>'
@@ -1060,7 +1088,7 @@
     // ‹Field name› placeholder so the user sees exactly what's still missing.
     var segs = (tpl.fieldIds || []).map(function (id, i) {
       var f = fieldById(L, id);
-      var v = encodeField(f, ROOT.ui.values, ctx);
+      var v = encodeField(f, ROOT.ui.values, ctx, effFmt(tpl, f));
       if (v) return '<span style="color:' + SEG[i % SEG.length] + '">' + esc(v) + '</span>';
       return '<span class="fng-ph">&lt;' + esc(f ? f.name : '?') + '&gt;</span>';
     });
@@ -1157,6 +1185,12 @@
     return odConfigs(op, dev).filter(function (c) { return c.id === activeConfigId(op, dev); })[0] || null;
   }
   // config handlers act on (current operator + the device chosen for the file name)
+  // A config is 'text' (free text) or 'kv' (Key: value). Explicit type wins; else infer.
+  function cfgType(c) { if (!c) return 'kv'; if (c.type === 'text' || c.type === 'kv') return c.type; return Object.keys(parseSettings(c.text)).length ? 'kv' : 'text'; }
+  // Per-experiment edits made in the metadata panel — session only, never saved to the template.
+  ROOT.setCfgText = function (id, v) { ROOT.ui.cfgText = ROOT.ui.cfgText || {}; ROOT.ui.cfgText[id] = v; refreshHeader(); };
+  ROOT.setCfgVal = function (id, key, v) { ROOT.ui.cfgVals = ROOT.ui.cfgVals || {}; ROOT.ui.cfgVals[id] = ROOT.ui.cfgVals[id] || {}; ROOT.ui.cfgVals[id][key] = v; refreshHeader(); };
+  ROOT.setConfigType = function (t) { var op = currentOperator(), dev = currentDeviceName(); if (!op || !dev) return; var m = loadAllConfigs(), k = cfgKey(op, dev), c = (m[k] || []).filter(function (x) { return x.id === activeConfigId(op, dev); })[0]; if (!c) return; c.type = (t === 'text') ? 'text' : 'kv'; saveAllConfigs(m); rerender(); };
   ROOT.selectConfig = function (id) { var op = currentOperator(), dev = currentDeviceName(); if (!op || !dev) return; setActiveConfigId(op, dev, id); rerender(); };
   ROOT.newConfig = function () {
     var op = currentOperator(); if (!op) { toast('Select your operator on the main screen first.'); return; }
@@ -1200,7 +1234,7 @@
     (tpl.fieldIds || []).forEach(function (id) {
       var f = fieldById(L, id); if (!f) return;
       // metadata keeps the FULL value (lab/operator names), the file name abbreviates
-      fields[f.name] = f.source === 'lab' ? lab.name : (isAuto(f) ? encodeField(f, {}, ctx) : (ROOT.ui.values[id] || ''));
+      fields[f.name] = f.source === 'lab' ? lab.name : (isAuto(f) ? encodeField(f, {}, ctx, effFmt(tpl, f)) : (ROOT.ui.values[id] || ''));
     });
     var folder = defaultTpl(lab.folderTemplates);
     var sepc = tpl.separator || '_';
@@ -1208,10 +1242,11 @@
     var h = { fileName: curName(), lab: lab.name, template: tpl.name, separator: sepc, pattern: pattern, fields: fields };
     // location & storage: the name is the durable identifier; paths are mutable
     var _subtree = folder ? buildName(folder, L, ROOT.ui.values, ctx) : '';
-    if (_subtree) h.relPath = _subtree + '/' + (h.fileName || '');          // relative, location-independent
-    var _fp = fullLocalPath(); if (_fp) h.fullPath = _fp;   // relative -> full once the data folder's absolute path is set
+    if (_subtree) h.relPath = _subtree;                    // folder, relative (the file name is recorded separately below)
+    var _lb = localBase();
+    if (_lb) h.fullPath = _subtree ? joinPath(_lb, _subtree) : _lb;   // local FOLDER path (no file name)
     var _root = (folder && folder.basePath) ? normPath(folder.basePath) : '';
-    if (showLiteralPath()) { var _lit = [_root, _subtree].filter(Boolean).join('/'); h.literalPath = (_lit ? _lit + '/' : '') + (h.fileName || ''); }
+    if (showLiteralPath()) { var _lit = [_root, _subtree].filter(Boolean).join('/'); if (_lit) h.literalPath = _lit; }   // NASAC FOLDER path (no file name)
     // Department is bound to the lab — always recorded in the metadata, even if it
     // isn't part of the naming template.
     var depCode = (lab && lab.dept) ? lab.dept : '';
@@ -1236,9 +1271,22 @@
       var f = fieldById(L, id);
       if (f && f.source === 'operator') { var op = operatorByName(ROOT.ui.values[id] || ''); if (op) { if (op.email) h.operatorEmail = op.email; if (op.orcid) h.operatorOrcid = op.orcid; } }
     });
-    // attach the operator's active experiment configuration (local to this machine)
+    // attach the operator's active experiment configuration (local to this machine).
+    // Per-experiment edits live in ROOT.ui.cfgVals[id] / cfgText[id] (session only) and
+    // feed the metadata + copy; the saved config stays a reusable template.
     var cfg = activeConfig();
-    if (cfg) { var cs = parseSettings(cfg.text); if (Object.keys(cs).length) h.config = { name: cfg.name, settings: cs }; }
+    if (cfg) {
+      var ctype = cfgType(cfg);
+      if (ctype === 'text') {
+        var ov = ROOT.ui.cfgText && ROOT.ui.cfgText[cfg.id];
+        var body = (ov != null) ? ov : (cfg.text || '');
+        if (String(body).trim()) h.config = { name: cfg.name, type: 'text', text: body };
+      } else {
+        var base = parseSettings(cfg.text), sv = (ROOT.ui.cfgVals && ROOT.ui.cfgVals[cfg.id]) || {};
+        var out = {}; Object.keys(base).forEach(function (k) { out[k] = (sv[k] != null) ? sv[k] : base[k]; });
+        if (Object.keys(out).length) h.config = { name: cfg.name, type: 'kv', settings: out };
+      }
+    }
     // paths in the metadata are recorded OS-agnostically (forward slashes), independent of the
     // separator the user typed for their local root. The Folder card keeps native separators.
     ['relPath', 'fullPath', 'literalPath'].forEach(function (k) { if (h[k]) h[k] = String(h[k]).replace(/\\/g, '/'); });
@@ -1265,8 +1313,8 @@
       Object.keys(h.device.info).forEach(function (k) { md.push('| ' + k + ' | ' + h.device.info[k] + ' |'); });
     }
     if (h.config) {
-      md.push('', '**Configuration — ' + h.config.name + '** (this machine)', '', '| Setting | Value |', '| --- | --- |');
-      Object.keys(h.config.settings).forEach(function (k) { md.push('| ' + k + ' | ' + h.config.settings[k] + ' |'); });
+      if (h.config.type === 'text') { md.push('', '**Configuration — ' + h.config.name + '** (this machine)', '', (h.config.text || '')); }
+      else { md.push('', '**Configuration — ' + h.config.name + '** (this machine)', '', '| Setting | Value |', '| --- | --- |'); Object.keys(h.config.settings).forEach(function (k) { md.push('| ' + k + ' | ' + h.config.settings[k] + ' |'); }); }
     }
     return md.join('\n');
   }
@@ -1281,18 +1329,28 @@
     if (h.literalPath) html += '<b>Recommended transfer path (NASAC):</b> <code>' + esc(h.literalPath) + '</code><br>';
     html += '<b>Lab:</b> ' + esc(h.lab) + (h.department ? '<br><b>Department:</b> ' + esc(h.department) : '') + (h.operatorEmail ? '<br><b>Operator email:</b> ' + esc(h.operatorEmail) : '') + (h.operatorOrcid ? '<br><b>Operator ORCID iD:</b> ' + esc(h.operatorOrcid) : '') + '<br><b>Template:</b> ' + esc(h.template)
       + '<br><b>Generated:</b> ' + fmtDate(new Date(), 'YYYY-MM-DD') + ' ' + fmtDate(new Date(), 'HH:MM') + '</p>'
-      + '<table class="fng-doc-t"><thead><tr><th>Field</th><th>Value</th></tr></thead><tbody>';
+    var CG = '<colgroup><col style="width:38%"><col></colgroup>';
+    var TOPEN = '<table class="fng-doc-t" style="table-layout:fixed">' + CG + '<thead><tr><th>Field</th><th>Value</th></tr></thead><tbody>';
+    html += TOPEN;
     Object.keys(h.fields).forEach(function (k) { html += '<tr><td>' + esc(k) + '</td><td>' + esc(h.fields[k] || '—') + '</td></tr>'; });
     html += '</tbody></table>';
     if (h.device) {
-      html += '<p style="margin-top:10px"><b>Device — ' + esc(h.device.name) + '</b></p><table class="fng-doc-t"><tbody>';
+      html += '<p style="margin-top:10px"><b>Device — ' + esc(h.device.name) + '</b></p>' + TOPEN;
       Object.keys(h.device.info).forEach(function (k) { html += '<tr><td>' + esc(k) + '</td><td>' + esc(h.device.info[k]) + '</td></tr>'; });
       html += '</tbody></table>';
     }
     if (h.config) {
-      html += '<p style="margin-top:10px"><b>Configuration — ' + esc(h.config.name) + '</b> <span style="color:#838daa">(this machine)</span></p><table class="fng-doc-t"><tbody>';
-      Object.keys(h.config.settings).forEach(function (k) { html += '<tr><td>' + esc(k) + '</td><td>' + esc(h.config.settings[k]) + '</td></tr>'; });
-      html += '</tbody></table>';
+      html += '<p style="margin-top:10px"><b>Configuration — ' + esc(h.config.name) + '</b> <span style="color:#838daa">(this machine · edit values for this experiment)</span></p>';
+      if (h.config.type === 'text') {
+        html += '<textarea class="fng-ta" style="width:100%;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;min-height:90px" oninput="' + R() + '.setCfgText(\'' + esc(activeConfigId(currentOperator(), currentDeviceName())) + '\',this.value)">' + esc(h.config.text || '') + '</textarea>';
+      } else {
+        var cid = activeConfigId(currentOperator(), currentDeviceName());
+        html += TOPEN;
+        Object.keys(h.config.settings).forEach(function (k) {
+          html += '<tr><td>' + esc(k) + '</td><td style="padding:2px 6px"><input class="fng-in" style="width:100%;box-sizing:border-box" value="' + esc(h.config.settings[k]) + '" onchange="' + R() + '.setCfgVal(\'' + esc(cid) + '\',\'' + esc(k).replace(/'/g, '&#39;') + '\',this.value)"></td></tr>';
+        });
+        html += '</tbody></table>';
+      }
     }
     return html;
   }
@@ -1494,6 +1552,22 @@
   function fsMkdirp(root, segs) { var cur = Promise.resolve(root); segs.forEach(function (sg) { cur = cur.then(function (h) { return h.getDirectoryHandle(sg, { create: true }); }); }); return cur; }
   function fsWrite(dir, name, text) { return dir.getFileHandle(name, { create: true }).then(function (fh) { return fh.createWritable(); }).then(function (w) { return Promise.resolve(w.write(text)).then(function () { return w.close(); }); }); }
   function fsSubSegs() { return (folderSubtree() || '').split('/').map(function (x) { return x.trim(); }).filter(Boolean); }
+  // Last path segment of a typed path, tolerant of \\ and / and trailing slashes.
+  function pathLeaf(p) { return p ? (String(p).replace(/[\\/]+$/, '').split(/[\\/]+/).pop() || '') : ''; }
+  // Does the granted folder handle match the local root path the user typed? The
+  // browser only exposes a handle's leaf NAME, so that's all we can compare — but a
+  // leaf mismatch is a reliable sign the path was changed without re-picking the
+  // folder, which would make Create folder tree act on the wrong (old) folder.
+  //   'nobase'      no local root set yet
+  //   'nohandle'    path set, but no folder access granted (will be prompted)
+  //   'mismatch'    granted folder's name != the typed path's leaf
+  //   'ok'          they line up
+  function fsRootState() {
+    if (!localBase()) return 'nobase';
+    if (!ROOT._fsRoot) return 'nohandle';
+    var want = pathLeaf(localBase()), have = ROOT._fsRoot.name || '';
+    return (want && have && want.toLowerCase() === have.toLowerCase()) ? 'ok' : 'mismatch';
+  }
   function fsNavigate(root, segs) { var i = 0, cur = root; function step() { if (i >= segs.length) return Promise.resolve(cur); return cur.getDirectoryHandle(segs[i]).then(function (h) { cur = h; i++; return step(); }).catch(function () { return null; }); } return step(); }
   // Best-effort: write the LATEST metadata into the already-created leaf folder. Called
   // from copy / eLabNext so the saved file is always current. Never creates folders.
@@ -1587,9 +1661,24 @@
       return '<div class="fng-save"><div class="fng-l">Folder tree (this machine)</div>'
         + '<p class="fng-muted" style="font-size:12px;margin:4px 0 0">Creating the folder tree needs Chrome or Edge. In this browser, use <b>Download .json</b> above and file it under the path shown.</p></div>';
     }
+    var st = fsRootState();
+    var warn = '';
+    if (st === 'mismatch') {
+      warn = '<div style="margin:6px 0 0;padding:8px 10px;border-radius:8px;'
+        + 'background:rgba(214,158,46,.14);border:1px solid rgba(214,158,46,.55);'
+        + 'font-size:12px;line-height:1.5">\u26A0\uFE0F The folder you granted access to is '
+        + '<b>\u201C' + esc(ROOT._fsRoot.name || '') + '\u201D</b>, which doesn\u2019t match your local '
+        + 'root path (it ends in <b>\u201C' + esc(pathLeaf(localBase())) + '\u201D</b>). It looks like the '
+        + 'path was changed without re-picking the folder \u2014 Create folder tree would write to the old '
+        + 'folder. Re-pick your local root folder with the folder chooser to fix this.</div>';
+    } else if (st === 'nohandle') {
+      warn = '<p class="fng-muted" style="font-size:12px;margin:6px 0 0">You\u2019ll be asked to '
+        + 'pick this folder the first time, so the browser can create folders in it.</p>';
+    }
     return '<div class="fng-save"><div class="fng-row" style="justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">'
       + '<span class="fng-l" style="margin:0">Folder tree (this machine)</span>'
       + '<button class="fng-btn pri" onclick="' + R() + '.createTree()">Create folder tree</button></div>'
+      + warn
       + '<p class="fng-muted" style="font-size:12px;margin:5px 0 0">Creates the missing subfolders under your <b>local root folder</b>; the metadata path then switches from <i>Recommended local full path</i> to <i>Full path</i>.</p></div>';
   }
 
@@ -1699,9 +1788,10 @@
    * best-effort machine record (whether it survives depends on the ELN's
    * sanitiser — the downloaded .json sidecar is the guaranteed canonical form). */
   function clipTable(pairs, c1, c2) {
-    var TS = 'border-collapse:collapse;margin:4px 0;', CS = 'border:1px solid #999;padding:4px 9px;text-align:left;';
+    var TS = 'border-collapse:collapse;margin:4px 0;table-layout:fixed;width:560px;', CS = 'border:1px solid #999;padding:4px 9px;text-align:left;word-break:break-word;';
+    var cg = '<colgroup><col style="width:200px"><col></colgroup>';
     var rows = pairs.map(function (p) { return '<tr><td style="' + CS + '">' + esc(p[0]) + '</td><td style="' + CS + '">' + esc(p[1] == null || p[1] === '' ? '—' : p[1]) + '</td></tr>'; }).join('');
-    return '<table style="' + TS + '"><thead><tr><th style="' + CS + '">' + esc(c1) + '</th><th style="' + CS + '">' + esc(c2) + '</th></tr></thead><tbody>' + rows + '</tbody></table>';
+    return '<table style="' + TS + '">' + cg + '<thead><tr><th style="' + CS + '">' + esc(c1) + '</th><th style="' + CS + '">' + esc(c2) + '</th></tr></thead><tbody>' + rows + '</tbody></table>';
   }
   // Self-contained HTML (no app CSS classes — those don't exist in the ELN).
   function clipboardHtml() {
@@ -1720,7 +1810,9 @@
     if (h.device) html += '<p style="margin:10px 0 4px"><strong>Device — ' + esc(h.device.name) + '</strong></p>'
       + clipTable(Object.keys(h.device.info).map(function (k) { return [k, h.device.info[k]]; }), 'Property', 'Value');
     if (h.config) html += '<p style="margin:10px 0 4px"><strong>Configuration — ' + esc(h.config.name) + '</strong> (this machine)</p>'
-      + clipTable(Object.keys(h.config.settings).map(function (k) { return [k, h.config.settings[k]]; }), 'Setting', 'Value');
+      + (h.config.type === 'text'
+          ? '<p style="white-space:pre-wrap;margin:4px 0">' + esc(h.config.text || '') + '</p>'
+          : clipTable(Object.keys(h.config.settings).map(function (k) { return [k, h.config.settings[k]]; }), 'Setting', 'Value'));
     if (notesNonEmpty()) html += '<hr><h3 style="margin:0 0 6px">Notes</h3>' + ROOT.ui.notesHtml;
     return html;
   }
@@ -1796,6 +1888,97 @@
     toast('File name copied.');
   };
   ROOT.copyPath = function () { if (!guard()) return; var lit = showLiteralPath(); copyText(lit ? curPath() : relPath()); toast(lit ? 'Full path copied (not verified).' : 'Relative path copied.'); };
+  // Hand off to the SafeTransfer desktop app via its URL scheme, with the absolute
+  // local source and the NASAC destination already filled in. Both come straight from
+  // headerObject() (forward-slash normalised); SafeTransfer converts slashes per-OS and
+  // shows a confirm screen before anything is copied.
+  var ST_DOWNLOAD_URL = 'https://facmed-filenamer.gitlab.io/safetransfer/';
+  // OS detection is used only to tailor the one-time 'run it once' hint; the
+  // download button goes to the Pages site, which is login-free, always live,
+  // and offers the right build for the visitor's system.
+  function stDetectOS() {
+    var d = (navigator.userAgentData && navigator.userAgentData.platform) || '';
+    var ua = (d + ' ' + navigator.userAgent + ' ' + (navigator.platform || '')).toLowerCase();
+    if (ua.indexOf('win') !== -1) return 'windows';
+    if (ua.indexOf('mac') !== -1 || ua.indexOf('iphone') !== -1 || ua.indexOf('ipad') !== -1) return 'macos';
+    return 'linux';
+  }
+
+  // Show one-time-per-machine guidance when the safetransfer:// link appears not
+  // to have opened anything (i.e. SafeTransfer has never been run on this PC).
+  function stShowFirstRunHelp() {
+    if (document.getElementById('fng-st-help')) return;          // already open
+    var runHint = {
+      windows: 'Double-click it once to open it. It\u2019s unsigned, so choose <b>More info \u2192 Run anyway</b> the first time.',
+      macos:   'Open it once. It\u2019s unsigned, so <b>right-click \u2192 Open</b> the first time to get past Gatekeeper.',
+      linux:   'Make it executable (<code>chmod +x SafeTransfer-linux</code>) and run it once. If tkinter is missing: <code>sudo apt install python3-tk</code>.'
+    }[stDetectOS()];
+    var ov = document.createElement('div');
+    ov.id = 'fng-st-help';
+    ov.className = 'fng-modal';
+    ov.innerHTML =
+      '<div class="fng-modal-card">' +
+        '<div class="fng-modal-h"><h3 style="margin:0">SafeTransfer didn\u2019t open?</h3>' +
+        '<button class="fng-modal-x" title="Close">\u2715</button></div>' +
+        '<p class="fng-muted">The first time on a computer, SafeTransfer has to be run once so the browser can open it. This is a one-time step per machine \u2014 after that, the link works every time, including after updates.</p>' +
+        '<ol style="margin:8px 0 14px 18px;line-height:1.6">' +
+          '<li>Open the download page (button below) and download SafeTransfer for your system. Keep it in a permanent folder (not Downloads).</li>' +
+          '<li>' + runHint + '</li>' +
+          '<li>Come back here and click <b>Transfer with SafeTransfer</b> again. It will open from now on.</li>' +
+        '</ol>' +
+        '<div class="fng-acts">' +
+          '<a class="fng-btn pri" href="' + ST_DOWNLOAD_URL + '" target="_blank" rel="noopener">Get SafeTransfer</a>' +
+          '<button class="fng-btn" id="fng-st-help-ok">Got it</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(ov);
+    var close = function () { if (ov.parentNode) ov.parentNode.removeChild(ov); };
+    ov.addEventListener('click', function (e) { if (e.target === ov) close(); });
+    var x = ov.querySelector('.fng-modal-x'); if (x) x.onclick = close;
+    var ok = ov.querySelector('#fng-st-help-ok'); if (ok) ok.onclick = close;
+  }
+
+  // Fire the protocol link. A web page can't query whether a handler is
+  // registered, so we use the standard heuristic: if the app launches it steals
+  // focus / hides the tab; if after a short wait nothing did, assume first run
+  // on this machine and show guidance. A remembered success suppresses nagging.
+  function stLaunch(url) {
+    var launched = false;
+    function mark() { launched = true; }
+    var knew = false;
+    try { knew = localStorage.getItem('fng.st.ok') === '1'; } catch (e) { /* ignore */ }
+    window.addEventListener('blur', mark);
+    document.addEventListener('visibilitychange', mark);
+    window.location.href = url;
+    setTimeout(function () {
+      window.removeEventListener('blur', mark);
+      document.removeEventListener('visibilitychange', mark);
+      if (launched || document.hidden) {
+        try { localStorage.setItem('fng.st.ok', '1'); } catch (e) { /* ignore */ }
+      } else if (!knew) {
+        stShowFirstRunHelp();
+      }
+    }, 1500);
+  }
+
+  ROOT.openSafeTransfer = function () {
+    if (!guard()) return;
+    var sub = folderSubtree();
+    var base = localBase();
+    var root = archiveRoot();
+    var source = base ? joinPath(base, sub) : '';   // local experiment FOLDER (no file name)
+    var dest = root ? joinPath(root, sub) : '';     // NASAC experiment FOLDER (no file name)
+    if (!source) { toast('Set your Local root folder first (in Use) so the full local path is known.'); return; }
+    if (!dest) { toast('No NASAC transfer path — set this lab\u2019s folder-template base path in Manage.'); return; }
+    var BS = String.fromCharCode(92);
+    var isAbs = /^[A-Za-z]:/.test(source) || source.indexOf('//') === 0
+      || source.charAt(0) === '/' || source.indexOf(BS + BS) === 0;
+    if (!isAbs) { toast('That local path is not absolute yet — set the Local root folder so SafeTransfer can find the data.'); return; }
+    var url = 'safetransfer://transfer?source=' + encodeURIComponent(source)
+      + '&destination=' + encodeURIComponent(dest);
+    toast('Opening SafeTransfer\u2026 confirm the source and destination there, then Start.');
+    stLaunch(url);
+  };
   ROOT.copyLocalPath = function () {
     var base = localBase();
     var dir = base ? joinPath(base, folderSubtree()) : folderSubtree();
@@ -2049,8 +2232,6 @@
         + 'ondblclick="' + R() + '.openField(\'' + f.id + '\')" '
         + 'ondragstart="' + R() + '.tileDragStart(event)" ondragend="' + R() + '.tileDragEnd(event)">'
         + dot(i) + esc(f.name)
-        + '<button class="rm" title="move left" onclick="' + R() + '.moveTile(' + i + ',-1)">◀</button>'
-        + '<button class="rm" title="move right" onclick="' + R() + '.moveTile(' + i + ',1)">▶</button>'
         + '<button class="rm" title="edit attributes" onclick="' + R() + '.openField(\'' + f.id + '\')">✎</button>'
         + '<button class="rm" title="remove" onclick="' + R() + '.removeTile(' + i + ')">✕</button></span>';
     }).join('') || '<span class="fng-muted">Click fields below to add them.</span>';
@@ -2081,7 +2262,8 @@
       else sample[f.id] = f.name === 'Project' ? 'VIPlearning' : f.name === 'Sample' ? 'M042' : f.name;
     });
     var segs = (tpl.fieldIds || []).map(function (id, i) {
-      var v = encodeField(fieldById(L, id), sample, ctx);
+      var f = fieldById(L, id);
+      var v = encodeField(f, sample, ctx, effFmt(tpl, f));
       return v ? '<span style="color:' + SEG[i % SEG.length] + '">' + esc(v) + '</span>' : '';
     }).filter(Boolean);
     var sepc = '<span class="sep">' + esc(tpl.separator || '_') + '</span>';
@@ -2106,13 +2288,16 @@
   function fieldDialog() {
     var id = ROOT.fieldDlg && ROOT.fieldDlg.fieldId; if (!id) return '';
     var f = fieldById(ROOT.library, id); if (!f) return '';
+    var curTpl = buildTpl(buildLab());   // the template whose tile was opened
+    var inFolder = (ROOT.build.kind === 'folder');
+    var fmtLabel = inFolder ? 'Folder-path format' : 'File-name format';
     var rows = '<div class="fng-f"><span class="fng-l">Field name</span>'
       + '<input class="fng-in" value="' + esc(f.name) + '" oninput="' + R() + '.setFieldName(\'' + id + '\',this.value)"></div>';
 
     if (f.source === 'date') {
       var dtf = ['YYYYMMDD', 'YYYY-MM-DD', 'YYMMDD', 'YYYYMM', 'YYYY', 'YYYYMMDD_HHMM', 'YYYYMMDD_HHMMSS', 'YYYY-MM-DD_HH-MM', 'HHMM', 'HHMMSS'];
-      var cur = f.format || 'YYYYMMDD';
-      rows += '<div class="fng-f"><span class="fng-l">Date / time format</span><select class="fng-sel" onchange="' + R() + '.setFieldFormat(\'' + id + '\',this.value)">'
+      var cur = effFmt(curTpl, f) || 'YYYYMMDD';
+      rows += '<div class="fng-f"><span class="fng-l">Date / time format</span><select class="fng-sel" onchange="' + R() + '.setTileFormat(\'' + id + '\',this.value)">'
         + dtf.map(function (t) { return '<option value="' + t + '"' + (t === cur ? ' selected' : '') + '>' + t + ' — ' + esc(fmtDate(new Date(), t)) + '</option>'; }).join('') + '</select></div>'
         + '<p class="fng-muted">In the file name now: <b>' + esc(fmtDate(new Date(), cur)) + '</b>. Use <code>_HHMM</code> for minute or <code>_HHMMSS</code> for second precision.</p>';
     } else if (f.source === 'counter') {
@@ -2122,10 +2307,10 @@
         + ['daily', 'global'].map(function (s) { return '<option value="' + s + '"' + ((f.scope || 'daily') === s ? ' selected' : '') + '>' + (s === 'daily' ? 'every day' : 'never (global)') + '</option>'; }).join('') + '</select></div>'
         + '<p class="fng-muted">Next value: <b>' + esc(pad(counterNext(f, cctx), f.pad || 2)) + '</b> · <a class="fng-x2" onclick="' + R() + '.resetCounter(\'' + id + '\')">reset counter</a>. Advances when you click <b>Next run ▸</b> in Use.</p>';
     } else {
-      var sample = fieldSample(f), curf = f.format || 'full';
+      var sample = fieldSample(f), curf = effFmt(curTpl, f) || 'full';
       var opts = [['full', 'Full (cleaned value)'], ['acronym', 'Initials / acronym'], ['first3', 'First 3 letters'], ['lastlower', 'Last name (lowercase)'], ['upper', 'UPPERCASE'], ['lower', 'lowercase']];
       if (f.source !== 'operator' && f.source !== 'lab') opts.splice(1, 0, ['initial', 'First initial']);
-      rows += '<div class="fng-f"><span class="fng-l">File-name format</span><select class="fng-sel" onchange="' + R() + '.setFieldFormat(\'' + id + '\',this.value)">'
+      rows += '<div class="fng-f"><span class="fng-l">' + esc(fmtLabel) + '</span><select class="fng-sel" onchange="' + R() + '.setTileFormat(\'' + id + '\',this.value)">'
         + opts.map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === curf ? ' selected' : '') + '>' + o[1] + ' — “' + esc(applyFmt(sample, o[0])) + '”</option>'; }).join('') + '</select></div>';
       if (f.source === 'list') {
         rows += '<div class="fng-f"><span class="fng-l">Options (comma-separated)</span>'
@@ -2147,6 +2332,15 @@
   ROOT.closeField = function () { ROOT.fieldDlg.fieldId = null; rerender(); };
   ROOT.setFieldName = function (id, v) { var f = fieldById(ROOT.library, id); if (f) f.name = v; dirty(); };  // no rerender (keep focus)
   ROOT.setFieldFormat = function (id, v) { var f = fieldById(ROOT.library, id); if (f) f.format = v; rerender(); };
+  // Per-template format: store the choice on the template being edited (folder or
+  // file), so the same field can format differently in the file name vs the folder
+  // path. Falls back to setting the field default if no template is in context.
+  ROOT.setTileFormat = function (id, v) {
+    var t = buildTpl(buildLab());
+    if (t) { t.formats = t.formats || {}; t.formats[id] = v; }
+    else { var f = fieldById(ROOT.library, id); if (f) f.format = v; }
+    dirty(); rerender();
+  };
   ROOT.setFieldOptions = function (id, v) { var f = fieldById(ROOT.library, id); if (f) f.options = v.split(',').map(function (s) { return s.trim(); }).filter(Boolean); dirty(); };
   ROOT.setFieldReq = function (id, v) { var f = fieldById(ROOT.library, id); if (f) f.required = (v === '1'); rerender(); };
   ROOT.setFieldNum = function (id, prop, v) { var f = fieldById(ROOT.library, id); if (f) f[prop] = (v === '' ? undefined : parseInt(v, 10)); rerender(); };
@@ -2168,21 +2362,24 @@
         + DEPARTMENTS.map(function (d) { return '<option value="' + esc(d.code) + '"' + (l.dept === d.code ? ' selected' : '') + '>' + esc(d.code) + ' — ' + esc(d.label) + '</option>'; }).join('')
         + '</select></td>';
     }
-    function emailCell(e, i) {
-      return '<td><input class="fng-in" type="email" style="width:190px" placeholder="name@unige.ch" value="' + esc(e.email || '') + '" onchange="' + R() + '.setOperatorEmail(' + i + ',this.value)"></td>';
+    function emailCell(e, i, setter) {
+      return '<td><input class="fng-in" type="email" style="width:190px" placeholder="name@unige.ch" value="' + esc(e.email || '') + '" onchange="' + R() + '.' + (setter || 'setOperatorEmail') + '(' + i + ',this.value)"></td>';
     }
-    function orcidCell(e, i) {
+    function orcidCell(e, i, setter) {
       var v = e.orcid || '', bad = v && !orcidValid(v);
-      return '<td><input class="fng-in' + (bad ? ' fng-dupin' : '') + '" style="width:175px" placeholder="0000-0002-1825-0097"' + (bad ? ' title="This doesn&rsquo;t look like a valid ORCID iD (expected 0000-0000-0000-000X with a valid check digit)"' : '') + ' value="' + esc(v) + '" onchange="' + R() + '.setOperatorOrcid(' + i + ',this.value)">' + (bad ? '<span class="fng-bang" title="Invalid ORCID iD \u2014 check for typos"> !</span>' : '') + '</td>';
+      return '<td><input class="fng-in' + (bad ? ' fng-dupin' : '') + '" style="width:175px" placeholder="0000-0002-1825-0097"' + (bad ? ' title="This doesn&rsquo;t look like a valid ORCID iD (expected 0000-0000-0000-000X with a valid check digit)"' : '') + ' value="' + esc(v) + '" onchange="' + R() + '.' + (setter || 'setOperatorOrcid') + '(' + i + ',this.value)">' + (bad ? '<span class="fng-bang" title="Invalid ORCID iD \u2014 check for typos"> !</span>' : '') + '</td>';
     }
-    function operExtraCells(e, i) { return emailCell(e, i) + orcidCell(e, i); }
-    function abbrTable(list, keyOf, fns, extraCell) {
-      var fullV = list.map(function (e) { return applyFmt(opName(e), 'full'); });
-      var iniV = list.map(abbrIni), f3V = list.map(abbrF3);
-      var fD = countMap(fullV), iD = countMap(iniV), tD = countMap(f3V), any = false;
+    function moveCell(i, fn, label) { return '<td><button class="fng-btn sm" title="' + esc(label) + '" onclick="' + R() + '.' + fn + '(' + i + ')">' + esc(label) + '</button></td>'; }
+    function operExtraCells(e, i) { return emailCell(e, i, 'setOperatorEmail') + orcidCell(e, i, 'setOperatorOrcid') + moveCell(i, 'toAlumni', '\u2192 Alumni'); }
+    function alumExtraCells(e, i) { return emailCell(e, i, 'setAlumniEmail') + orcidCell(e, i, 'setAlumniOrcid') + moveCell(i, 'fromAlumni', '\u2192 Operators'); }
+    function abbrTable(list, keyOf, fns, extraCell, universe) {
+      universe = universe || list;
+      var uFull = universe.map(function (e) { return applyFmt(opName(e), 'full'); });
+      var fD = countMap(uFull), iD = countMap(universe.map(abbrIni)), tD = countMap(universe.map(abbrF3)), any = false;
       var rows = list.map(function (e, i) {
         var k = keyOf(e, i);
-        var fb = fullV[i] && fD[fullV[i]] > 1, ib = iniV[i] && iD[iniV[i]] > 1, tb = f3V[i] && tD[f3V[i]] > 1;
+        var full = applyFmt(opName(e), 'full'), ini = abbrIni(e), f3 = abbrF3(e);
+        var fb = full && fD[full] > 1, ib = ini && iD[ini] > 1, tb = f3 && tD[f3] > 1;
         if (fb || ib || tb) any = true;
         var iniDisp = (e.initials != null && e.initials !== '') ? e.initials : applyFmt(opName(e), 'acronym');
         var f3Disp = (e.first3 != null && e.first3 !== '') ? e.first3 : applyFmt(opName(e), 'first3');
@@ -2200,7 +2397,10 @@
           + (t.any ? '<p class="fng-muted" style="margin-top:6px">Fields flagged <span class="fng-bang">!</span> match another ' + kind + ' — edit them to make each unique.</p>' : '')
         : '<span class="fng-muted">' + emptyMsg + '</span>';
     }
-    var ops = abbrTableHtml(abbrTable(opList.slice().sort(function (a, b) { return cmpName(opName(a), opName(b)); }), function (e) { return '' + opList.indexOf(e); }, { name: 'setOperatorName', ini: 'setOperatorInitials', f3: 'setOperatorFirst3', del: 'delOperator' }, operExtraCells), 'no operators yet', 'operator', 'Full name', '<th>Email</th><th>ORCID iD</th>');
+    var alumList = L.alumni || [];
+    var opUniverse = opList.concat(alumList);   // uniqueness spans operators + alumni
+    var ops = abbrTableHtml(abbrTable(opList.slice().sort(function (a, b) { return cmpName(opName(a), opName(b)); }), function (e) { return '' + opList.indexOf(e); }, { name: 'setOperatorName', ini: 'setOperatorInitials', f3: 'setOperatorFirst3', del: 'delOperator' }, operExtraCells, opUniverse), 'no operators yet', 'operator or alumnus', 'Full name', '<th>Email</th><th>ORCID iD</th><th></th>');
+    var alum = abbrTableHtml(abbrTable(alumList.slice().sort(function (a, b) { return cmpName(opName(a), opName(b)); }), function (e) { return '' + alumList.indexOf(e); }, { name: 'setAlumniName', ini: 'setAlumniInitials', f3: 'setAlumniFirst3', del: 'delAlumni' }, alumExtraCells, opUniverse), 'no alumni yet', 'operator or alumnus', 'Full name', '<th>Email</th><th>ORCID iD</th><th></th>');
     var labsTable = abbrTableHtml(abbrTable(labs(), function (l) { return '\'' + l.id + '\''; }, { name: 'setLabName', ini: 'setLabInitials', f3: 'setLabFirst3', del: 'delLab' }, deptCell), 'no labs yet', 'lab', 'Lab name', '<th>Department</th>');
     var devDup = countMap((L.devices || []).map(function (d) { return d.name; }));
 
@@ -2222,6 +2422,10 @@
       + '<div class="fng-card"><h3 style="margin-top:0">Operators</h3>'
       + ops
       + '<div class="fng-row" style="margin-top:8px"><input class="fng-in" id="fng-newop" placeholder="Full name"><button class="fng-btn sm" onclick="' + R() + '.addOperator()">+ Add operator</button></div></div>'
+
+      + '<div class="fng-card"><h3 style="margin-top:0">Alumni operators <span class="fng-muted" style="font-weight:400">(left the lab — kept so their identifiers stay reserved and can\u2019t be reused)</span></h3>'
+      + alum
+      + '<div class="fng-row" style="margin-top:8px"><input class="fng-in" id="fng-newalum" placeholder="Full name"><button class="fng-btn sm" onclick="' + R() + '.addAlumnus()">+ Add alumnus</button></div></div>'
 
       + '<div class="fng-card"><h3 style="margin-top:0">Departments <span class="fng-muted">(fixed)</span></h3>'
       + '<div class="fng-mini">' + DEPARTMENTS.map(function (d) { return '<span class="fng-chiprm" style="padding-right:11px">' + esc(d.code) + ' — ' + esc(d.label) + '</span>'; }).join('') + '</div></div>';
@@ -2352,6 +2556,18 @@
   ROOT.setOperatorName = function (i, v) { var o = ROOT.library.operators[i]; if (o) o.name = v; rerender(); };
   ROOT.setOperatorInitials = function (i, v) { var o = ROOT.library.operators[i]; if (o) setOverride(o, 'initials', 'acronym', v); rerender(); };
   ROOT.setOperatorFirst3 = function (i, v) { var o = ROOT.library.operators[i]; if (o) setOverride(o, 'first3', 'first3', v); rerender(); };
+
+  // alumni — same shape as operators; kept so their name/initials/first-3 stay
+  // reserved and a current member can't collide with a departed one.
+  ROOT.addAlumnus = function () { var el = document.getElementById('fng-newalum'); var v = el ? el.value.trim() : ''; if (v) { (ROOT.library.alumni = ROOT.library.alumni || []).push({ name: v }); rerender(); } };
+  ROOT.delAlumni = function (i) { ROOT.library.alumni.splice(i, 1); rerender(); };
+  ROOT.setAlumniName = function (i, v) { var o = ROOT.library.alumni[i]; if (o) o.name = v; rerender(); };
+  ROOT.setAlumniInitials = function (i, v) { var o = ROOT.library.alumni[i]; if (o) setOverride(o, 'initials', 'acronym', v); rerender(); };
+  ROOT.setAlumniFirst3 = function (i, v) { var o = ROOT.library.alumni[i]; if (o) setOverride(o, 'first3', 'first3', v); rerender(); };
+  ROOT.setAlumniEmail = function (i, v) { var o = ROOT.library.alumni[i]; if (o) o.email = (v || '').trim(); dirty(); };
+  ROOT.setAlumniOrcid = function (i, v) { var o = ROOT.library.alumni[i]; if (o) o.orcid = normOrcid(v); dirty(); };
+  ROOT.toAlumni = function (i) { var o = ROOT.library.operators[i]; if (o) { ROOT.library.operators.splice(i, 1); (ROOT.library.alumni = ROOT.library.alumni || []).push(o); rerender(); } };
+  ROOT.fromAlumni = function (i) { var o = ROOT.library.alumni[i]; if (o) { ROOT.library.alumni.splice(i, 1); ROOT.library.operators.push(o); rerender(); } };
   ROOT.setOperatorEmail = function (i, v) { var o = ROOT.library.operators[i]; if (o) o.email = (v || '').trim(); dirty(); };   // no rerender (keep focus)
   ROOT.setOperatorOrcid = function (i, v) { var o = ROOT.library.operators[i]; if (o) o.orcid = normOrcid(v); dirty(); };   // no rerender (keep focus)
 
@@ -2520,6 +2736,7 @@
       });
     }
     listDiff(oldL.operators, newL.operators, 'op', 'members', function (x) { return opName(x); }, function (x) { return opName(x); });
+    listDiff(oldL.alumni, newL.alumni, 'alum', 'members', function (x) { return opName(x); }, function (x) { return opName(x) + ' (alumnus)'; });
     listDiff(oldL.devices, newL.devices, 'device', 'devices', function (x) { return x.id || x.name; }, function (x) { return x.name || x.id; });
     listDiff((oldL.fields || []).filter(function (f) { return !f.builtin; }), (newL.fields || []).filter(function (f) { return !f.builtin; }), 'field', 'templates', function (x) { return x.id; }, function (x) { return (x.name || x.id) + ' (custom field)'; });
     // labs: identity under members, templates under build-templates
@@ -2556,7 +2773,7 @@
   function rvApply() {
     var items = (ROOT._review && ROOT._review.items) || [];
     var m = rvClone(ROOT.library);
-    m.operators = m.operators || []; m.devices = m.devices || []; m.fields = m.fields || []; m.labs = m.labs || [];
+    m.operators = m.operators || []; m.alumni = m.alumni || []; m.devices = m.devices || []; m.fields = m.fields || []; m.labs = m.labs || [];
     function valOf(it) { return it.edited != null ? it.edited : it.incoming; }
     items.forEach(function (it) {
       if (it.decision !== 'accept') return;
@@ -2565,6 +2782,11 @@
         var i = rvFindi(m.operators, function (o) { return opName(o) === nm; });
         if (it.status === 'removed') { if (i >= 0) m.operators.splice(i, 1); }
         else { var v = valOf(it); if (i >= 0) m.operators[i] = v; else m.operators.push(v); }
+      } else if (it.kind === 'alum') {
+        var anm = opName(it.current || it.incoming);
+        var ai = rvFindi(m.alumni, function (o) { return opName(o) === anm; });
+        if (it.status === 'removed') { if (ai >= 0) m.alumni.splice(ai, 1); }
+        else { var av = valOf(it); if (ai >= 0) m.alumni[ai] = av; else m.alumni.push(av); }
       } else if (it.kind === 'device') {
         var dk = (it.current || it.incoming).id || (it.current || it.incoming).name;
         var di = rvFindi(m.devices, function (d) { return (d.id || d.name) === dk; });
