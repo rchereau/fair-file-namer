@@ -1186,12 +1186,13 @@
   // Suggested starting points offered when creating a new configuration.
   var CONFIG_SUGGESTIONS = [
     { label: 'Field–value pairs (empty)', type: 'kv',
-      text: 'Wavelength (nm):\nObjective:\nTrigger1:\nTrigger2:\nManipulator1:\nManipulator2:' },
+      preview: 'Wavelength (nm):\nObjective:\nTrigger1:\nTrigger2:\nManipulator1:\nManipulator2:',
+      text: 'setting1:\nsetting2:' },
     { label: 'Field–value pairs (pre-filled example)', type: 'kv',
-      text: 'Wavelength (nm): 920\nObjective: Nikon 16X NA0.8 WD3mm (MRP07220)\nTrigger1: 470nm LED optical stimulation\nTrigger2: reward\nManipulator1: somatic recording\nManipulator2: field recording' },
+      preview: 'Wavelength (nm): 920\nObjective: Nikon 16X NA0.8 WD3mm (MRP07220)\nTrigger1: 470nm LED optical stimulation\nTrigger2: reward\nManipulator1: somatic recording\nManipulator2: field recording',
+      text: 'setting1: XXX\nsetting2: XXX' },
     { label: 'Free text', type: 'text',
-      text: 'A IR filter set is replacing the original red filter set in this configuration.' },
-    { label: 'Blank', type: 'kv', text: CONFIG_TEMPLATE }
+      text: 'A IR filter set is replacing the original red filter set in this configuration.' }
   ];
   function parseSettings(text) {
     var o = {};
@@ -1242,15 +1243,21 @@
     var dev = currentDeviceName(); if (!dev) { toast('Choose a device first.'); return; }
     if (document.getElementById('fng-cfg-new')) return;
     var ov = document.createElement('div');
-    ov.id = 'fng-cfg-new'; ov.className = 'fng-modal'; ov.style.zIndex = '10001';
-    ov.innerHTML = '<div class="fng-modal-card"><div class="fng-modal-h"><h3 style="margin:0">New configuration</h3>'
-      + '<button class="fng-modal-x" title="Close">\u2715</button></div>'
-      + '<p class="fng-muted" style="margin-top:0">Start from a template — you can edit it afterwards:</p>'
+    ov.id = 'fng-cfg-new'; ov.className = 'fng-modal';
+    ov.style.cssText = 'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.55);z-index:10001';
+    ov.innerHTML = '<div style="background:#171b26;color:#cdd5e3;border:1px solid #222838;border-radius:10px;padding:18px;width:min(460px,92vw);max-height:85vh;overflow:auto;box-shadow:0 12px 40px rgba(0,0,0,.5)">'
+      + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'
+      + '<h3 style="margin:0;color:#cdd5e3">New configuration</h3>'
+      + '<button class="fng-modal-x" title="Close" style="background:none;border:none;color:#919bb4;font-size:17px;cursor:pointer">\u2715</button></div>'
+      + '<p style="margin:0 0 10px;color:#919bb4">Choose a template — you can edit it afterwards:</p>'
       + '<div style="display:flex;flex-direction:column;gap:8px">'
       + CONFIG_SUGGESTIONS.map(function (sg, i) {
-          return '<button class="fng-btn" data-i="' + i + '" style="text-align:left;white-space:normal;height:auto;padding:8px 10px">'
-            + '<b>' + esc(sg.label) + '</b>'
-            + (sg.text ? '<br><span class="fng-muted" style="font-size:11px;white-space:pre-wrap">' + esc(sg.text.length > 120 ? sg.text.slice(0, 120) + '\u2026' : sg.text) + '</span>' : '')
+          var body = sg.preview || sg.text || '';
+          return '<button data-i="' + i + '" style="display:block;width:100%;text-align:left;font:inherit;background:#10131b;color:#cdd5e3;border:1px solid #222838;border-radius:8px;padding:10px 12px;cursor:pointer;transition:background .12s,border-color .12s"'
+            + ' onmouseover="this.style.background=\'#1b2433\';this.style.borderColor=\'#4af0a0\'"'
+            + ' onmouseout="this.style.background=\'#10131b\';this.style.borderColor=\'#222838\'">'
+            + '<span style="display:block;font-weight:600;margin-bottom:3px">' + esc(sg.label) + '</span>'
+            + (body ? '<span style="display:block;font-size:11px;color:#919bb4;white-space:pre-wrap;line-height:1.35">' + esc(body.length > 160 ? body.slice(0, 160) + '\u2026' : body) + '</span>' : '')
             + '</button>';
         }).join('')
       + '</div></div>';

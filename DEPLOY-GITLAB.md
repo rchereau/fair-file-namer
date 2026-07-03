@@ -13,7 +13,7 @@ Base = your gitlab.com **group** Pages host (example below uses a group called `
 > **One link per lab.** Every lab member opens the same URL and can edit the library (operators, devices,
 > templates). Saving/editing is local; **committing to GitLab is a master action** (gated by GitLab repo
 > access, not by the app). A non‑master who makes changes uses **Publish…** to download `library.json` and
-> sends it to a master with a note; the master commits it. There is no longer an `&admin=1` link.
+> sends it to a master with a note; the master commits it. A lab's library no longer needs an `&admin=1` link — every member sees **Manage**. (Platform *devices* are edited on their own page, `platform.html?platform=<slug>`; see **Part 2B**.)
 >
 > **Shared platform devices** (microscopy/genomics platforms etc.) appear as extra folders in **every**
 > lab's *Manage devices* window. **Each platform has its own repo** so its manager edits only their own
@@ -99,6 +99,7 @@ e.g. `holtmaat`):
    **tick** "Initialize repository with a README".
 3. Open the **Web IDE** (`.` key). Add:
    - `index.html`, `platform.html`, and `fair_file_namer_addon.js` — paste from this repo.
+   - `_headers` — one-line cache-control file (see the **`_headers`** note just below).
    - `.gitlab-ci.yml` — the **app** job below.
    Commit to `main`.
 4. **Settings → Repository → Mirroring repositories**: URL
@@ -119,15 +120,35 @@ pages:
   stage: deploy
   script:
     - mkdir -p public
-    - cp index.html platform.html fair_file_namer_addon.js public/
+    - cp index.html platform.html fair_file_namer_addon.js _headers public/
   artifacts:
     paths: [public]
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
 ```
 
-> The `app` repo holds three files: `index.html` (the lab/user app), `platform.html` (the platform‑manager
-> page), and `fair_file_namer_addon.js` (shared code). All three are copied to `public/`.
+> The `app` repo holds four files: `index.html` (the lab/user app), `platform.html` (the platform‑manager
+> page), and `fair_file_namer_addon.js` (shared code), plus the one-line `_headers` cache file (below). All four are copied to `public/`.
+>
+> **The pipeline runs on gitlab.com, not on UNIGE.** gitlab.unige.ch (Community Edition) has **no CI
+> runners**, so on the UNIGE side any repo carrying a `.gitlab-ci.yml` shows a **stuck/pending — or
+> failed — `pages` job** ("you don't have any active runners"). That is expected and harmless: the push
+> mirror copies the files to gitlab.com, where the runners actually build and publish Pages. This is why
+> the live app works even though the UNIGE pipeline is red. To silence the noise, see **Troubleshooting**
+> (turn CI/CD off on the UNIGE repo, or gate the job with `$CI_SERVER_HOST`).
+
+**`_headers` — always serve the latest version.** Every repo also carries a one-line `_headers` file at its root:
+
+```
+/*
+  Cache-Control: no-store
+```
+
+`/*` matches every path, and `Cache-Control: no-store` tells browsers and rig machines never to keep a cached
+copy — so each visit fetches the current app code, library, and platform lists (it reinforces the app's own
+cache-busting). GitLab Pages applies `_headers` **only from the published site root**, which is why every
+`.gitlab-ci.yml` copies it into `public/` (the `cp … _headers public/` lines). Put the same `_headers` in
+**every** repo — `app`, each lab, `platforms`, and each `plat-<slug>`.
 
 ### 1D. The first lab — a gitlab.com target + a gitlab.unige.ch repo (library only; lab masters)
 
@@ -136,11 +157,12 @@ pages:
    **Public**, **uncheck** "Initialize with a README" → Create. Leave it empty.
 2. **(go to gitlab.unige.ch)** In the `facmed-filenamer` group, **New project → Create blank project** → name
    `filenamer-holtmaat`, **Visibility = Private**, tick README.
-3. **Web IDE** → add two files, commit to `main`:
+3. **Web IDE** → add these files, commit to `main`:
    - `library.json` — paste a starting library (copy this repo's `library.json`). Set the lab's display
      `name` (e.g. `"Holtmaat Lab"`). *(No `publishUrl` needed — the app derives the master's one‑click edit
      link automatically from the lab slug in the page URL → `…/filenamer-<slug>/-/edit/main/library.json`.)*
    - `.gitlab-ci.yml` — the **lab** job below.
+   - `_headers` — one-line cache-control file (copy this repo's; see the **`_headers`** note in 1C).
 4. **Mirror** (same as 1C steps 4–5): Settings → Repository → Mirroring → push‑mirror to
    `https://Ronan.Chereau@gitlab.com/facmed-filenamer/holtmaat.git` → **↻ Update now**. Then on the gitlab.com
    `holtmaat` project set `main` to **Allowed to force push = On** (or Unprotect). *(Turning off "Use unique
@@ -155,7 +177,7 @@ pages:
   stage: deploy
   script:
     - mkdir -p public
-    - cp library.json public/
+    - cp library.json _headers public/
   artifacts:
     paths: [public]
   rules:
@@ -227,6 +249,7 @@ the code. There are two pieces:
 1. **(gitlab.com)** New project `platforms`, namespace = group **`facmed-filenamer`**, **Public**, no README → Create.
 2. **(gitlab.unige.ch)** New project `filenamer-platforms`, **Private**, tick README → Web IDE → add:
    - `index.json` — copy this repo's starter `index.json` (a `{ slug, name }` per platform).
+   - `_headers` — one-line cache-control file (copy this repo's; see the **`_headers`** note in 1C).
    - `.gitlab-ci.yml` — copies `index.json`:
      ```yaml
      image: alpine:latest
@@ -234,7 +257,7 @@ the code. There are two pieces:
        stage: deploy
        script:
          - mkdir -p public
-         - cp index.json public/
+         - cp index.json _headers public/
        artifacts:
          paths: [public]
        rules:
@@ -249,14 +272,21 @@ the code. There are two pieces:
 
 1. **(gitlab.unige.ch → `filenamer-platforms`)** edit `index.json` → add a line
    `{ "slug": "imaging", "name": "Imaging Platform" }` → commit → **↻ Update now** on its mirror.
+   **Use a lowercase slug** (letters, digits, `-`/`_`): gitlab.com lowercases the project path and Pages
+   URLs are case-sensitive, and the app builds the fetch URL from this slug — a capital letter makes the
+   app request a path Pages never serves, so the platform loads with **no devices**.
 2. **(gitlab.com)** New project `plat-imaging`, namespace = group **`facmed-filenamer`**, **Public**, no README → Create.
 3. **(gitlab.unige.ch)** New project `filenamer-plat-imaging`, **Private**, tick README → Web IDE → add:
    - `platform.json` — copy this repo's starter `platform.json` (set `name` + a couple of devices; edit the rest in the app).
-   - `.gitlab-ci.yml` — copies `platform.json` (same block as above, but `cp platform.json public/`).
+   - `_headers` — one-line cache-control file (copy this repo's; see the **`_headers`** note in 1C).
+   - `.gitlab-ci.yml` — copies `platform.json` (same block as above, but `cp platform.json _headers public/`).
    Commit to `main`.
 4. **(gitlab.unige.ch)** Mirror → push to `https://Ronan.Chereau@gitlab.com/facmed-filenamer/plat-imaging.git` → **↻ Update now**.
 5. **(gitlab.com → `plat-imaging`)** `main` → **Allowed to force push = On**; **Deploy → Pages → turn off Use unique
    domain**. Confirm `https://facmed-filenamer.gitlab.io/plat-imaging/platform.json` serves the JSON.
+   Open it in an **incognito** window to confirm it returns raw JSON with **no login**. If it redirects to a
+   sign-in page, the project's Pages aren't public: Settings → General → **Visibility, project features,
+   permissions** → **Project visibility = Public** and **Pages = Everyone** (match a working platform).
 6. **(gitlab.unige.ch → `filenamer-plat-imaging`)** **Members** → add that platform's manager as **Maintainer**. They edit only this repo.
 7. Give the manager their URL: `https://facmed-filenamer.gitlab.io/app/platform.html?platform=imaging`.
 
@@ -308,6 +338,10 @@ Each row is a real symptom encountered during setup, with the cause and the exac
 | **`https://facmed-filenamer.gitlab.io/<lab>` (bare) is broken** | Lab repos are **data‑only** (no `index.html`), so the project root has no page — GitLab still auto‑generates that link | Expected, ignore it. Distribute `…/app/?cfg=/<lab>/library.json`. (Confirm data is live at `…/<lab>/library.json`.) |
 | **"Everyone can edit — is that safe?"** | By design: the lab URL shows **Manage** to all members (no `&admin=1`). | Editing is local only; nothing reaches the rigs until a **master commits** to GitLab (gated by repo membership). Non‑masters **Publish → send the file to a master**. So edits are safe to make; only a master can publish them. |
 | **`/app/…js` 404s and a pipeline named "Edit library.json" ran on the `app` project** | A lab repo had a **second, stray push mirror** pointing at `…/app.git`, so its `library.json` edits force‑overwrote the `app` project (deleting the code from the deploy) | A `library.json` edit must only ever build the matching **lab** project, never `app`. On the offending lab repo → Settings → Repository → Mirroring, **delete the row pointing to `…/app.git`** (keep only `…/<lab>.git`). Then **↻ Update now** on `filenamer-app` to restore the code. **Each UNIGE repo must have exactly ONE mirror, to its same‑named gitlab.com target.** |
+| **A pipeline on gitlab.unige.ch is stuck/pending ("no active runners") or shows failed — yet the app works** | UNIGE GitLab (CE) has **no CI runners**, so it can never run the `pages` job. The real build runs on **gitlab.com** via the push mirror, which is why the live site is fine despite the red mark on UNIGE. | Harmless — you can ignore it. To silence it: **(A, simplest)** on the UNIGE repo → Settings → General → **Visibility, project features, permissions** → turn **CI/CD off** (this leaves the mirror and files untouched, so gitlab.com keeps building); or **(B)** append `&& $CI_SERVER_HOST == "gitlab.com"` to the job's `rules:` so the job is only created where a runner exists. Applies to **every** UNIGE repo with a `.gitlab-ci.yml` — app, labs, platforms, and companions like `safetransfer`. |
+| **A platform appears in the picker but lists no devices** | The **slug's case doesn't match the Pages path.** gitlab.com **lowercases** project paths and Pages URLs are **case-sensitive**, but the app builds the fetch URL straight from the `index.json` slug. So slug `neuroimaging_Wyss` makes the app request `/plat-neuroimaging_Wyss/platform.json`, while Pages only serves the lowercase `/plat-neuroimaging_wyss/…` → 404 → empty list. | Make the slug **all-lowercase** in `platforms/index.json` so it matches the real path (e.g. `neuroimaging_wyss`); the display `name` can keep any capitalization. Use lowercase slugs from the start. |
+| **A platform still lists no devices, and opening its `platform.json` redirects to a GitLab sign-in page** | That `plat-<slug>` project's **Pages aren't public**, so the app's anonymous fetch is bounced to login and gets HTML instead of JSON. (You may still see the JSON yourself, because *you* are logged in.) | On the gitlab.com `plat-<slug>` project → Settings → General → **Visibility, project features, permissions** → **Project visibility = Public** and **Pages = Everyone** (match a working platform). Confirm in an **incognito** window that `…/plat-<slug>/platform.json` returns raw JSON. |
+| **A machine still shows an old version after a change went live** | Browser/CDN caching of the Pages files | Every repo ships a `_headers` file (`/*` → `Cache-Control: no-store`) that its `.gitlab-ci.yml` copies into `public/`, so Pages tells clients not to cache. Check the repo has `_headers` **and** that its CI copies it (`cp … _headers public/`). A single hard refresh clears a page that was cached before `_headers` existed. |
 
 ---
 
@@ -321,6 +355,9 @@ Each row is a real symptom encountered during setup, with the cause and the exac
 - **gitlab.com Pages is public** → libraries are world‑readable by URL. Fine for naming conventions; not secrets.
 - gitlab.com Free has a monthly CI‑minute quota; these "copy a file" builds use seconds.
 - **Push mirroring must be enabled** on UNIGE (Free supports it; if an admin disabled outbound mirroring, ask DiSTIC).
+- **UNIGE pipelines will look red — that's normal.** UNIGE CE has no runners, so its `pages` job can only sit pending or fail; the live site is built entirely by **gitlab.com**. Leave them, or turn **CI/CD off** on the UNIGE repos (see Troubleshooting). Never treat a green pipeline on UNIGE as the source of truth — check the **gitlab.com** pipeline instead.
+- **Platform slugs must be lowercase.** gitlab.com lowercases project paths and Pages URLs are case-sensitive, so each `index.json` slug must equal the lowercased `plat-<slug>` path, or the platform loads with no devices. Set slugs lowercase when you create them (the display `name` can be anything).
+- **`_headers` keeps machines current.** Every repo includes `_headers` (`/*` → `Cache-Control: no-store`), copied into `public/` by its CI, so GitLab Pages tells clients never to cache — a committed change reaches every machine on its next load. When you add a repo, include `_headers` and keep the `cp … _headers public/` step.
 
 ---
 
