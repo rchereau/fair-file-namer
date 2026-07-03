@@ -1175,7 +1175,7 @@
   };
   function refreshUsePreview() { var el = document.getElementById('fng-ex'); if (el) el.outerHTML = usePreview(); }
   // refresh only the rendered header — never the notes editor (keeps the cursor)
-  function refreshHeader() { var el = document.getElementById('fng-md-header'); if (el) el.innerHTML = headerHtml(); }
+  function refreshHeader() { var el = document.getElementById('fng-md-header'); if (el) el.innerHTML = headerHtml(); fsAutoSaveSoon(); }
 
   /* --- experiment configurations, scoped to (operator + device), local -----
    * Each (operator, device) pair can hold several named configs (presets) of
@@ -1652,6 +1652,38 @@
     }).catch(function () {});
   }
 
+  // --- Auto-save: keep a live metadata sidecar in the picked folder, updated on every
+  //     metadata change with no user action. Debounced; deduped on content (the volatile
+  //     generatedAt timestamp is excluded) so an unchanged form never rewrites.
+  var _fsAutoTimer = null;
+  function fsAutoSaveSoon() {
+    if (typeof window === 'undefined') return;
+    if (!fsSupported() || !ROOT._fsRoot) return;
+    if (_fsAutoTimer) clearTimeout(_fsAutoTimer);
+    _fsAutoTimer = setTimeout(fsAutoSaveNow, 700);
+  }
+  function fsAutoSaveNow() {
+    _fsAutoTimer = null;
+    if (!fsSupported() || !ROOT._fsRoot) return;
+    if (missingInputs().length) return;                 // complete records only; no modal (unlike guard())
+    var name = curName(); if (!name) return;
+    var segs = fsSubSegs();
+    var h = headerObject() || {};
+    var sig = segs.join('/') + '|::|' + name + '|::|' + JSON.stringify(h) + '|::|' + (ROOT.ui.notesHtml || '');
+    if (sig === ROOT._fsAutoSig) return;                // nothing meaningful changed since the last write
+    var json = JSON.stringify(sidecar(), null, 2);
+    fsEnsurePerm(ROOT._fsRoot).then(function (ok) {
+      if (!ok) return;
+      return (segs.length ? fsNavigate(ROOT._fsRoot, segs) : Promise.resolve(ROOT._fsRoot)).then(function (leaf) {
+        if (!leaf) return;                                // folder tree not created yet -> never auto-create; skip
+        return fsWrite(leaf, name + '.json', json).then(function () {
+          ROOT._fsAutoSig = sig;
+          var el = (typeof document !== 'undefined') && document.getElementById('fng-autosave');
+          if (el) el.textContent = '✓ Auto-saved ' + (segs.length ? segs.join('/') + '/' : '') + name + '.json · ' + new Date().toLocaleTimeString();
+        });
+      });
+    }).catch(function () {});
+  }
   ROOT.pickRootFolder = function () {
     if (!fsSupported()) { toast('Picking a folder needs Chrome or Edge.'); return; }
     window.showDirectoryPicker({ mode: 'readwrite' }).then(function (h) {
@@ -1694,7 +1726,7 @@
     window.showDirectoryPicker({ mode: 'readwrite' }).then(function (h) {
       ROOT._fsRoot = h; try { localStorage.setItem(LS_FSROOT, h.name); } catch (e) {}
       return idbSet('root', h);
-    }).then(function () { toast('Folder access confirmed.'); }).catch(function (e) { if (e && e.name !== 'AbortError') toast('Could not get folder access.'); });
+    }).then(function () { toast('Folder access confirmed.'); fsAutoSaveSoon(); }).catch(function (e) { if (e && e.name !== 'AbortError') toast('Could not get folder access.'); });
   };
   ROOT.createTree = function () {
     if (!guard()) return;
@@ -1748,7 +1780,9 @@
       + '<span class="fng-l" style="margin:0">Folder tree (this machine)</span>'
       + '<button class="fng-btn pri" onclick="' + R() + '.createTree()">Create folder tree</button></div>'
       + warn
-      + '<p class="fng-muted" style="font-size:12px;margin:5px 0 0">Creates the missing subfolders under your <b>local root folder</b>; the metadata path then switches from <i>Recommended local full path</i> to <i>Full path</i>.</p></div>';
+      + '<p class="fng-muted" style="font-size:12px;margin:5px 0 0">Creates the missing subfolders under your <b>local root folder</b>; the metadata path then switches from <i>Recommended local full path</i> to <i>Full path</i>.</p>'
+      + (ROOT._fsRoot ? '<p class="fng-muted" style="font-size:12px;margin:6px 0 0">✅ <b>Auto-save is on.</b> Once the experiment’s folder tree exists, its metadata file is written there and updated automatically on every change — no action needed. It never creates folders on its own.<span id="fng-autosave" style="color:var(--ac);display:block;margin-top:2px"></span></p>' : '')
+      + '</div>';
   }
 
   function renderFsConfirm() {
@@ -1764,12 +1798,12 @@
       + '<button class="fng-modal-x" title="Cancel" onclick="' + R() + '.fsConfirmNo()">✕</button></div>'
       + '<p style="margin:0;font-size:14px">Inside your local root folder <b>' + esc(label) + '</b>, target:</p>'
       + '<div class="fng-path" style="margin:4px 0">' + esc(pend.segs.join('/') || '(root)') + '</div>' + mk
-      + '<p class="fng-muted" style="margin:6px 0 0;font-size:13px">No file is written now — the metadata is saved into this folder when you copy it or open eLabNext.</p>'
+      + '<p class="fng-muted" style="margin:6px 0 0;font-size:13px">The metadata file is written into this folder automatically and kept up to date as you edit — no action needed.</p>'
       + '<div class="fng-acts" style="margin-top:12px"><button class="fng-btn" onclick="' + R() + '.fsConfirmNo()">Cancel</button>'
       + '<button class="fng-btn pri" onclick="' + R() + '.fsConfirmYes()">Create folders</button></div></div></div>';
   }
 
-  if (typeof indexedDB !== 'undefined') { try { idbGet('root').then(function (h) { if (h) ROOT._fsRoot = h; }).catch(function () {}); } catch (e) {} }
+  if (typeof indexedDB !== 'undefined') { try { idbGet('root').then(function (h) { if (h) { ROOT._fsRoot = h; fsAutoSaveSoon(); } }).catch(function () {}); } catch (e) {} }
 
   /* --- usage analytics (event ping) ---------------------------------------
    * Opt-in and fire-and-forget: active ONLY when window.FNG_ANALYTICS_URL is
@@ -3224,6 +3258,7 @@
   }
 
   function rerender() {
+    fsAutoSaveSoon();
     // Auto-persist on this machine so edits are never lost (no Save button).
     if (!ROOT._platformMode && ROOT.library) { try { localStorage.setItem(libCacheKey(), JSON.stringify(ROOT.library)); } catch (e) {} }
     if (ROOT._platformMode && ROOT.platformEdit) { try { localStorage.setItem('fng.platform.' + ROOT._platformSlug, JSON.stringify(ROOT.platformEdit)); } catch (e) {} }
