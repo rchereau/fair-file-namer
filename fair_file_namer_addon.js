@@ -791,10 +791,8 @@
           + DEPARTMENTS.map(function (d) { return '<option value="' + esc(d.code) + '"' + (d.code === v ? ' selected' : '') + '>' + esc(d.code) + ' — ' + esc(d.label) + '</option>'; }).join('') + '</select>';
       } else if (f.source === 'operator') {
         var opOpt = function (o) { var n = opName(o); return '<option value="' + esc(n) + '"' + (n === v ? ' selected' : '') + '>' + esc(n) + '</option>'; };
-        var alumSorted = (L.alumni || []).slice().sort(function (a, b) { return cmpName(opName(a), opName(b)); });
         ctrl = '<select class="fng-sel" required onchange="' + R() + '.setVal(\'' + f.id + '\',this.value)"><option value="">— select —</option>'
           + (L.operators || []).slice().sort(function (a, b) { return cmpName(opName(a), opName(b)); }).map(opOpt).join('')
-          + (alumSorted.length ? '<optgroup label="Alumni">' + alumSorted.map(opOpt).join('') + '</optgroup>' : '')
           + '</select>';
       } else if (f.source === 'device') {
         return '';   // Device is rendered on its own line above, with My Configs
@@ -957,7 +955,7 @@
   }
   function renderDevManager() {
     var dm = ROOT.ui.devmgr; if (!dm || !dm.open) return '';
-    return '<div class="fng-modal" onclick="if(event.target===this)' + R() + '.closeDevManager()">'
+    return '<div class="fng-modal" onmousedown="' + R() + '._bd=(event.target===this)" onmouseup="if(event.target===this&&' + R() + '._bd)' + R() + '.closeDevManager()">'
       + '<div class="fng-modal-card fng-dmcard"><div class="fng-modal-h"><h3 style="margin:0">' + (dm.edit ? 'Manage devices' : 'Select devices') + '</h3>'
       + '<button class="fng-modal-x" title="Close" onclick="' + R() + '.closeDevManager()">✕</button></div>'
       + '<div class="fng-dmbody"><div class="fng-dmleft">' + devmgrTree() + '</div>' + devmgrMiddle() + '</div>'
@@ -1011,7 +1009,7 @@
         + (active ? '<button class="fng-btn sm" onclick="' + R() + '.renameConfig()">Rename</button><button class="fng-btn sm" onclick="' + R() + '.deleteConfig()">Delete</button>' : '')
         + '</div>' + editor;
     }
-    return '<div class="fng-modal" onclick="if(event.target===this)' + R() + '.closeConfigMgr()">'
+    return '<div class="fng-modal" onmousedown="' + R() + '._bd=(event.target===this)" onmouseup="if(event.target===this&&' + R() + '._bd)' + R() + '.closeConfigMgr()">'
       + '<div class="fng-modal-card"><div class="fng-modal-h"><h3 style="margin:0">User configuration</h3>'
       + '<button class="fng-modal-x" title="Close" onclick="' + R() + '.closeConfigMgr()">✕</button></div>'
       + body
@@ -1185,6 +1183,16 @@
    * Manage devices window for the OPENED device; the active config of the
    * currently SELECTED (file-name) device is folded into the metadata + sidecar. */
   var CONFIG_TEMPLATE = 'Setting1 : XXX\nSetting2 : XXX';
+  // Suggested starting points offered when creating a new configuration.
+  var CONFIG_SUGGESTIONS = [
+    { label: 'Field–value pairs (empty)', type: 'kv',
+      text: 'Wavelength (nm):\nObjective:\nTrigger1:\nTrigger2:\nManipulator1:\nManipulator2:' },
+    { label: 'Field–value pairs (pre-filled example)', type: 'kv',
+      text: 'Wavelength (nm): 920\nObjective: Nikon 16X NA0.8 WD3mm (MRP07220)\nTrigger1: 470nm LED optical stimulation\nTrigger2: reward\nManipulator1: somatic recording\nManipulator2: field recording' },
+    { label: 'Free text', type: 'text',
+      text: 'A IR filter set is replacing the original red filter set in this configuration.' },
+    { label: 'Blank', type: 'kv', text: CONFIG_TEMPLATE }
+  ];
   function parseSettings(text) {
     var o = {};
     (text || '').split(/\n/).forEach(function (line) { var i = line.indexOf(':'); if (i > 0) { var k = line.slice(0, i).trim(); if (k) o[k] = line.slice(i + 1).trim(); } });
@@ -1219,15 +1227,42 @@
   ROOT.setCfgVal = function (id, key, v) { ROOT.ui.cfgVals = ROOT.ui.cfgVals || {}; ROOT.ui.cfgVals[id] = ROOT.ui.cfgVals[id] || {}; ROOT.ui.cfgVals[id][key] = v; refreshHeader(); };
   ROOT.setConfigType = function (t) { var op = currentOperator(), dev = currentDeviceName(); if (!op || !dev) return; var m = loadAllConfigs(), k = cfgKey(op, dev), c = (m[k] || []).filter(function (x) { return x.id === activeConfigId(op, dev); })[0]; if (!c) return; c.type = (t === 'text') ? 'text' : 'kv'; saveAllConfigs(m); rerender(); };
   ROOT.selectConfig = function (id) { var op = currentOperator(), dev = currentDeviceName(); if (!op || !dev) return; setActiveConfigId(op, dev, id); rerender(); };
-  ROOT.newConfig = function () {
-    var op = currentOperator(); if (!op) { toast('Select your operator on the main screen first.'); return; }
+  function createConfigFromTemplate(sug) {
+    var op = currentOperator(); if (!op) { toast('Choose an operator first.'); return; }
     var dev = currentDeviceName(); if (!dev) { toast('Choose a device first.'); return; }
     var def = 'Config ' + (odConfigs(op, dev).length + 1);
     var name = (typeof window !== 'undefined' && window.prompt) ? window.prompt('Name this configuration:', def) : def;
     if (name === null) return; name = (name || '').trim() || def;
     var m = loadAllConfigs(), k = cfgKey(op, dev); m[k] = m[k] || [];
-    var c = { id: uid('cfg'), name: name, text: CONFIG_TEMPLATE };
+    var c = { id: uid('cfg'), name: name, text: sug.text, type: sug.type };
     m[k].push(c); saveAllConfigs(m); setActiveConfigId(op, dev, c.id); rerender();
+  }
+  ROOT.newConfig = function () {
+    var op = currentOperator(); if (!op) { toast('Choose an operator first.'); return; }
+    var dev = currentDeviceName(); if (!dev) { toast('Choose a device first.'); return; }
+    if (document.getElementById('fng-cfg-new')) return;
+    var ov = document.createElement('div');
+    ov.id = 'fng-cfg-new'; ov.className = 'fng-modal'; ov.style.zIndex = '10001';
+    ov.innerHTML = '<div class="fng-modal-card"><div class="fng-modal-h"><h3 style="margin:0">New configuration</h3>'
+      + '<button class="fng-modal-x" title="Close">\u2715</button></div>'
+      + '<p class="fng-muted" style="margin-top:0">Start from a template — you can edit it afterwards:</p>'
+      + '<div style="display:flex;flex-direction:column;gap:8px">'
+      + CONFIG_SUGGESTIONS.map(function (sg, i) {
+          return '<button class="fng-btn" data-i="' + i + '" style="text-align:left;white-space:normal;height:auto;padding:8px 10px">'
+            + '<b>' + esc(sg.label) + '</b>'
+            + (sg.text ? '<br><span class="fng-muted" style="font-size:11px;white-space:pre-wrap">' + esc(sg.text.length > 120 ? sg.text.slice(0, 120) + '\u2026' : sg.text) + '</span>' : '')
+            + '</button>';
+        }).join('')
+      + '</div></div>';
+    document.body.appendChild(ov);
+    var close = function () { if (ov.parentNode) ov.parentNode.removeChild(ov); };
+    var mdb = false;
+    ov.addEventListener('mousedown', function (e) { mdb = (e.target === ov); });
+    ov.addEventListener('mouseup', function (e) { if (mdb && e.target === ov) close(); });
+    ov.querySelector('.fng-modal-x').onclick = close;
+    Array.prototype.forEach.call(ov.querySelectorAll('button[data-i]'), function (b) {
+      b.onclick = function () { var sg = CONFIG_SUGGESTIONS[+b.getAttribute('data-i')]; close(); createConfigFromTemplate(sg); };
+    });
   };
   ROOT.editConfig = function (text) {   // no rerender — keep the textarea cursor
     var op = currentOperator(), dev = currentDeviceName(); if (!op || !dev) return;
@@ -1717,7 +1752,7 @@
     var mk = missing.length
       ? '<p style="margin:8px 0 4px">These folders will be created (only the missing ones):</p><ul class="fng-fslist">' + missing.map(function (m) { return '<li>' + esc(m) + '</li>'; }).join('') + '</ul>'
       : '<p class="fng-muted" style="margin:8px 0">All folders already exist — nothing new will be created.</p>';
-    return '<div class="fng-modal" onclick="if(event.target===this)' + R() + '.fsConfirmNo()">'
+    return '<div class="fng-modal" onmousedown="' + R() + '._bd=(event.target===this)" onmouseup="if(event.target===this&&' + R() + '._bd)' + R() + '.fsConfirmNo()">'
       + '<div class="fng-modal-card"><div class="fng-modal-h"><h3 style="margin:0">Create folder tree</h3>'
       + '<button class="fng-modal-x" title="Cancel" onclick="' + R() + '.fsConfirmNo()">✕</button></div>'
       + '<p style="margin:0;font-size:14px">Inside your local root folder <b>' + esc(label) + '</b>, target:</p>'
@@ -1897,7 +1932,7 @@
   function missModal() {
     if (!ROOT.ui.missOpen) return '';
     var list = ROOT.ui.missList || [];
-    return '<div class="fng-modal" onclick="if(event.target===this)' + R() + '.closeMiss()">'
+    return '<div class="fng-modal" onmousedown="' + R() + '._bd=(event.target===this)" onmouseup="if(event.target===this&&' + R() + '._bd)' + R() + '.closeMiss()">'
       + '<div class="fng-modal-card"><div class="fng-modal-h"><h3 style="margin:0">Complete the file name</h3>'
       + '<button class="fng-modal-x" title="Close" onclick="' + R() + '.closeMiss()">✕</button></div>'
       + '<p class="fng-muted">Fill in the following field' + (list.length > 1 ? 's' : '') + ' before copying the file name:</p>'
@@ -1960,7 +1995,9 @@
       '</div>';
     document.body.appendChild(ov);
     var close = function () { if (ov.parentNode) ov.parentNode.removeChild(ov); };
-    ov.addEventListener('click', function (e) { if (e.target === ov) close(); });
+    var mdOnBackdrop = false;
+    ov.addEventListener('mousedown', function (e) { mdOnBackdrop = (e.target === ov); });
+    ov.addEventListener('mouseup', function (e) { if (mdOnBackdrop && e.target === ov) close(); });
     var x = ov.querySelector('.fng-modal-x'); if (x) x.onclick = close;
     var ok = ov.querySelector('#fng-st-help-ok'); if (ok) ok.onclick = close;
   }
@@ -2221,7 +2258,7 @@
       + (tpl ? '<button class="fng-btn sm" onclick="' + R() + '.dupTpl()">Duplicate</button><button class="fng-btn sm" onclick="' + R() + '.delTpl()">Delete</button>' : '')
       + '</div>';
     var editor = tpl ? tileEditor(lab, tpl) : '<p class="fng-muted" style="margin-top:12px">Create a template to start.</p>';
-    return '<div class="fng-modal" onclick="if(event.target===this)' + R() + '.closeTplBuilder()">'
+    return '<div class="fng-modal" onmousedown="' + R() + '._bd=(event.target===this)" onmouseup="if(event.target===this&&' + R() + '._bd)' + R() + '.closeTplBuilder()">'
       + '<div class="fng-modal-card fng-bigcard"><div class="fng-modal-h"><h3 style="margin:0">Building templates</h3>'
       + '<button class="fng-modal-x" title="Close" onclick="' + R() + '.closeTplBuilder()">✕</button></div>'
       + head + editor
@@ -2229,7 +2266,7 @@
   }
   function renderLabsOperators() {
     if (!ROOT.ui.labsOpen) return '';
-    return '<div class="fng-modal" onclick="if(event.target===this)' + R() + '.closeLabsOps()">'
+    return '<div class="fng-modal" onmousedown="' + R() + '._bd=(event.target===this)" onmouseup="if(event.target===this&&' + R() + '._bd)' + R() + '.closeLabsOps()">'
       + '<div class="fng-modal-card fng-bigcard"><div class="fng-modal-h"><h3 style="margin:0">Edit labs and operators</h3>'
       + '<button class="fng-modal-x" title="Close" onclick="' + R() + '.closeLabsOps()">✕</button></div>'
       + manageLists()
@@ -2349,7 +2386,7 @@
       rows += '<p class="fng-muted">Example for “' + esc(sample) + '” → <b>' + esc(applyFmt(sample, curf)) + '</b> in the file name. ' + (f.source === 'operator' || f.source === 'lab' ? 'Initials/first-3 are managed (and disambiguated) in the table. ' : '') + 'The <b>full value is always kept in the metadata</b>.</p>';
     }
 
-    return '<div class="fng-modal" onclick="if(event.target===this)' + R() + '.closeField()">'
+    return '<div class="fng-modal" onmousedown="' + R() + '._bd=(event.target===this)" onmouseup="if(event.target===this&&' + R() + '._bd)' + R() + '.closeField()">'
       + '<div class="fng-modal-card"><div class="fng-modal-h"><h3 style="margin:0">Edit field — ' + esc(f.name) + '</h3>'
       + '<button class="fng-modal-x" title="Close" onclick="' + R() + '.closeField()">✕</button></div>'
       + rows
@@ -2712,7 +2749,7 @@
     var step1 = url
       ? '<a class="fng-btn pri" href="' + esc(url) + '" target="_blank" rel="noopener">Open this lab\'s library in the Web IDE ▸</a>'
       : '<span class="fng-muted">Set the “Web IDE link” field (under the buttons) to get a one-click link here.</span>';
-    return '<div class="fng-modal" onclick="if(event.target===this)' + R() + '.closePublish()">'
+    return '<div class="fng-modal" onmousedown="' + R() + '._bd=(event.target===this)" onmouseup="if(event.target===this&&' + R() + '._bd)' + R() + '.closePublish()">'
       + '<div class="fng-modal-card"><div class="fng-modal-h"><h3 style="margin:0">Publish to the lab</h3>'
       + '<button class="fng-modal-x" title="Close" onclick="' + R() + '.closePublish()">✕</button></div>'
       + '<p class="fng-muted">✓ <code>library.json</code> downloaded &nbsp;·&nbsp; ✓ contents copied to your clipboard.</p>'
@@ -2908,7 +2945,7 @@
     }).join('');
     var cards = ''; items.forEach(function (it, i) { if (it.section === rv.section) cards += rvCard(it, i); });
     var accepted = 0; items.forEach(function (it) { if (it.decision === 'accept') accepted++; });
-    return '<div class="fng-modal" onclick="if(event.target===this)' + R() + '.reviewCancel()">'
+    return '<div class="fng-modal" onmousedown="' + R() + '._bd=(event.target===this)" onmouseup="if(event.target===this&&' + R() + '._bd)' + R() + '.reviewCancel()">'
       + '<div class="fng-modal-card fng-rvcard"><div class="fng-modal-h"><h3 style="margin:0">Review imported changes</h3>'
       + '<button class="fng-modal-x" title="Cancel" onclick="' + R() + '.reviewCancel()">\u2715</button></div>'
       + '<p class="fng-muted" style="margin:0 0 10px">Accept, reject or edit each change. Accepted changes are merged into your working library; then use <b>Publish changes</b> to share them with the lab.</p>'
@@ -3064,7 +3101,7 @@
   function platformsPublishDialog() {
     if (!ROOT.ui.platPublishOpen) return '';
     var url = platformPublishLink();
-    return '<div class="fng-modal" onclick="if(event.target===this)' + R() + '.closePlatPublish()">'
+    return '<div class="fng-modal" onmousedown="' + R() + '._bd=(event.target===this)" onmouseup="if(event.target===this&&' + R() + '._bd)' + R() + '.closePlatPublish()">'
       + '<div class="fng-modal-card"><div class="fng-modal-h"><h3 style="margin:0">Publish platform devices</h3>'
       + '<button class="fng-modal-x" title="Close" onclick="' + R() + '.closePlatPublish()">✕</button></div>'
       + '<p class="fng-muted">✓ <code>platform.json</code> downloaded &nbsp;·&nbsp; ✓ contents copied to your clipboard.</p>'
