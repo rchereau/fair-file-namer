@@ -839,15 +839,13 @@
       + renderMetaDoc()
       + '<div class="fng-acts">'
       + (hasCounter ? '<button class="fng-btn pri" onclick="' + R() + '.nextRun()">Next run ▸</button>' : '')
-      + '<button class="fng-btn" onclick="' + R() + '.copyPath()">Copy path</button>'
       + '<button class="fng-btn pri" onclick="' + R() + '.openSafeTransfer()">Transfer with SafeTransfer \u25B8</button>'
+      + '<button class="fng-btn" onclick="' + R() + '.openRenamer()">Rename existing files \u25B8</button>'
       + '<button class="fng-btn" onclick="' + R() + '.copyMarkdown()">Copy metadata (Markdown)</button>'
       + '<button class="fng-btn" onclick="' + R() + '.downloadMarkdown()">Download .md</button>'
       + '<button class="fng-btn" onclick="' + R() + '.downloadSidecar()">Download .json</button>'
-      + '<button class="fng-btn" onclick="' + R() + '.recordToSection()">Record in experiment</button>'
-      + '<button class="fng-btn" onclick="' + R() + '.resetForm()">Reset</button>'
       + '</div>'
-      + recentBlock() + decodeBlock() + missModal();
+      + recentBlock() + decodeBlock() + missModal() + renderRenamer();
   }
 
   /* --- Manage devices window (file-explorer) -----------------------------
@@ -1119,12 +1117,12 @@
     var sepc = '<span class="sep">' + esc(tpl.separator || '_') + '</span>';
     var nameHtml = segs.length ? segs.join(sepc) : '<span class="fng-muted">add fields to this template…</span>';
     var folder = useFolderTpl(lab);
-    var fileCard = '<div class="fng-ex"><div class="h">File name</div>'
+    var fileCard = '<div class="fng-ex"' + (missingInputs().length ? ' style="border-color:#f0604a"' : '') + '><div class="h">File name</div>'
       + '<div class="fng-namerow"><div class="fng-name">' + nameHtml + '</div>'
       + '<button class="fng-copy" id="fng-copybtn" title="Copy file name" onclick="' + R() + '.copyName()">'
       + '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path></svg>'
       + '</button></div></div>';
-    var folderCard = '<div class="fng-ex"><div class="h">Folder</div>' + locationBlock(folder) + '</div>';
+    var folderCard = '<div class="fng-ex"' + ((missingInputs().length || !localBase()) ? ' style="border-color:#f0604a"' : '') + '><div class="h">Folder</div>' + locationBlock(folder) + '</div>';
     return '<div id="fng-ex">' + fileCard + folderCard + '</div>';
   }
 
@@ -1565,7 +1563,7 @@
           + '<input class="fng-in" id="fng-rootin" style="flex:1;min-width:200px" value="' + esc(b) + '" placeholder="full path incl. drive, e.g. A:&#92;DATA" oninput="' + R() + '.rootDirty()">'
           + '<button class="fng-btn sm" id="fng-rootset"' + (b ? '' : ' disabled') + ' onclick="' + R() + '.setRootFromInput()">' + (b ? 'Close' : 'Set') + '</button>'
           + '</div>'
-          + '<p class="fng-muted" style="font-size:12px;margin:4px 0 0">Type the <b>full path including the drive letter</b> (e.g. <code>A:&#92;DATA</code>). On <b>Set</b>, Chrome/Edge asks you to confirm access to that folder once, so the tool can create the subfolders there.</p>';
+          + '<p class="fng-muted" style="font-size:12px;margin:4px 0 0">Type the <b>full path including the drive letter</b> (e.g. <code>A:&#92;DATA</code>). On <b>Set</b>, Chrome/Edge opens a folder chooser (its title — e.g. “Select where this site can save changes” — comes from the browser and can’t be changed by this tool); pick the <b>local root folder you just defined</b> so the tool can create the subfolders there.</p>';
       } else {
         html += '<div class="fng-row" style="margin-top:4px;gap:8px;align-items:center;flex-wrap:wrap">'
           + '<span class="fng-path" style="flex:1;min-width:0;margin-top:0;word-break:break-all">' + esc(b) + '</span>'
@@ -1722,7 +1720,7 @@
   ROOT.rootEditOn = function () { ROOT.ui.rootEdit = true; refreshUsePreview(); var el = (typeof document !== 'undefined') && document.getElementById('fng-rootin'); if (el) { try { el.focus(); } catch (e) {} } };
   ROOT.grantRootAccess = function () {
     if (!fsSupported()) return;
-    toast('Select the LOCAL ROOT FOLDER that has been defined' + (localBase() ? ' (' + localBase() + ')' : '') + '.');
+    toast('Select the local root folder you just defined' + (localBase() ? ' (' + localBase() + ')' : '') + '.');
     window.showDirectoryPicker({ mode: 'readwrite' }).then(function (h) {
       ROOT._fsRoot = h; try { localStorage.setItem(LS_FSROOT, h.name); } catch (e) {}
       return idbSet('root', h);
@@ -1740,7 +1738,7 @@
         .catch(function () { toast('Could not create the subfolders — confirm access to your local root folder and try again.'); });
     };
     if (ROOT._fsRoot) doCreate();
-    else { toast('Select the LOCAL ROOT FOLDER that has been defined (' + localBase() + ').'); window.showDirectoryPicker({ mode: 'readwrite' }).then(function (h) { ROOT._fsRoot = h; try { localStorage.setItem(LS_FSROOT, h.name); } catch (e) {} return idbSet('root', h); }).then(doCreate).catch(function (e) { if (e && e.name !== 'AbortError') toast('Could not get folder access.'); }); }
+    else { toast('Select the local root folder you just defined (' + localBase() + ').'); window.showDirectoryPicker({ mode: 'readwrite' }).then(function (h) { ROOT._fsRoot = h; try { localStorage.setItem(LS_FSROOT, h.name); } catch (e) {} return idbSet('root', h); }).then(doCreate).catch(function (e) { if (e && e.name !== 'AbortError') toast('Could not get folder access.'); }); }
   };
   ROOT.fsConfirmNo = function () { ROOT.ui.fsConfirm = false; ROOT._fsPending = null; rerender(); };
   ROOT.fsConfirmYes = function () {
@@ -1983,6 +1981,259 @@
   }
   ROOT.closeMiss = function () { ROOT.ui.missOpen = false; rerender(); };
 
+  /* ==========================================================================
+   * RENAME EXISTING FILES  (batch-rename pre-FAIR acquisitions; Chromium only)
+   * Pick folders/files -> match the old acquisition token (literal or regex) ->
+   * replace it with the current Use-tab file name, keeping each file's _0001.ext
+   * suffix. Preview -> confirm -> rename in place (FileSystemFileHandle.move) or,
+   * where move() is unavailable, copy-then-delete (verified). Writes an undo
+   * manifest and supports an in-session Undo. Non-matching files are never touched.
+   * ======================================================================== */
+  function rnState() { if (!ROOT._renamer) ROOT._renamer = { files: [], pattern: '', useRegex: false, suffix: '^_\\d+', allowText: false, applying: false, results: null, progress: '' }; return ROOT._renamer; }
+  function rnEsc(s) { return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
+  function rnDirOf(rel) { var i = rel.lastIndexOf('/'); return i < 0 ? '' : rel.slice(0, i); }
+  function rnMatchRe() { var st = rnState(), p = st.pattern || ''; if (!p) return null; try { return st.useRegex ? new RegExp(p) : new RegExp(rnEsc(p)); } catch (e) { return null; } }
+  function rnSuffixRe() { var s = (rnState().suffix || '').trim(); if (!s) return null; try { return new RegExp(s); } catch (e) { return 'bad'; } }
+  // Per-file date: the new base uses the file's own last-modified date (closest the
+  // browser exposes to a creation date) by briefly borrowing the date override.
+  function rnDateStr(f) { return (f && f.mtime) ? fmtDate(f.mtime, 'YYYY-MM-DD') : ''; }
+  function rnWithFileDate(f, fn) { var ds = rnDateStr(f); if (!ds) return fn(); var saved = ROOT.ui.dateOverride; ROOT.ui.dateOverride = ds; try { return fn(); } finally { ROOT.ui.dateOverride = saved; } }
+  function rnBaseFor(f) { return rnWithFileDate(f, function () { return curName(); }); }
+  function rnSidecarJsonFor(f) { return rnWithFileDate(f, function () { return JSON.stringify(sidecar(), null, 2); }); }
+  async function rnCollect(dir, prefix, out) {
+    for await (var e of dir.values()) {
+      var rel = prefix ? prefix + '/' + e.name : e.name;
+      if (e.kind === 'file') { var mt = null; try { mt = new Date((await e.getFile()).lastModified); } catch (er) {} out.push({ handle: e, parent: dir, name: e.name, relPath: rel, mtime: mt }); }
+      else if (e.kind === 'directory') await rnCollect(e, rel, out);
+    }
+  }
+  function rnMerge(list) {
+    var st = rnState(), have = {};
+    st.files.forEach(function (f) { have[f.relPath] = true; });
+    list.forEach(function (f) { if (!have[f.relPath]) { have[f.relPath] = true; st.files.push(f); } });
+    st.results = null;
+  }
+  function rnPlan() {
+    var st = rnState(), files = st.files || [], re = rnMatchRe(), sre = rnSuffixRe();
+    var plan = files.map(function (f) {
+      var row = { f: f, name: f.name, relPath: f.relPath, status: 'nomatch', newName: '', base: '' };
+      if (!re) { row.status = 'nopattern'; return row; }
+      var m = re.exec(f.name); if (!m) { row.status = 'nomatch'; return row; }
+      var remainder = f.name.slice(m.index + m[0].length);
+      if (sre === 'bad') { row.status = 'badsuffix'; return row; }
+      if (sre && !sre.test(remainder)) { row.status = 'suffix'; return row; }
+      var base = rnBaseFor(f);
+      if (!base) { row.status = 'nobase'; return row; }
+      var nn = f.name.slice(0, m.index) + base + remainder;
+      row.newName = nn; row.base = base;
+      row.status = (nn === f.name) ? 'unchanged' : 'rename';
+      return row;
+    });
+    var byT = {};
+    plan.forEach(function (r) { if (r.status === 'rename') { var k = rnDirOf(r.relPath) + '\u0000' + r.newName; byT[k] = (byT[k] || 0) + 1; } });
+    plan.forEach(function (r) { if (r.status === 'rename' && byT[rnDirOf(r.relPath) + '\u0000' + r.newName] > 1) r.status = 'dupTarget'; });
+    return plan;
+  }
+  function rnRefresh() { var el = (typeof document !== 'undefined') && document.getElementById('fng-rn-body'); if (el) el.innerHTML = rnBodyHtml(); }
+  function rnResultsHtml() {
+    var res = rnState().results || [], ok = res.filter(function (x) { return x.ok; }).length, fail = res.length - ok;
+    var fails = res.filter(function (x) { return !x.ok; });
+    return '<div style="margin-top:8px;font-size:12.5px"><b>' + ok + '</b> renamed' + (fail ? (', <b style="color:#f0604a">' + fail + '</b> skipped') : '') + '. The rename manifest and FAIR metadata were saved into the folder(s).'
+      + (fails.length ? '<div class="fng-muted" style="margin-top:4px">Skipped: ' + fails.slice(0, 8).map(function (x) { return esc(x.old) + ' (' + esc(x.err || 'error') + ')'; }).join('; ') + (fails.length > 8 ? ' \u2026' : '') + '</div>' : '')
+      + '</div>';
+  }
+  function rnBodyHtml() {
+    var st = rnState(), base = curName();
+    if (!st.files.length) return '<p class="fng-muted" style="margin:10px 0 0">No files yet \u2014 add a folder or files above.</p>';
+    var plan = rnPlan();
+    var n = function (s) { return plan.filter(function (r) { return r.status === s; }).length; };
+    var toRename = n('rename'), badRe = (!rnMatchRe() && st.pattern), badSfx = (rnSuffixRe() === 'bad');
+    var summary = '<div class="fng-muted" style="font-size:12.5px;margin:8px 0">'
+      + (base ? 'New name = your Use-tab name <b style="color:var(--ac)">' + esc(base) + '</b>, with the <b>date taken from each file</b> (its last-modified date).' : '<b style="color:#f0604a">Build a complete file name in the Use tab first \u2014 that becomes the replacement.</b>')
+      + (badRe ? '<br><b style="color:#f0604a">The match pattern is not a valid regular expression.</b>' : '')
+      + (badSfx ? '<br><b style="color:#f0604a">The keep-suffix filter is not a valid regular expression.</b>' : '')
+      + '<br>' + toRename + ' to rename \u00b7 ' + n('nomatch') + ' no match \u00b7 ' + n('suffix') + ' filtered out'
+      + (n('dupTarget') ? (' \u00b7 <b style="color:#f0604a">' + n('dupTarget') + ' name clash</b>') : '')
+      + (n('unchanged') ? (' \u00b7 ' + n('unchanged') + ' unchanged') : '')
+      + '</div>';
+    var rows = plan.map(function (r) {
+      var dim = r.status === 'rename' ? '' : 'opacity:.5';
+      var tag = { nomatch: 'no match', suffix: 'filtered out', badsuffix: 'bad filter', nopattern: '\u2014', nobase: 'no base name', unchanged: 'unchanged', dupTarget: 'NAME CLASH' }[r.status] || '';
+      var right = r.status === 'rename' ? '<span style="color:var(--ac)">' + esc(r.newName) + '</span>' : '<span class="fng-muted">' + esc(tag) + '</span>';
+      return '<tr style="' + dim + '"><td style="word-break:break-all">' + esc(r.relPath) + '</td><td style="word-break:break-all">' + right + '</td></tr>';
+    }).join('');
+    var table = '<div style="max-height:280px;overflow:auto;border:1px solid var(--bd);border-radius:8px;margin-top:4px"><table class="fng-doc-t" style="table-layout:fixed;width:100%"><colgroup><col style="width:50%"><col style="width:50%"></colgroup><thead><tr><th>Current file</th><th>New name</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+    var acts = '<div class="fng-acts" style="margin-top:12px">'
+      + '<button class="fng-btn pri" ' + ((toRename && !st.applying) ? '' : 'disabled ') + 'onclick="' + R() + '.rnApply()">' + (st.applying ? 'Renaming\u2026' : ('Rename ' + toRename + ' file' + (toRename !== 1 ? 's' : ''))) + '</button>'
+      + (st.results ? '<button class="fng-btn" onclick="' + R() + '.rnUndo()">Undo last batch</button>' : '')
+      + '</div>';
+    var extra = st.results ? rnResultsHtml() : (st.progress ? '<p class="fng-muted" style="font-size:12px;margin:6px 0 0">' + esc(st.progress) + '</p>' : '');
+    return summary + table + acts + extra;
+  }
+  function renderRenamer() {
+    if (!ROOT.ui.renamerOpen) return '';
+    var st = rnState();
+    var head = '<div class="fng-modal-h"><h3 style="margin:0">Rename existing files</h3><button class="fng-modal-x" title="Close" onclick="' + R() + '.closeRenamer()">\u2715</button></div>';
+    if (!fsSupported()) {
+      return '<div class="fng-modal" onmousedown="' + R() + '._bd=(event.target===this)" onmouseup="if(event.target===this&&' + R() + '._bd)' + R() + '.closeRenamer()"><div class="fng-modal-card">' + head
+        + '<p class="fng-muted">Renaming files on disk needs Chrome or Edge (the File System Access API). This browser can\u2019t do it.</p></div></div>';
+    }
+    var listRows = st.files.length
+      ? st.files.map(function (f) { return '<div style="padding:2px 0;border-bottom:1px solid var(--bd);font-size:12px;word-break:break-all">' + esc(f.relPath) + '</div>'; }).join('')
+      : '<p class="fng-muted" style="font-size:12px;margin:6px 0">No files selected yet.</p>';
+    var controls = '<div class="fng-row" style="gap:8px;flex-wrap:wrap">'
+      + '<button class="fng-btn" onclick="' + R() + '.rnAddFolder()">Add folder(s)\u2026</button>'
+      + '<button class="fng-btn" onclick="' + R() + '.rnAddFiles()">Add file(s)\u2026</button>'
+      + (st.files.length ? '<button class="fng-btn" onclick="' + R() + '.rnClearFiles()">Clear (' + st.files.length + ')</button>' : '')
+      + '<button class="fng-btn" style="margin-left:auto" title="Reverse a previous rename by reading fair-rename-manifest.json in a folder." onclick="' + R() + '.rnUndoManifest()">Undo from a folder\u2019s manifest\u2026</button>'
+      + '</div>'
+      + '<div style="max-height:130px;overflow:auto;border:1px solid var(--bd);border-radius:8px;padding:6px 8px;margin-top:6px">' + listRows + '</div>';
+    var patternRow = '<div class="fng-row" style="gap:10px;flex-wrap:wrap;align-items:flex-end;margin-top:10px">'
+      + '<div class="fng-f" style="flex:1;min-width:220px"><span class="fng-l">Old acquisition text to replace</span>'
+      + '<input class="fng-in" style="width:100%;box-sizing:border-box" placeholder="e.g. HOL00554_20062026" value="' + esc(st.pattern) + '" oninput="' + R() + '.rnSetPattern(this.value)"></div>'
+      + '<label class="fng-muted" title="On: the text on the left is a regular expression \u2014 e.g. HOL\\d+_\\d+ matches HOL followed by any digits. Off: it is matched literally, character for character." style="font-size:12px;display:flex;align-items:center;gap:5px;padding-bottom:8px;cursor:help"><input type="checkbox" ' + (st.useRegex ? 'checked ' : '') + 'onchange="' + R() + '.rnToggleRegex(this.checked)">regex&nbsp;<span style="opacity:.6;border:1px solid var(--bd);border-radius:50%;width:14px;height:14px;display:inline-flex;align-items:center;justify-content:center;font-size:10px">?</span></label>'
+      + '<label class="fng-muted" title="Rename every matching file no matter what follows the matched text \u2014 including names with spaces, brackets, or no _0001 suffix at all. (Clears the keep-suffix filter.)" style="font-size:12px;display:flex;align-items:center;gap:5px;padding-bottom:8px;cursor:help"><input type="checkbox" ' + (st.allowText ? 'checked ' : '') + 'onchange="' + R() + '.rnToggleAllowText(this.checked)">any suffix</label>'
+      + '<div class="fng-f" style="width:130px"><span class="fng-l">Keep-suffix filter</span>'
+      + '<input class="fng-in" style="width:100%;box-sizing:border-box" placeholder="^_\\d+" value="' + esc(st.suffix) + '" oninput="' + R() + '.rnSetSuffix(this.value)"></div>'
+      + '</div>'
+      + '<p class="fng-muted" style="font-size:11.5px;margin:4px 0 0">Everything after the matched text (e.g. <code>_0001.tif</code>) is kept, and the date in the new name is taken from each file. <b>regex</b> treats the box as a pattern; <b>any suffix</b> renames every match no matter what follows the text (spaces, brackets, or no <code>_0001</code> at all). The keep-suffix filter (<code>^_\\d+</code> = numbered only, the default) limits which files qualify \u2014 clear it, or tick \u201cany suffix\u201d, to rename every match.</p>';
+    return '<div class="fng-modal" onmousedown="' + R() + '._bd=(event.target===this)" onmouseup="if(event.target===this&&' + R() + '._bd)' + R() + '.closeRenamer()">'
+      + '<div class="fng-modal-card fng-bigcard">' + head
+      + '<p class="fng-muted" style="margin-top:0;font-size:12.5px">Rename files from an earlier session to the FAIR name. Build the target name in the Use tab; here you pick the files and the old text to replace. Nothing is written until you confirm; non-matching files are never touched. The rename <b>manifest</b> and the FAIR <b>metadata</b> are saved into each folder so you can undo later.</p>'
+      + controls + patternRow
+      + '<div id="fng-rn-body">' + rnBodyHtml() + '</div>'
+      + '</div></div>';
+  }
+  ROOT.openRenamer = function () { rnState(); ROOT.ui.renamerOpen = true; rerender(); };
+  ROOT.closeRenamer = function () { ROOT.ui.renamerOpen = false; rerender(); };
+  ROOT.rnClearFiles = function () { var st = rnState(); st.files = []; st.results = null; rerender(); };
+  ROOT.rnSetPattern = function (v) { rnState().pattern = v; rnRefresh(); };
+  ROOT.rnToggleRegex = function (on) { rnState().useRegex = !!on; rnRefresh(); };
+  ROOT.rnToggleAllowText = function (on) { var st = rnState(); st.allowText = !!on; st.suffix = on ? '' : '^_\\d+'; rerender(); };
+  ROOT.rnSetSuffix = function (v) { rnState().suffix = v; rnRefresh(); };
+  ROOT.rnAddFolder = async function () {
+    if (!fsSupported()) { toast('Renaming needs Chrome or Edge.'); return; }
+    var dir;
+    try { dir = await window.showDirectoryPicker({ mode: 'readwrite' }); }
+    catch (e) { if (e && e.name !== 'AbortError') toast('Could not open the folder.'); return; }
+    var out = [];
+    try { await rnCollect(dir, '', out); } catch (e) { toast('Could not read the folder.'); }
+    rnMerge(out); rerender();
+    toast('Added ' + out.length + ' file' + (out.length !== 1 ? 's' : '') + ' from ' + dir.name + '.');
+  };
+  ROOT.rnAddFiles = async function () {
+    if (!fsSupported() || !window.showOpenFilePicker) { toast('Renaming needs Chrome or Edge.'); return; }
+    var hs;
+    try { hs = await window.showOpenFilePicker({ multiple: true }); }
+    catch (e) { if (e && e.name !== 'AbortError') toast('Could not open files.'); return; }
+    var list = [];
+    for (var i = 0; i < hs.length; i++) { var mt = null; try { mt = new Date((await hs[i].getFile()).lastModified); } catch (er) {} list.push({ handle: hs[i], parent: null, name: hs[i].name, relPath: hs[i].name, mtime: mt }); }
+    rnMerge(list); rerender();
+  };
+  async function rnRenameOne(r) {
+    var f = r.f, newName = r.newName, permTarget = f.parent || f.handle;
+    var ok = await fsEnsurePerm(permTarget); if (!ok) return { f: f, ok: false, old: f.name, newName: newName, base: r.base, err: 'permission denied' };
+    if (f.parent) { var exists = false; try { await f.parent.getFileHandle(newName); exists = true; } catch (e) {} if (exists) return { f: f, ok: false, old: f.name, newName: newName, base: r.base, err: 'target exists' }; }
+    if (typeof f.handle.move === 'function') {
+      try { await f.handle.move(newName); return { f: f, ok: true, old: f.name, newName: newName, base: r.base, method: 'move' }; }
+      catch (e) { return { f: f, ok: false, old: f.name, newName: newName, base: r.base, err: 'move ' + ((e && e.name) || 'failed') }; }
+    }
+    if (!f.parent) return { f: f, ok: false, old: f.name, newName: newName, base: r.base, err: 'no move() and no folder access' };
+    try {
+      var file = await f.handle.getFile(), sz = file.size;
+      var nh = await f.parent.getFileHandle(newName, { create: true });
+      var w = await nh.createWritable(); await w.write(file); await w.close();
+      var nf = await nh.getFile(); if (nf.size !== sz) { throw new Error('size mismatch'); }
+      await f.parent.removeEntry(f.name);
+      return { f: f, ok: true, old: f.name, newName: newName, base: r.base, method: 'copy+delete' };
+    } catch (e) { return { f: f, ok: false, old: f.name, newName: newName, base: r.base, err: 'copy ' + ((e && e.message) || 'failed') }; }
+  }
+  async function rnWriteManifests(results) {
+    var byDir = new Map();
+    results.forEach(function (res) { if (res.ok && res.f.parent) { if (!byDir.has(res.f.parent)) byDir.set(res.f.parent, []); byDir.get(res.f.parent).push(res); } });
+    for (var pair of byDir) {
+      var parent = pair[0], arr = pair[1];
+      var manifest = { tool: 'FAIR File Namer \u2014 rename', updated: new Date().toISOString(), renames: [] };
+      try { var fh = await parent.getFileHandle('fair-rename-manifest.json'); var prev = JSON.parse(await (await fh.getFile()).text()); if (prev && prev.renames) manifest.renames = prev.renames; } catch (e) {}
+      arr.forEach(function (res) { manifest.renames.push({ old: res.old, 'new': res.newName, method: res.method || null, sidecar: res.sidecar || null, at: new Date().toISOString() }); });
+      try { await fsWrite(parent, 'fair-rename-manifest.json', JSON.stringify(manifest, null, 2)); } catch (e) {}
+    }
+  }
+  ROOT.rnApply = async function () {
+    var st = rnState(); if (st.applying) return;
+    var plan = rnPlan().filter(function (r) { return r.status === 'rename'; });
+    if (!plan.length) { toast('Nothing to rename.'); return; }
+    st.applying = true; st.results = null; st.progress = 'Renaming\u2026'; rnRefresh();
+    var results = [], sideMap = new Map();
+    for (var i = 0; i < plan.length; i++) {
+      var r = plan[i];
+      var res = await rnRenameOne(r);
+      if (res.ok && r.f.parent) {
+        res.sidecar = r.base + '.json';
+        if (!sideMap.has(r.f.parent)) sideMap.set(r.f.parent, new Map());
+        var pm = sideMap.get(r.f.parent); if (!pm.has(r.base)) pm.set(r.base, rnSidecarJsonFor(r.f));
+      }
+      results.push(res);
+      st.progress = 'Renamed ' + results.length + ' / ' + plan.length + '\u2026'; rnRefresh();
+    }
+    for (var sp of sideMap) { var parent = sp[0], pm = sp[1]; for (var be of pm) { try { await fsWrite(parent, be[0] + '.json', be[1]); } catch (e) {} } }
+    await rnWriteManifests(results);
+    results.forEach(function (res) { if (res.ok) { var f = res.f; f.name = res.newName; f.relPath = (rnDirOf(f.relPath) ? rnDirOf(f.relPath) + '/' : '') + res.newName; } });
+    st.applying = false; st.results = results; st.progress = ''; rerender();
+    var ok = results.filter(function (x) { return x.ok; }).length;
+    toast('Renamed ' + ok + ' of ' + results.length + ' file' + (results.length !== 1 ? 's' : '') + '; manifest + metadata saved.');
+  };
+  ROOT.rnUndo = async function () {
+    var st = rnState(), res = (st.results || []).filter(function (x) { return x.ok; });
+    if (!res.length) { toast('Nothing to undo.'); return; }
+    var undone = 0, sidecarsDone = {};
+    for (var i = 0; i < res.length; i++) {
+      var r = res[i], f = r.f;
+      try {
+        if (r.method === 'move' && typeof f.handle.move === 'function') {
+          await f.handle.move(r.old); f.name = r.old; f.relPath = (rnDirOf(f.relPath) ? rnDirOf(f.relPath) + '/' : '') + r.old; undone++;
+        } else if (f.parent) {
+          var srcHandle = await f.parent.getFileHandle(r.newName);
+          var file = await srcHandle.getFile();
+          var oh = await f.parent.getFileHandle(r.old, { create: true });
+          var w = await oh.createWritable(); await w.write(file); await w.close();
+          await f.parent.removeEntry(r.newName);
+          f.name = r.old; f.relPath = (rnDirOf(f.relPath) ? rnDirOf(f.relPath) + '/' : '') + r.old; undone++;
+        }
+        if (r.sidecar && f.parent && !sidecarsDone[r.sidecar]) { sidecarsDone[r.sidecar] = true; try { await f.parent.removeEntry(r.sidecar); } catch (e) {} }
+      } catch (e) {}
+    }
+    st.results = null; rerender();
+    toast('Undid ' + undone + ' rename' + (undone !== 1 ? 's' : '') + '.');
+  };
+  ROOT.rnUndoManifest = async function () {
+    if (!fsSupported()) { toast('Renaming needs Chrome or Edge.'); return; }
+    var dir;
+    try { dir = await window.showDirectoryPicker({ mode: 'readwrite' }); }
+    catch (e) { if (e && e.name !== 'AbortError') toast('Could not open the folder.'); return; }
+    var manifest;
+    try { var fh = await dir.getFileHandle('fair-rename-manifest.json'); manifest = JSON.parse(await (await fh.getFile()).text()); }
+    catch (e) { toast('No fair-rename-manifest.json found in that folder.'); return; }
+    var entries = (manifest && manifest.renames) || [];
+    if (!entries.length) { toast('That manifest lists no renames.'); return; }
+    if (typeof window !== 'undefined' && window.confirm && !window.confirm('Undo ' + entries.length + ' rename(s) in \u201c' + dir.name + '\u201d? Files are renamed back to their original names and the FAIR sidecars are removed.')) return;
+    var undone = 0, remaining = [], sidecarsDone = {};
+    for (var i = entries.length - 1; i >= 0; i--) {
+      var en = entries[i], done = false;
+      try {
+        var cur = await dir.getFileHandle(en['new']);
+        if (typeof cur.move === 'function') { await cur.move(en.old); done = true; }
+        else { var file = await cur.getFile(); var oh = await dir.getFileHandle(en.old, { create: true }); var w = await oh.createWritable(); await w.write(file); await w.close(); await dir.removeEntry(en['new']); done = true; }
+      } catch (e) {}
+      if (done) { undone++; if (en.sidecar && !sidecarsDone[en.sidecar]) { sidecarsDone[en.sidecar] = true; try { await dir.removeEntry(en.sidecar); } catch (e) {} } }
+      else remaining.push(en);
+    }
+    try {
+      if (remaining.length) { manifest.renames = remaining.reverse(); await fsWrite(dir, 'fair-rename-manifest.json', JSON.stringify(manifest, null, 2)); }
+      else { try { await dir.removeEntry('fair-rename-manifest.json'); } catch (e) {} }
+    } catch (e) {}
+    toast('Undid ' + undone + ' of ' + entries.length + ' rename(s) from the manifest.');
+  };
   ROOT.copyName = function () {
     if (!guard()) return;
     copyText(curName()); pushHistory(curName()); saveFieldHistories(); logEvent('name');
