@@ -841,11 +841,12 @@
       + (hasCounter ? '<button class="fng-btn pri" onclick="' + R() + '.nextRun()">Next run ▸</button>' : '')
       + '<button class="fng-btn pri" onclick="' + R() + '.openSafeTransfer()">Transfer with SafeTransfer \u25B8</button>'
       + '<button class="fng-btn" onclick="' + R() + '.openRenamer()">Rename existing files \u25B8</button>'
+      + '<button class="fng-btn" onclick="' + R() + '.openLinker()">Link recordings \u25B8</button>'
       + '<button class="fng-btn" onclick="' + R() + '.copyMarkdown()">Copy metadata (Markdown)</button>'
       + '<button class="fng-btn" onclick="' + R() + '.downloadMarkdown()">Download .md</button>'
       + '<button class="fng-btn" onclick="' + R() + '.downloadSidecar()">Download .json</button>'
       + '</div>'
-      + recentBlock() + decodeBlock() + missModal() + renderRenamer();
+      + recentBlock() + decodeBlock() + missModal() + renderRenamer() + renderLinker();
   }
 
   /* --- Manage devices window (file-explorer) -----------------------------
@@ -2234,6 +2235,248 @@
     } catch (e) {}
     toast('Undid ' + undone + ' of ' + entries.length + ' rename(s) from the manifest.');
   };
+  // ===== Link recordings: co-acquired files share one opaque session id =====
+  function lkState() { if (!ROOT._linker) ROOT._linker = { mode: 'scan', files: [], sessionId: '', clusters: null, scanName: '', windowMin: 30, applying: false, results: null, progress: '' }; return ROOT._linker; }
+  function lkUuid() { try { if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID(); } catch (e) {} return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) { var r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8); return v.toString(16); }); }
+  function lkStripExt(n) { var i = String(n).lastIndexOf('.'); return i > 0 ? String(n).slice(0, i) : String(n); }
+  var LK_ROLES = ['imaging', 'behavior', 'video', 'ephys', 'stimulus', 'sync', 'data'];
+  function lkGuessRole(name) {
+    var ext = (String(name).split('.').pop() || '').toLowerCase();
+    if (['tif', 'tiff', 'sbx', 'scan', 'raw', 'ome', 'nd2', 'lsm', 'czi'].indexOf(ext) >= 0) return 'imaging';
+    if (['avi', 'mp4', 'mov', 'mkv', 'webm'].indexOf(ext) >= 0) return 'video';
+    if (['abf', 'nwb', 'bin', 'h5', 'nev', 'ns5', 'ns6'].indexOf(ext) >= 0) return 'ephys';
+    if (['csv', 'txt', 'dat', 'log', 'tsv'].indexOf(ext) >= 0) return 'behavior';
+    return 'data';
+  }
+  function lkIsSidecarObj(o) { return !!(o && typeof o === 'object' && (o.header || o.session || o.notes != null)); }
+  function lkFieldMatch(header, re) {
+    if (!header || !header.fields) return '';
+    var ks = Object.keys(header.fields);
+    for (var i = 0; i < ks.length; i++) { if (re.test(ks[i])) { var v = header.fields[ks[i]]; if (v) return String(v); } }
+    return '';
+  }
+  function lkOpOf(obj) { var h = obj && obj.header; if (!h) return ''; return h.operatorEmail || h.operatorOrcid || lkFieldMatch(h, /operator|experimenter|surgeon|user|author/i) || ''; }
+  function lkProjOf(obj) { var h = obj && obj.header; if (!h) return ''; return lkFieldMatch(h, /project|study|experiment|cohort/i) || ''; }
+  function lkSidOf(obj) { return (obj && obj.session && obj.session.id) ? obj.session.id : null; }
+  function lkDayOf(mt) { return mt ? fmtDate(mt, 'YYYY-MM-DD') : ''; }
+  // Walk a tree: index JSON sidecars by folder, collect data files with their mtime.
+  async function lkWalk(dir, prefix, jsonByFolder, dataFiles) {
+    for await (var e of dir.values()) {
+      var rel = prefix ? prefix + '/' + e.name : e.name;
+      if (e.kind === 'directory') { await lkWalk(e, rel, jsonByFolder, dataFiles); continue; }
+      if (/\.json$/i.test(e.name)) {
+        var obj = null; try { obj = JSON.parse(await (await e.getFile()).text()); } catch (er) {}
+        if (lkIsSidecarObj(obj)) { (jsonByFolder[prefix] = jsonByFolder[prefix] || []).push({ name: e.name, base: lkStripExt(e.name), obj: obj }); }
+      } else {
+        var mt = null; try { mt = new Date((await e.getFile()).lastModified); } catch (er) {}
+        dataFiles.push({ handle: e, parent: dir, name: e.name, relPath: rel, folder: prefix, mtime: mt });
+      }
+    }
+  }
+  // Associate a data file with its sidecar (longest base that prefixes the name),
+  // else a per-file <name>.json. Pull operator/project/existing-id off the sidecar.
+  function lkAssociate(f, jsonByFolder) {
+    var arr = jsonByFolder[f.folder] || [], best = null;
+    arr.forEach(function (s) { if (s.base && f.name.indexOf(s.base) === 0) { if (!best || s.base.length > best.base.length) best = s; } });
+    if (best) { f.sidecarName = best.name; f.hasSidecar = true; f.obj = best.obj; }
+    else { var cand = lkStripExt(f.name) + '.json'; var hit = arr.filter(function (s) { return s.name === cand; })[0]; f.sidecarName = cand; f.hasSidecar = !!hit; f.obj = hit ? hit.obj : null; }
+    f.existingSid = lkSidOf(f.obj); f.op = lkOpOf(f.obj); f.proj = lkProjOf(f.obj); f.role = lkGuessRole(f.name);
+    return f;
+  }
+  function lkClusterKey(f) { return (f.op || '\u2205') + '\u0000' + (f.proj || '\u2205') + '\u0000' + lkDayOf(f.mtime); }
+  // Stage 1: cluster metadata-bearing files by operator+project+date, split into
+  // sessions by mtime gap. Stage 2: attach sidecar-less files in the same folder
+  // whose mtime falls in the session window (ticked by default). Keep groups >=2.
+  function lkBuildClusters(dataFiles, windowMin) {
+    dataFiles.forEach(function (f) { f.checked = true; f._used = false; });
+    var seeds = dataFiles.filter(function (f) { return f.op || f.proj; });
+    var foreign = dataFiles.filter(function (f) { return !f.op && !f.proj; });
+    var groups = {}, order = [];
+    seeds.forEach(function (f) { var k = lkClusterKey(f); if (!groups[k]) { groups[k] = []; order.push(k); } groups[k].push(f); });
+    var winMs = Math.max(1, windowMin) * 60000, clusters = [];
+    order.forEach(function (k) {
+      var arr = groups[k].slice().sort(function (a, b) { return (a.mtime ? a.mtime.getTime() : 0) - (b.mtime ? b.mtime.getTime() : 0); });
+      var sessions = [], cur = [];
+      arr.forEach(function (f) {
+        if (!cur.length) { cur = [f]; return; }
+        var prev = cur[cur.length - 1], gap = (f.mtime && prev.mtime) ? (f.mtime.getTime() - prev.mtime.getTime()) : 0;
+        if (gap > winMs) { sessions.push(cur); cur = [f]; } else cur.push(f);
+      });
+      if (cur.length) sessions.push(cur);
+      sessions.forEach(function (sess) {
+        var folders = {}; sess.forEach(function (f) { folders[f.folder] = true; });
+        var times = sess.map(function (f) { return f.mtime ? f.mtime.getTime() : null; }).filter(function (t) { return t != null; });
+        var lo = times.length ? Math.min.apply(null, times) : null, hi = times.length ? Math.max.apply(null, times) : null;
+        var attached = foreign.filter(function (ff) {
+          if (!folders[ff.folder] || ff._used) return false;
+          if (lo == null || !ff.mtime) return true;
+          var t = ff.mtime.getTime(); return t >= lo - winMs && t <= hi + winMs;
+        });
+        attached.forEach(function (ff) { ff._used = true; });
+        sess.forEach(function (f) { f.reason = 'project + operator + date'; });
+        attached.forEach(function (f) { f.reason = 'same folder + time'; });
+        var members = sess.concat(attached);
+        if (members.length < 2) return;
+        var sids = members.map(function (m) { return m.existingSid; }).filter(Boolean);
+        var uniq = sids.filter(function (v, i) { return sids.indexOf(v) === i; });
+        var reused = (uniq.length === 1 && sids.length === members.length) ? uniq[0] : '';
+        clusters.push({ id: reused || lkUuid(), reused: reused, key: k, members: members });
+      });
+    });
+    return clusters;
+  }
+  async function lkStampOne(m, id) {
+    var ok = await fsEnsurePerm(m.parent); if (!ok) return { ok: false, name: m.relPath, err: 'permission denied' };
+    var obj = null, existed = false;
+    try { var fh = await m.parent.getFileHandle(m.sidecarName); obj = JSON.parse(await (await fh.getFile()).text()); existed = true; } catch (e) { obj = null; }
+    if (!obj || typeof obj !== 'object') obj = {};
+    var prevSession = obj.session || null;
+    obj.session = { id: id, role: m.role || 'data' };
+    try { await fsWrite(m.parent, m.sidecarName, JSON.stringify(obj, null, 2)); }
+    catch (e) { return { ok: false, name: m.relPath, err: 'write failed' }; }
+    return { ok: true, name: m.relPath, parent: m.parent, sidecarName: m.sidecarName, createdByUs: !existed, prevSession: prevSession, id: id };
+  }
+  async function lkStamp(members, id) {
+    var chosen = members.filter(function (m) { return m.checked; });
+    if (chosen.length < 2) { toast('Pick at least two files to link.'); return null; }
+    var conflict = chosen.filter(function (m) { return m.existingSid && m.existingSid !== id; });
+    if (conflict.length && typeof window !== 'undefined' && window.confirm && !window.confirm(conflict.length + ' of these file(s) already belong to a different session. Reassign them to this one?')) return null;
+    var st = lkState(); st.applying = true; st.progress = 'Linking\u2026'; rerender();
+    var results = [];
+    for (var i = 0; i < chosen.length; i++) { results.push(await lkStampOne(chosen[i], id)); chosen[i].existingSid = id; }
+    st.applying = false; st.progress = ''; st.results = { id: id, items: results }; rerender();
+    var ok = results.filter(function (r) { return r.ok; }).length;
+    toast('Linked ' + ok + ' file' + (ok !== 1 ? 's' : '') + ' under one session id.');
+    return results;
+  }
+  ROOT.openLinker = function () { lkState(); ROOT.ui.linkerOpen = true; rerender(); };
+  ROOT.closeLinker = function () { ROOT.ui.linkerOpen = false; rerender(); };
+  ROOT.lkSetMode = function (m) { lkState().mode = m; rerender(); };
+  ROOT.lkSetWindow = function (v) { var n = parseInt(v, 10); lkState().windowMin = (isFinite(n) && n > 0) ? n : 30; };
+  ROOT.lkSetId = function (v) { lkState().sessionId = String(v || '').trim(); };
+  ROOT.lkGenId = function () { lkState().sessionId = lkUuid(); rerender(); };
+  ROOT.lkClear = function () { var st = lkState(); st.files = []; st.results = null; rerender(); };
+  ROOT.lkToggleM = function (i, on) { var f = lkState().files[i]; if (f) f.checked = !!on; lkRefresh(); };
+  ROOT.lkSetRoleM = function (i, v) { var f = lkState().files[i]; if (f) f.role = v; };
+  ROOT.lkToggleC = function (ci, mi, on) { var c = (lkState().clusters || [])[ci]; if (c && c.members[mi]) c.members[mi].checked = !!on; lkRefresh(); };
+  ROOT.lkSetRoleC = function (ci, mi, v) { var c = (lkState().clusters || [])[ci]; if (c && c.members[mi]) c.members[mi].role = v; };
+  ROOT.lkScan = async function () {
+    if (!fsSupported()) { toast('Linking needs Chrome or Edge.'); return; }
+    var st = lkState(), dir;
+    try { dir = await window.showDirectoryPicker({ mode: 'readwrite' }); }
+    catch (e) { if (e && e.name !== 'AbortError') toast('Could not open the folder.'); return; }
+    st.progress = 'Scanning\u2026'; st.clusters = null; st.results = null; rerender();
+    var jsonByFolder = {}, dataFiles = [];
+    try { await lkWalk(dir, '', jsonByFolder, dataFiles); } catch (e) { st.progress = ''; toast('Could not read the folder.'); rerender(); return; }
+    dataFiles.forEach(function (f) { lkAssociate(f, jsonByFolder); });
+    st.clusters = lkBuildClusters(dataFiles, st.windowMin); st.scanName = dir.name; st.progress = ''; rerender();
+    var nm = st.clusters.reduce(function (a, c) { return a + c.members.length; }, 0);
+    toast(st.clusters.length ? ('Found ' + st.clusters.length + ' candidate session' + (st.clusters.length !== 1 ? 's' : '') + ' (' + nm + ' files).') : ('No multi-file sessions found in ' + dir.name + '.'));
+  };
+  ROOT.lkAddFolder = async function () {
+    if (!fsSupported()) { toast('Linking needs Chrome or Edge.'); return; }
+    var st = lkState(), dir;
+    try { dir = await window.showDirectoryPicker({ mode: 'readwrite' }); }
+    catch (e) { if (e && e.name !== 'AbortError') toast('Could not open the folder.'); return; }
+    var jsonByFolder = {}, dataFiles = [];
+    try { await lkWalk(dir, '', jsonByFolder, dataFiles); } catch (e) { toast('Could not read the folder.'); return; }
+    dataFiles.forEach(function (f) { lkAssociate(f, jsonByFolder); f.checked = false; });
+    var have = {}; st.files.forEach(function (f) { have[f.relPath] = true; });
+    dataFiles.forEach(function (f) { if (!have[f.relPath]) { have[f.relPath] = true; st.files.push(f); } });
+    st.results = null; rerender();
+    toast('Added ' + dataFiles.length + ' file' + (dataFiles.length !== 1 ? 's' : '') + ' from ' + dir.name + '.');
+  };
+  ROOT.lkLinkManual = async function () { var st = lkState(); var id = st.sessionId || lkUuid(); st.sessionId = id; await lkStamp(st.files, id); };
+  ROOT.lkLinkCluster = async function (ci) { var c = (lkState().clusters || [])[ci]; if (c) await lkStamp(c.members, c.id); };
+  ROOT.lkUndo = async function () {
+    var st = lkState(), res = st.results; if (!res || !res.items) { toast('Nothing to undo.'); return; }
+    var done = 0;
+    for (var i = 0; i < res.items.length; i++) {
+      var r = res.items[i]; if (!r.ok) continue;
+      try {
+        if (r.createdByUs && !r.prevSession) { try { await r.parent.removeEntry(r.sidecarName); } catch (e) {} done++; continue; }
+        var obj = {}; try { obj = JSON.parse(await (await (await r.parent.getFileHandle(r.sidecarName)).getFile()).text()); } catch (e) {}
+        if (r.prevSession) obj.session = r.prevSession; else delete obj.session;
+        await fsWrite(r.parent, r.sidecarName, JSON.stringify(obj, null, 2)); done++;
+      } catch (e) {}
+    }
+    st.results = null; rerender();
+    toast('Unlinked ' + done + ' file' + (done !== 1 ? 's' : '') + '.');
+  };
+  function lkRefresh() { var el = (typeof document !== 'undefined') && document.getElementById('fng-lk-body'); if (el) el.innerHTML = lkBodyHtml(); }
+  function lkShortId(id) { return id ? (String(id).slice(0, 8) + '\u2026') : ''; }
+  function lkRoleInput(onInput, val) { return '<input class="fng-in" list="fng-lk-roles" style="width:110px;padding:2px 6px;font-size:12px" value="' + esc(val || '') + '" oninput="' + onInput + '">'; }
+  function lkMemberRow(f, toggleH, roleH, showReason) {
+    var flag = f.existingSid ? '<span title="Already linked to ' + esc(f.existingSid) + '" style="color:#e0a13a;font-size:11px"> \u00b7 already linked</span>' : '';
+    var reason = showReason ? '<span class="fng-muted" style="font-size:11px"> \u00b7 ' + esc(f.reason || '') + '</span>' : '';
+    return '<tr><td style="width:24px;text-align:center"><input type="checkbox" ' + (f.checked ? 'checked ' : '') + 'onchange="' + toggleH + '"></td>'
+      + '<td style="word-break:break-all;font-size:12px">' + esc(f.relPath) + flag + reason + '</td>'
+      + '<td style="width:120px">' + lkRoleInput(roleH, f.role) + '</td></tr>';
+  }
+  function lkScanHtml() {
+    var st = lkState();
+    var top = '<div class="fng-row" style="gap:10px;flex-wrap:wrap;align-items:flex-end">'
+      + '<button class="fng-btn pri" ' + (st.applying ? 'disabled ' : '') + 'onclick="' + R() + '.lkScan()">Scan a folder\u2026</button>'
+      + '<div class="fng-f" style="width:160px"><span class="fng-l">Same session within (min)</span><input class="fng-in" type="number" min="1" style="width:100%;box-sizing:border-box" value="' + st.windowMin + '" onchange="' + R() + '.lkSetWindow(this.value)"></div>'
+      + (st.scanName ? '<span class="fng-muted" style="font-size:12px">Scanned: ' + esc(st.scanName) + '</span>' : '')
+      + '</div>';
+    if (st.progress) return top + '<p class="fng-muted" style="margin-top:10px">' + esc(st.progress) + '</p>';
+    if (st.clusters == null) return top + '<p class="fng-muted" style="font-size:12.5px;margin-top:10px">Pick a folder and the tool proposes likely co-acquisition sessions from the sidecars it finds \u2014 grouped by project, operator and date, split into sessions by file time, with nearby sidecar-less files suggested as members. You confirm each group before anything is written.</p>';
+    if (!st.clusters.length) return top + '<p class="fng-muted" style="margin-top:10px">No multi-file sessions found. Widen the time window, or use <b>Manual pick</b>.</p>';
+    var cards = st.clusters.map(function (c, ci) {
+      var rows = c.members.map(function (m, mi) { return lkMemberRow(m, R() + '.lkToggleC(' + ci + ',' + mi + ',this.checked)', R() + '.lkSetRoleC(' + ci + ',' + mi + ',this.value)', true); }).join('');
+      var nChecked = c.members.filter(function (m) { return m.checked; }).length;
+      var kp = c.key.split('\u0000');
+      var lbl = (kp[0] === '\u2205' ? 'no operator' : kp[0]) + ' \u00b7 ' + (kp[1] === '\u2205' ? 'no project' : kp[1]) + ' \u00b7 ' + (kp[2] || 'no date');
+      return '<div style="border:1px solid var(--bd);border-radius:8px;padding:10px;margin-top:10px">'
+        + '<div style="font-size:12.5px;margin-bottom:2px"><b>' + esc(lbl) + '</b>' + (c.reused ? ' <span style="color:#e0a13a">\u00b7 already linked</span>' : '') + '</div>'
+        + '<div class="fng-muted" style="font-size:11px">session id: <code>' + esc(c.id) + '</code></div>'
+        + '<table class="fng-doc-t" style="table-layout:fixed;width:100%;margin-top:6px"><colgroup><col style="width:24px"><col><col style="width:120px"></colgroup><tbody>' + rows + '</tbody></table>'
+        + '<div class="fng-acts" style="margin-top:8px"><button class="fng-btn pri" ' + ((nChecked >= 2 && !st.applying) ? '' : 'disabled ') + 'onclick="' + R() + '.lkLinkCluster(' + ci + ')">Link ' + nChecked + ' file' + (nChecked !== 1 ? 's' : '') + '</button></div>'
+        + '</div>';
+    }).join('');
+    return top + cards + (st.results ? lkResultsHtml() : '');
+  }
+  function lkManualHtml() {
+    var st = lkState();
+    var top = '<div class="fng-row" style="gap:8px;flex-wrap:wrap">'
+      + '<button class="fng-btn" onclick="' + R() + '.lkAddFolder()">Add folder(s)\u2026</button>'
+      + (st.files.length ? '<button class="fng-btn" onclick="' + R() + '.lkClear()">Clear (' + st.files.length + ')</button>' : '')
+      + '</div>';
+    if (!st.files.length) return top + '<p class="fng-muted" style="font-size:12.5px;margin-top:10px">Add the folder(s) holding your co-acquired files, tick the ones recorded together, set each file\u2019s role, then link them under one session id.</p>';
+    var idRow = '<div class="fng-row" style="gap:8px;align-items:flex-end;margin-top:10px"><div class="fng-f" style="flex:1;min-width:220px"><span class="fng-l">Session id</span><input class="fng-in" style="width:100%;box-sizing:border-box" placeholder="(generated on Link \u2014 or paste one to join an existing group)" value="' + esc(st.sessionId) + '" oninput="' + R() + '.lkSetId(this.value)"></div><button class="fng-btn" onclick="' + R() + '.lkGenId()">Generate</button></div>';
+    var rows = st.files.map(function (f, i) { return lkMemberRow(f, R() + '.lkToggleM(' + i + ',this.checked)', R() + '.lkSetRoleM(' + i + ',this.value)', false); }).join('');
+    var table = '<div style="max-height:280px;overflow:auto;border:1px solid var(--bd);border-radius:8px;margin-top:8px"><table class="fng-doc-t" style="table-layout:fixed;width:100%"><colgroup><col style="width:24px"><col><col style="width:120px"></colgroup><thead><tr><th></th><th>File</th><th>Role</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+    var nChecked = st.files.filter(function (f) { return f.checked; }).length;
+    var acts = '<div class="fng-acts" style="margin-top:10px"><button class="fng-btn pri" ' + ((nChecked >= 2 && !st.applying) ? '' : 'disabled ') + 'onclick="' + R() + '.lkLinkManual()">Link ' + nChecked + ' file' + (nChecked !== 1 ? 's' : '') + '</button>' + (st.results ? '<button class="fng-btn" onclick="' + R() + '.lkUndo()">Unlink last</button>' : '') + '</div>';
+    return top + idRow + table + acts + (st.results ? lkResultsHtml() : '');
+  }
+  function lkResultsHtml() {
+    var res = lkState().results; if (!res) return '';
+    var ok = res.items.filter(function (r) { return r.ok; }).length, fail = res.items.length - ok;
+    return '<div style="margin-top:10px;font-size:12.5px"><b>' + ok + '</b> file' + (ok !== 1 ? 's' : '') + ' linked under <code>' + esc(lkShortId(res.id)) + '</code>' + (fail ? (', <b style="color:#f0604a">' + fail + '</b> failed') : '') + '.<button class="fng-btn" style="margin-left:8px" onclick="' + R() + '.lkUndo()">Unlink last</button></div>';
+  }
+  function lkBodyHtml() { return lkState().mode === 'manual' ? lkManualHtml() : lkScanHtml(); }
+  function renderLinker() {
+    if (!ROOT.ui.linkerOpen) return '';
+    var st = lkState();
+    var head = '<div class="fng-modal-h"><h3 style="margin:0">Link recordings</h3><button class="fng-modal-x" title="Close" onclick="' + R() + '.closeLinker()">\u2715</button></div>';
+    if (!fsSupported()) {
+      return '<div class="fng-modal" onmousedown="' + R() + '._bd=(event.target===this)" onmouseup="if(event.target===this&&' + R() + '._bd)' + R() + '.closeLinker()"><div class="fng-modal-card">' + head + '<p class="fng-muted">Linking files needs Chrome or Edge (the File System Access API). This browser can\u2019t do it.</p></div></div>';
+    }
+    var tabs = '<div class="fng-row" style="gap:6px;margin-bottom:8px">'
+      + '<button class="fng-btn' + (st.mode === 'scan' ? ' pri' : '') + '" onclick="' + R() + '.lkSetMode(\'scan\')">Scan &amp; suggest</button>'
+      + '<button class="fng-btn' + (st.mode === 'manual' ? ' pri' : '') + '" onclick="' + R() + '.lkSetMode(\'manual\')">Manual pick</button>'
+      + '</div>';
+    return '<div class="fng-modal" onmousedown="' + R() + '._bd=(event.target===this)" onmouseup="if(event.target===this&&' + R() + '._bd)' + R() + '.closeLinker()">'
+      + '<div class="fng-modal-card fng-bigcard">' + head
+      + '<p class="fng-muted" style="margin-top:0;font-size:12.5px">Give every file from one simultaneous recording the same <b>session id</b>, stored in each file\u2019s sidecar. Files then group by that shared id \u2014 no pointers between files, so renaming or moving one never breaks the link. Nothing is written until you confirm.</p>'
+      + tabs
+      + '<datalist id="fng-lk-roles">' + LK_ROLES.map(function (r) { return '<option value="' + r + '">'; }).join('') + '</datalist>'
+      + '<div id="fng-lk-body">' + lkBodyHtml() + '</div>'
+      + '</div></div>';
+  }
+
   ROOT.copyName = function () {
     if (!guard()) return;
     copyText(curName()); pushHistory(curName()); saveFieldHistories(); logEvent('name');
