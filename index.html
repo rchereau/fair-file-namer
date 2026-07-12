@@ -49,8 +49,17 @@
     recent names) stay in this browser only. Use the <b>Manage</b> tab to edit the library and
     <b>Publish</b> a new <code>library.json</code>.
     <br><br>
+    Transferring acquired data to NASAC? After generating a name, use the
+    <b>Transfer with SafeTransfer</b> button (it opens the desktop app with the source and
+    destination already filled in). Don't have it yet?
+    <a href="https://facmed-filenamer.gitlab.io/safetransfer/" style="color:#9fb0cf">Get SafeTransfer</a>.
+    <br><br>
     This tool was created by the Research Data Management Service (RDMS) of the Faculty of Medicine
     &ndash; UNIGE (contact: <a href="mailto:Ronan.Chereau@unige.ch" style="color:#9fb0cf">Ronan.Chereau@unige.ch</a>).
+    <br><br>
+    &copy; 2026 Research Data Management Service (RDMS), Faculty of Medicine, University of Geneva (UNIGE).
+    Licensed under <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" rel="license" style="color:#9fb0cf">CC&nbsp;BY-NC-SA&nbsp;4.0</a>
+    (Attribution &ndash; NonCommercial &ndash; ShareAlike).
   </div>
 
   <!-- Fallback only. The exact "edit this lab's library" link comes from each lab's
@@ -65,8 +74,8 @@
        stats.html. The WRITE key can only append events, so it is safe to ship here;
        reading the data needs the separate READ key, which stays only in stats.html. -->
   <script>
-    window.FNG_ANALYTICS_URL = ""; // e.g. "https://script.google.com/macros/s/XXXX/exec"
-    window.FNG_ANALYTICS_KEY = ""; // the WRITE_KEY from analytics-appsscript.gs (public-safe)
+    window.FNG_ANALYTICS_URL = "https://script.google.com/macros/s/AKfycbw7a0_DbjW6C76CzlFTQk9CaRIBNGLXFnQPBdkKkIYWT6bxZMdlL0Xw1WrwPGmPTQHM/exec"; // e.g. "https://script.google.com/macros/s/XXXX/exec"
+    window.FNG_ANALYTICS_KEY = "Y3XDQbvTEVetnJGkMWmQZoCCRvZXiq"; // the WRITE_KEY from analytics-appsscript.gs (public-safe)
   </script>
 
   <!-- Shared platform devices (faculty-wide). By default the app reads the platform list from
