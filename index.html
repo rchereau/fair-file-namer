@@ -49,11 +49,21 @@
     recent names) stay in this browser only. Use the <b>Manage</b> tab to edit the library and
     <b>Publish</b> a new <code>library.json</code>.
     <br><br>
-    Transferring acquired data to NASAC? After generating a name, use the
-    <b>Transfer with SafeTransfer</b> button (it opens the desktop app with the source and
-    destination already filled in). Don't have it yet?
-    <a href="https://facmed-filenamer.gitlab.io/safetransfer/" style="color:#9fb0cf">Get SafeTransfer</a>.
-    <br><br>
+    <b>The action buttons under a completed name:</b>
+    <ul style="margin:6px 0 0;padding-left:18px;line-height:1.7">
+      <li><b>Transfer with SafeTransfer</b> &ndash; opens the SafeTransfer desktop app with the source and
+      destination already filled in, to copy the acquired data to NASAC. Don't have it yet?
+      <a href="https://facmed-filenamer.gitlab.io/safetransfer/" style="color:#9fb0cf">Get SafeTransfer</a>.</li>
+      <li><b>Rename existing files</b> &ndash; batch-rename files from an earlier session to the FAIR name; a
+      reversible rename manifest and a metadata sidecar are written into each folder. <i>(Chrome/Edge only.)</i></li>
+      <li><b>Link recordings</b> &ndash; give every file from one simultaneous recording (e.g. two-photon imaging
+      plus a behavioural stream from other software) the same <code>session</code> id in each file's sidecar, so
+      they group together. Scan-and-confirm or manual pick. <i>(Chrome/Edge only.)</i></li>
+      <li><b>Download .md</b> / <b>Download .json</b> &ndash; save the metadata as a Markdown block or as the JSON
+      sidecar. The <code>.json</code> sidecar is already written automatically into the destination folder once you've
+      set a local root folder, so these are mainly for keeping a copy elsewhere.</li>
+    </ul>
+    <br>
     This tool was created by the Research Data Management Service (RDMS) of the Faculty of Medicine
     &ndash; UNIGE (contact: <a href="mailto:Ronan.Chereau@unige.ch" style="color:#9fb0cf">Ronan.Chereau@unige.ch</a>).
     <br><br>

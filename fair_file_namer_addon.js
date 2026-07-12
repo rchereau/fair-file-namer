@@ -842,7 +842,6 @@
       + '<button class="fng-btn pri" onclick="' + R() + '.openSafeTransfer()">Transfer with SafeTransfer \u25B8</button>'
       + '<button class="fng-btn" onclick="' + R() + '.openRenamer()">Rename existing files \u25B8</button>'
       + '<button class="fng-btn" onclick="' + R() + '.openLinker()">Link recordings \u25B8</button>'
-      + '<button class="fng-btn" onclick="' + R() + '.copyMarkdown()">Copy metadata (Markdown)</button>'
       + '<button class="fng-btn" onclick="' + R() + '.downloadMarkdown()">Download .md</button>'
       + '<button class="fng-btn" onclick="' + R() + '.downloadSidecar()">Download .json</button>'
       + '</div>'
