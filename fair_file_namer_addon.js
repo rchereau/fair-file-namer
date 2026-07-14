@@ -1123,7 +1123,7 @@
       + '<button class="fng-copy" id="fng-copybtn" title="Copy file name" onclick="' + R() + '.copyName()">'
       + '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path></svg>'
       + '</button></div></div>';
-    var folderCard = '<div class="fng-ex"' + ((missingInputs().length || !localBase()) ? ' style="border-color:#f0604a"' : '') + '><div class="h">Folder</div>' + locationBlock(folder) + '</div>';
+    var folderCard = '<div class="fng-ex"' + ((missingInputs().length || !localBase() || !fsTreeReady()) ? ' style="border-color:#f0604a"' : '') + '><div class="h">Folder</div>' + locationBlock(folder) + '</div>';
     return '<div id="fng-ex">' + fileCard + folderCard + '</div>';
   }
 
@@ -1174,7 +1174,7 @@
   };
   function refreshUsePreview() { var el = document.getElementById('fng-ex'); if (el) el.outerHTML = usePreview(); }
   // refresh only the rendered header — never the notes editor (keeps the cursor)
-  function refreshHeader() { var el = document.getElementById('fng-md-header'); if (el) el.innerHTML = headerHtml(); fsAutoSaveSoon(); }
+  function refreshHeader() { var el = document.getElementById('fng-md-header'); if (el) el.innerHTML = headerHtml(); }
 
   /* --- experiment configurations, scoped to (operator + device), local -----
    * Each (operator, device) pair can hold several named configs (presets) of
@@ -1620,6 +1620,12 @@
   function fsMkdirp(root, segs) { var cur = Promise.resolve(root); segs.forEach(function (sg) { cur = cur.then(function (h) { return h.getDirectoryHandle(sg, { create: true }); }); }); return cur; }
   function fsWrite(dir, name, text) { return dir.getFileHandle(name, { create: true }).then(function (fh) { return fh.createWritable(); }).then(function (w) { return Promise.resolve(w.write(text)).then(function () { return w.close(); }); }); }
   function fsSubSegs() { return (folderSubtree() || '').split('/').map(function (x) { return x.trim(); }).filter(Boolean); }
+  // The FOLDER box turns green only once the destination is actually ready: either the
+  // template has no subfolders (the root itself is the destination), or the subfolder
+  // tree for the current fields has been successfully created on disk. On a browser
+  // without Create folder tree (not Chrome/Edge) it stays red -- the user must file the
+  // .json manually (see the folder-section warning).
+  function fsTreeReady() { var segs = fsSubSegs(); if (!segs.length) return true; return !!(ROOT.ui && ROOT.ui.createdSubtree === folderSubtree()); }
   // Last path segment of a typed path, tolerant of \\ and / and trailing slashes.
   function pathLeaf(p) { return p ? (String(p).replace(/[\\/]+$/, '').split(/[\\/]+/).pop() || '') : ''; }
   // Does the granted folder handle match the local root path the user typed? The
@@ -1630,25 +1636,42 @@
   //   'nohandle'    path set, but no folder access granted (will be prompted)
   //   'mismatch'    granted folder's name != the typed path's leaf
   //   'ok'          they line up
+  function isDriveRoot(p) { return /^[A-Za-z]:[\\/]?$/.test(String(p || '').trim()); }
   function fsRootState() {
     if (!localBase()) return 'nobase';
     if (!ROOT._fsRoot) return 'nohandle';
     var want = pathLeaf(localBase()), have = ROOT._fsRoot.name || '';
+    // Drive roots (e.g. D:\ ) can't be leaf-matched: the browser reports the granted
+    // handle's name as a bare separator or drive, never a folder leaf. Accept any
+    // drive-root-ish handle so a legitimate drive-root pick isn't flagged as a mismatch.
+    if (isDriveRoot(localBase())) {
+      var haveClean = have.replace(/[\\/]+$/g, '');
+      return (haveClean === '' || /^[A-Za-z]:$/.test(haveClean)) ? 'ok' : 'mismatch';
+    }
     return (want && have && want.toLowerCase() === have.toLowerCase()) ? 'ok' : 'mismatch';
   }
   function fsNavigate(root, segs) { var i = 0, cur = root; function step() { if (i >= segs.length) return Promise.resolve(cur); return cur.getDirectoryHandle(segs[i]).then(function (h) { cur = h; i++; return step(); }).catch(function () { return null; }); } return step(); }
   // Best-effort: write the LATEST metadata into the already-created leaf folder. Called
   // from copy / eLabNext so the saved file is always current. Never creates folders.
-  function fsSaveMetadataQuietly() {
-    if (!fsSupported() || !ROOT._fsRoot) return;
-    var segs = fsSubSegs(), name = curName(); if (!name || !segs.length) return;
-    fsEnsurePerm(ROOT._fsRoot).then(function (ok) {
-      if (!ok) return;
-      return fsNavigate(ROOT._fsRoot, segs).then(function (leaf) {
-        if (!leaf) return;
-        return fsWrite(leaf, name + '.json', JSON.stringify(sidecar(), null, 2)).then(function () { toast('Latest metadata saved to your local root folder.'); });
+  // Write the current metadata sidecar into the (already-created) leaf folder. Called
+  // when the user clicks Copy file name -- their confirmation the name will be used --
+  // never on mere edits. Never creates folders. Returns a Promise<boolean> (wrote?).
+  function fsSaveMetadataQuietly(silent) {
+    if (!fsSupported() || !ROOT._fsRoot) return Promise.resolve(false);
+    var name = curName(); if (!name) return Promise.resolve(false);
+    var segs = fsSubSegs();
+    return fsEnsurePerm(ROOT._fsRoot).then(function (ok) {
+      if (!ok) return false;
+      return (segs.length ? fsNavigate(ROOT._fsRoot, segs) : Promise.resolve(ROOT._fsRoot)).then(function (leaf) {
+        if (!leaf) return false;                          // folder tree not created yet -> never auto-create
+        return fsWrite(leaf, name + '.json', JSON.stringify(sidecar(), null, 2)).then(function () {
+          var el = (typeof document !== 'undefined') && document.getElementById('fng-autosave');
+          if (el) el.textContent = '✓ Saved ' + (segs.length ? segs.join('/') + '/' : '') + name + '.json · ' + new Date().toLocaleTimeString();
+          if (!silent) toast('Metadata saved to your data folder.');
+          return true;
+        });
       });
-    }).catch(function () {});
+    }).catch(function () { return false; });
   }
 
   // --- Auto-save: keep a live metadata sidecar in the picked folder, updated on every
@@ -1725,7 +1748,7 @@
     window.showDirectoryPicker({ mode: 'readwrite' }).then(function (h) {
       ROOT._fsRoot = h; try { localStorage.setItem(LS_FSROOT, h.name); } catch (e) {}
       return idbSet('root', h);
-    }).then(function () { toast('Folder access confirmed.'); fsAutoSaveSoon(); }).catch(function (e) { if (e && e.name !== 'AbortError') toast('Could not get folder access.'); });
+    }).then(function () { toast('Folder access confirmed.'); }).catch(function (e) { if (e && e.name !== 'AbortError') toast('Could not get folder access.'); });
   };
   ROOT.createTree = function () {
     if (!guard()) return;
@@ -1735,7 +1758,7 @@
     if (!segs.length) { toast('This template has no subfolders to create.'); return; }
     var doCreate = function () {
       fsEnsurePerm(ROOT._fsRoot).then(function (ok) { if (!ok) throw new Error('perm'); return fsMkdirp(ROOT._fsRoot, segs); })
-        .then(function () { ROOT.ui.createdSubtree = folderSubtree(); refreshUsePreview(); refreshHeader(); toast('Subfolders created under your local root folder.'); })
+        .then(function () { ROOT.ui.createdSubtree = folderSubtree(); refreshUsePreview(); refreshHeader(); if (ROOT._fsPendingSave) { ROOT._fsPendingSave = false; fsSaveMetadataQuietly(true).then(function (w) { toast(w ? 'Subfolders created — metadata saved to your data folder.' : 'Subfolders created under your local root folder.'); }); } else { toast('Subfolders created under your local root folder.'); } })
         .catch(function () { toast('Could not create the subfolders — confirm access to your local root folder and try again.'); });
     };
     if (ROOT._fsRoot) doCreate();
@@ -1751,7 +1774,7 @@
     var folderAbs = localBase() ? joinPath(localBase(), pend.segs.join('/')) : '';
     if (folderAbs) copyText(folderAbs);
     fsEnsurePerm(root).then(function (ok) { if (!ok) throw new Error('perm'); return fsMkdirp(root, pend.segs); })
-      .then(function () { ROOT.ui.createdSubtree = pend.segs.join('/'); ROOT.ui.fsConfirm = false; ROOT._fsPending = null; rerender(); var el = (typeof document !== 'undefined') && document.getElementById('fng-rootin'); if (el && !localBase()) { try { el.focus(); } catch (e) {} } toast(folderAbs ? 'Folder tree created — folder path copied. Paste it into your file explorer to open it (Windows: Ctrl+L in Explorer; macOS: ⌘⇧G in Finder).' : 'Folder tree ready — set your Local root folder so the folder path can be copied.'); })
+      .then(function () { ROOT.ui.createdSubtree = pend.segs.join('/'); ROOT.ui.fsConfirm = false; ROOT._fsPending = null; rerender(); var el = (typeof document !== 'undefined') && document.getElementById('fng-rootin'); if (el && !localBase()) { try { el.focus(); } catch (e) {} } toast(folderAbs ? 'Folder tree created — folder path copied. Paste it into your file explorer to open it (Windows: Ctrl+L in Explorer; macOS: ⌘⇧G in Finder).' : 'Folder tree ready — set your Local root folder so the folder path can be copied.'); if (ROOT._fsPendingSave) { ROOT._fsPendingSave = false; fsSaveMetadataQuietly(true); } })
       .catch(function () { ROOT.ui.fsConfirm = false; rerender(); toast('Could not create the folder tree.'); });
   };
 
@@ -1759,7 +1782,7 @@
     if (!folder) return '';
     if (!fsSupported()) {
       return '<div class="fng-save"><div class="fng-l">Folder tree (this machine)</div>'
-        + '<p class="fng-muted" style="font-size:12px;margin:4px 0 0">Creating the folder tree needs Chrome or Edge. In this browser, use <b>Download .json</b> above and file it under the path shown.</p></div>';
+        + '<div style="margin:6px 0 0;padding:8px 10px;border-radius:8px;background:rgba(214,158,46,.14);border:1px solid rgba(214,158,46,.55);font-size:12px;line-height:1.5">\u26A0\uFE0F <b>Create folder tree isn\u2019t available in this browser</b> (it needs Chrome or Edge), so the tool can\u2019t place the metadata file for you. Create the destination folder yourself, then use <b>Download .json</b> above and save the metadata into that folder \u2014 the FOLDER box stays red as a reminder until then.</div></div>';
     }
     var st = fsRootState();
     var warn = '';
@@ -1780,7 +1803,7 @@
       + '<button class="fng-btn pri" onclick="' + R() + '.createTree()">Create folder tree</button></div>'
       + warn
       + '<p class="fng-muted" style="font-size:12px;margin:5px 0 0">Creates the missing subfolders under your <b>local root folder</b>; the metadata path then switches from <i>Recommended local full path</i> to <i>Full path</i>.</p>'
-      + (ROOT._fsRoot ? '<p class="fng-muted" style="font-size:12px;margin:6px 0 0">✅ <b>Auto-save is on.</b> Once the experiment’s folder tree exists, its metadata file is written there and updated automatically on every change — no action needed. It never creates folders on its own.<span id="fng-autosave" style="color:var(--ac);display:block;margin-top:2px"></span></p>' : '')
+      + (ROOT._fsRoot ? '<p class="fng-muted" style="font-size:12px;margin:6px 0 0">✅ <b>Access granted.</b> When you click <b>Copy file name</b>, the metadata <code>.json</code> is written into that experiment’s folder (once its folder tree exists) — not before, and never by creating folders on its own.<span id="fng-autosave" style="color:var(--ac);display:block;margin-top:2px"></span></p>' : '')
       + '</div>';
   }
 
@@ -1797,12 +1820,12 @@
       + '<button class="fng-modal-x" title="Cancel" onclick="' + R() + '.fsConfirmNo()">✕</button></div>'
       + '<p style="margin:0;font-size:14px">Inside your local root folder <b>' + esc(label) + '</b>, target:</p>'
       + '<div class="fng-path" style="margin:4px 0">' + esc(pend.segs.join('/') || '(root)') + '</div>' + mk
-      + '<p class="fng-muted" style="margin:6px 0 0;font-size:13px">The metadata file is written into this folder automatically and kept up to date as you edit — no action needed.</p>'
+      + '<p class="fng-muted" style="margin:6px 0 0;font-size:13px">The metadata file is written into this folder when you click <b>Copy file name</b> (once the folder tree exists) — not on every edit.</p>'
       + '<div class="fng-acts" style="margin-top:12px"><button class="fng-btn" onclick="' + R() + '.fsConfirmNo()">Cancel</button>'
       + '<button class="fng-btn pri" onclick="' + R() + '.fsConfirmYes()">Create folders</button></div></div></div>';
   }
 
-  if (typeof indexedDB !== 'undefined') { try { idbGet('root').then(function (h) { if (h) { ROOT._fsRoot = h; fsAutoSaveSoon(); } }).catch(function () {}); } catch (e) {} }
+  if (typeof indexedDB !== 'undefined') { try { idbGet('root').then(function (h) { if (h) { ROOT._fsRoot = h; } }).catch(function () {}); } catch (e) {} }
 
   /* --- usage analytics (event ping) ---------------------------------------
    * Opt-in and fire-and-forget: active ONLY when window.FNG_ANALYTICS_URL is
@@ -2483,6 +2506,12 @@
     var b = document.getElementById('fng-copybtn');
     if (b) { var o = b.innerHTML; b.classList.add('ok'); b.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><polyline points="20 6 9 17 4 12"></polyline></svg>'; setTimeout(function () { b.classList.remove('ok'); b.innerHTML = o; }, 1300); }
     toast('File name copied.');
+    // The copy is the user's confirmation the name will be used -> now (and only now)
+    // write the metadata sidecar into its data folder, if the folder tree exists.
+    fsSaveMetadataQuietly(true).then(function (wrote) {
+      if (wrote) { ROOT._fsPendingSave = false; toast('File name copied — metadata saved to your data folder.'); }
+      else if (fsSupported() && localBase()) { ROOT._fsPendingSave = true; toast('File name copied — metadata will be saved once its folder tree is created.'); }
+    });
   };
   ROOT.copyPath = function () { if (!guard()) return; var lit = showLiteralPath(); copyText(lit ? curPath() : relPath()); toast(lit ? 'Full path copied (not verified).' : 'Relative path copied.'); };
   // Hand off to the SafeTransfer desktop app via its URL scheme, with the absolute
@@ -2574,7 +2603,9 @@
       || source.charAt(0) === '/' || source.indexOf(BS + BS) === 0;
     if (!isAbs) { toast('That local path is not absolute yet — set the Local root folder so SafeTransfer can find the data.'); return; }
     var url = 'safetransfer://transfer?source=' + encodeURIComponent(source)
-      + '&destination=' + encodeURIComponent(dest);
+      + '&destination=' + encodeURIComponent(dest)
+      + '&scanRoot=' + encodeURIComponent(base)
+      + '&destRoot=' + encodeURIComponent(root);
     toast('Opening SafeTransfer\u2026 confirm the source and destination there, then Start.');
     stLaunch(url);
   };
@@ -3752,7 +3783,6 @@
   }
 
   function rerender() {
-    fsAutoSaveSoon();
     // Auto-persist on this machine so edits are never lost (no Save button).
     if (!ROOT._platformMode && ROOT.library) { try { localStorage.setItem(libCacheKey(), JSON.stringify(ROOT.library)); } catch (e) {} }
     if (ROOT._platformMode && ROOT.platformEdit) { try { localStorage.setItem('fng.platform.' + ROOT._platformSlug, JSON.stringify(ROOT.platformEdit)); } catch (e) {} }
