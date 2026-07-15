@@ -1,33 +1,449 @@
 {
   "version": 3,
   "operators": [
-    { "name": "Marie Curie" },
-    { "name": "Jean Dupont" }
+    {
+      "name": "Anthony Holtmaat",
+      "email": "Anthony.Holtmaat@unige.ch",
+      "orcid": "0000-0002-7577-0769"
+    },
+    {
+      "name": "Ronan Chéreau",
+      "email": "Ronan.Chereau@unige.ch",
+      "orcid": "0000-0002-2359-3086"
+    },
+    {
+      "name": "Elisavet Mandora",
+      "email": "Elisavet.Mandora@etu.unige.ch",
+      "orcid": ""
+    },
+    {
+      "name": "Andrea Valderrama",
+      "email": "Andrea.Valderramaalvarez@unige.ch"
+    },
+    {
+      "name": "Yeraz Gedik",
+      "email": "Yeraz.Gedik@etu.unige.ch"
+    },
+    {
+      "name": "I-Wen Chen",
+      "email": "I-Wen.Chen@unige.ch"
+    },
+    {
+      "name": "Vaibhav Chippalkatti",
+      "email": "Vaibhav.Chippalkatti@unige.ch"
+    },
+    {
+      "name": "Celine Dürst",
+      "email": "Celine.Durst@unige.ch",
+      "orcid": "0000-0003-3821-2888"
+    },
+    {
+      "name": "Valentin Dhondt",
+      "email": "Valentin.Dhondt@etu.unige.ch"
+    },
+    {
+      "name": "David VanOorschot",
+      "email": "David.VanOorschot@unige.ch"
+    },
+    {
+      "name": "Thao Linh Tran",
+      "email": "Thao.Tran.1@etu.unige.ch"
+    },
+    {
+      "name": "Elodie Husi",
+      "email": "Elodie.Husi@unige.ch"
+    }
   ],
   "devices": [
-    { "id": "dev1", "name": "2P-B", "info": { "Microscope": "Two-photon", "Software": "ScanImage", "Version": "2023.1", "Laser": "MaiTai DeepSee" } },
-    { "id": "dev2", "name": "Confocal1", "info": { "Microscope": "Confocal", "Software": "ZEN", "Version": "3.5" } }
+    {
+      "id": "dev1",
+      "name": "Rig4-2PLSM",
+      "info": {
+        "Microscope": "Custom-built two-photon laser scanning microscope",
+        "System": "MIMMS modular in vivo multiphoton system (Janelia, 10-2016)",
+        "System reference": "https://www.janelia.org/open-science/mimms-10-2016",
+        "Scanner": "8 kHz resonant scanner",
+        "Software": "ScanImage",
+        "Version": "2016b44",
+        "Software reference": "http://www.scanimage.org",
+        "Laser": "Ti:Sapphire tunable (Coherent Chameleon Ultra)",
+        "Detectors": "GaAsP PMTs (Hamamatsu 10770PB-40)",
+        "Dichroic mirror": "Chroma 565dcxr",
+        "Emission filter green": "Chroma ET525/50m",
+        "Emission filter red": "Chroma ET620/60m",
+        "Z-scanner": "Physik Instrumente P-725 PIFOC piezo",
+        "Building and room location": "CMU"
+      }
+    },
+    {
+      "id": "dev2",
+      "name": "Rig2-2PLSM",
+      "info": {
+        "Microscope": "Two-photon Laser Scanning Microscope",
+        "Software": "ScanImage",
+        "Version": "3.8",
+        "Laser": "Chameleon Ultra"
+      }
+    },
+    {
+      "id": "devkhdsw",
+      "name": "Rig3-2PLSM",
+      "info": {
+        "Microscope": "Custom-built two-photon laser scanning microscope,",
+        "System": "MIMMS modular in vivo multiphoton system (Janelia, 10-2016),",
+        "System reference": "https://www.janelia.org/open-science/mimms-10-2016,",
+        "Software": "ScanImage,",
+        "Version": "2023,",
+        "Software reference": "http://www.scanimage.org,",
+        "Laser": "Ti:Sapphire tunable (Coherent Chameleon Ultra),",
+        "Scanner": "\"Cambridge Technology CRS 8 kHz resonant scanner\",",
+        "Detectors": "\"GaAsP PMTs (Hamamatsu 10770PB-40)\",",
+        "Dichroic mirror": "\"Chroma 565dcxr\",",
+        "Emission filter green": "\"Semrock FF01-520/70-30-D\",",
+        "Emission filter red": "\"Chroma ET620/60m\",",
+        "Z-scanner": "-,",
+        "Building and room location": "CMU, D08.2150.a"
+      }
+    },
+    {
+      "id": "devbeg3r",
+      "name": "IOI",
+      "info": {
+        "Microscope": "Custom-built widefield (macroscope) cortical imaging system",
+        "System": "Dual-mode intrinsic optical signal (IOI/IOS) + GCaMP fluorescence imager",
+        "Imaging modes": "IOI (intrinsic hemodynamic reflectance) / GCaMP fluorescence",
+        "Modality": "Reflectance (IOI) and epifluorescence (GCaMP), single camera, dual-mode",
+        "Preparation": "Anesthetized mouse, cranial window over barrel cortex",
+        "Objective / imaging lens": "Nikon CFI Plan Apochromat Lambda D 4X (MRD70040)",
+        "Working distance (mm)": "20",
+        "Z-control": "Manual focus (single-plane widefield, no piezo Z)",
+        "Building and room location": "CMU (Centre Medical Universitaire), Geneva",
+        "Room": "[specify]",
+        "IOI contrast": "Hemodynamic reflectance change",
+        "IOI illumination": "Red channel (~625-630 nm)",
+        "IOI signal": "dR/R",
+        "Fluorescence indicator": "GCaMP [variant: specify]",
+        "Fluorescence excitation": "Blue channel (~465-470 nm)",
+        "Fluorescence emission filter": "Green bandpass [part: FITC filter]",
+        "Fluorescence signal": "dF/F0",
+        "Camera": "Ximea MQ013RG-ON-S7",
+        "Sensor": "ON Semiconductor PYTHON 1300 (1/2\" CMOS)",
+        "Native resolution": "1280 x 1024 (1.3 MP)",
+        "Interface": "USB 3.1 Gen 1",
+        "Bit depth": "10-bit native",
+        "Pixel format": "MONO16 (IOI) / MONO8 (selectable)",
+        "Image type": "Raw monochrome (Bayer bypassed, no demosaicing)",
+        "AEAG (auto exposure/gain)": "Disabled",
+        "Buffer policy": "SAFE",
+        "SDK / driver": "Ximea xiAPI",
+        "Detector reference": "https://www.ximea.com/en/products/usb-31-gen-1-with-sony-cmos-mq/mq013rg-on",
+        "Light source": "Adafruit NeoPixel Ring 16 (SK6812 RGBW)",
+        "Color order": "NEO_GRBW",
+        "Red wavelength": "~625-630 nm (IOI)",
+        "Green wavelength": "~515-525 nm",
+        "Blue wavelength": "~465-470 nm (GCaMP excitation)",
+        "White": "Broadband",
+        "Illumination geometry": "Ring epi-illumination (oblique)",
+        "Per-LED calibration": "Yes (centroid mapping + iterative gradient flattening)",
+        "Saturation threshold": "< 1020 DN",
+        "Minimum LED scale": "5%",
+        "LED driver MCU": "Seeeduino Xiao",
+        "LED data pin": "D7",
+        "Brightness control": "Per-channel 0-255 + per-LED scale",
+        "Trigger MCU": "Arduino Uno",
+        "Camera trigger output": "Pin 9 -> camera GPI1",
+        "Trigger period": "100 ms (10 Hz)",
+        "Trigger pulse width": "1 ms",
+        "Camera trigger port": "XI_GPI_PORT1",
+        "Camera trigger mode": "XI_GPI_TRIGGER",
+        "Trigger selector": "XI_TRG_SEL_FRAME_START (one frame per pulse)",
+        "Trigger edge": "Rising",
+        "Timer source": "Arduino Timer1 ISR",
+        "Stimulator": "Piezoelectric whisker deflector [model: specify]",
+        "Stim trigger output": "Arduino Pin 8 (TTL)",
+        "Stim target": "Single whisker -> corresponding barrel column",
+        "Arduino port": "COM7 @ 9600 baud, LF",
+        "Arduino commands": "S (stim), T1 (start trigger), T0 (stop trigger)",
+        "Xiao port": "COM8 @ 9600 baud, LF",
+        "Xiao commands": "R/G/B/W<val>, A<r,g,b,w>, OFF, S<led,scale>, C, Q, ?",
+        "Application": "ezIOI",
+        "Primary implementation": "Python 3.11 + PyQt5",
+        "Dependencies": "NumPy, Ximea xiAPI, h5py, SciPy",
+        "Legacy implementation": "MATLAB classdef GUI (IOS_Imaging_App_Ximea.m, reference)",
+        "Source file 1": "ezIOI_app.py (main window, IOIThread)",
+        "Source file 2": "ezIOI_windows.py (compute_drr, monitor/review/overlay/player)",
+        "Firmware (Uno)": "IOS_Imaging_Arduino_Final.ino",
+        "Firmware (Xiao)": "neopixel_rgbw_smart_control.ino",
+        "Version": "[git tag/commit: specify]",
+        "Data format (Python)": "NPZ (uint16 raw frames + results)",
+        "Blood-vessel reference": "*_bloodvessel_*.tiff (16-bit, 1024x1024)",
+        "Average map": "*_<whisker>_average_*.tiff (32-bit float dR/R)",
+        "Results file": "*_<whisker>_results_*.mat",
+        "Summary file": "*_<whisker>_summary_*.txt",
+        "Overlay file": "*_overlay_*.tiff / .jpg",
+        "Per-trial output": "registered frames, avg raw projection, inter-trial shift (optional)"
+      }
+    },
+    {
+      "id": "devnhfye",
+      "name": "Rig4-Behavior",
+      "info": {
+        "Setting1": "XXX",
+        "Setting2": "XXX"
+      }
+    },
+    {
+      "id": "dev6s3mz",
+      "name": "Licko_Behavior_02",
+      "info": {
+        "Setting1": "XXX",
+        "Setting2": "XXX"
+      }
+    },
+    {
+      "id": "devkaym4",
+      "name": "Licko_Behavior_03",
+      "info": {
+        "Setting1": "XXX",
+        "Setting2": "XXX"
+      }
+    }
   ],
   "fields": [
-    { "id": "f-lab", "name": "Lab", "source": "lab", "builtin": true },
-    { "id": "f-dept", "name": "Department", "source": "department", "builtin": true },
-    { "id": "f-oper", "name": "Operator", "source": "operator", "builtin": true },
-    { "id": "f-dev", "name": "Device", "source": "device", "builtin": true },
-    { "id": "f-proj", "name": "Project", "source": "freetext", "builtin": true },
-    { "id": "f-samp", "name": "Sample", "source": "freetext", "builtin": true },
-    { "id": "f-cond", "name": "Condition", "source": "freetext", "builtin": true },
-    { "id": "f-run", "name": "Run", "source": "counter", "pad": 2, "scope": "daily", "builtin": true },
-    { "id": "f-date", "name": "Date", "source": "date", "format": "YYYYMMDD", "builtin": true }
+    {
+      "id": "f-exp",
+      "name": "Experiment",
+      "source": "freetext",
+      "builtin": true
+    },
+    {
+      "id": "f-study",
+      "name": "Study",
+      "source": "freetext",
+      "builtin": true
+    },
+    {
+      "id": "f-lab",
+      "name": "Lab",
+      "source": "lab",
+      "builtin": true,
+      "format": "first3"
+    },
+    {
+      "id": "f-dept",
+      "name": "Department",
+      "source": "department",
+      "builtin": true
+    },
+    {
+      "id": "f-oper",
+      "name": "Operator",
+      "source": "operator",
+      "builtin": true,
+      "format": "lastlower"
+    },
+    {
+      "id": "f-dev",
+      "name": "Device",
+      "source": "device",
+      "builtin": true
+    },
+    {
+      "id": "f-proj",
+      "name": "Project",
+      "source": "freetext",
+      "builtin": true
+    },
+    {
+      "id": "f-samp",
+      "name": "Sample",
+      "source": "freetext",
+      "builtin": true
+    },
+    {
+      "id": "f-cond",
+      "name": "Condition",
+      "source": "freetext",
+      "builtin": true
+    },
+    {
+      "id": "f-run",
+      "name": "Run",
+      "source": "counter",
+      "pad": 2,
+      "scope": "daily",
+      "builtin": true
+    },
+    {
+      "id": "f-date",
+      "name": "Date",
+      "source": "date",
+      "format": "YYYYMMDD",
+      "builtin": true
+    },
+    {
+      "id": "cfh9bvh",
+      "name": "Type",
+      "source": "freetext"
+    },
+    {
+      "id": "cfilvro",
+      "name": "Mouse Line",
+      "source": "freetext"
+    }
   ],
   "labs": [
     {
-      "id": "lab-demo", "name": "Demo Lab",
+      "id": "lab-demo",
+      "name": "Holtmaat",
       "fileTemplates": [
-        { "id": "tpl1", "name": "Acquisition", "default": true, "separator": "_", "fieldIds": ["f-lab", "f-dept", "f-oper", "f-dev", "f-proj", "f-samp", "f-cond", "f-date"] }
+        {
+          "id": "tpl1",
+          "name": "EM_template",
+          "default": false,
+          "separator": "_",
+          "fieldIds": [
+            "f-lab",
+            "f-oper",
+            "f-proj",
+            "f-samp",
+            "f-dev",
+            "f-date",
+            "f-cond",
+            "cfilvro",
+            "f-exp"
+          ],
+          "formats": {
+            "f-oper": "acronym"
+          }
+        },
+        {
+          "id": "tplepk9m",
+          "name": "CD_template_1",
+          "default": false,
+          "separator": "_",
+          "fieldIds": [
+            "f-lab",
+            "f-oper",
+            "f-proj",
+            "f-samp",
+            "f-dev",
+            "f-date",
+            "f-cond",
+            "f-exp"
+          ],
+          "formats": {
+            "f-oper": "acronym"
+          }
+        },
+        {
+          "id": "tplfekkq",
+          "name": "AV_template",
+          "separator": "_",
+          "fieldIds": [
+            "f-lab",
+            "f-oper",
+            "f-proj",
+            "f-samp",
+            "f-dev",
+            "f-date",
+            "f-cond",
+            "cfh9bvh"
+          ],
+          "formats": {
+            "f-oper": "acronym"
+          }
+        },
+        {
+          "id": "tplobbf6",
+          "name": "Lab Default",
+          "default": false,
+          "separator": "_",
+          "fieldIds": [
+            "f-lab",
+            "f-oper",
+            "f-proj",
+            "f-samp",
+            "f-dev",
+            "f-date",
+            "f-cond"
+          ],
+          "formats": {
+            "f-oper": "acronym"
+          }
+        }
       ],
       "folderTemplates": [
-        { "id": "fld1", "name": "Project tree", "default": true, "separator": "/", "fieldIds": ["f-proj", "f-samp"] }
-      ]
+        {
+          "id": "fld1",
+          "name": "Lab Default",
+          "default": true,
+          "separator": "/",
+          "fieldIds": [
+            "f-oper",
+            "f-proj",
+            "f-samp",
+            "f-dev",
+            "f-date"
+          ],
+          "basePath": "//nasac-m2.isis.unige.ch/m-GHoltmaat/GHoltmaat/USERS/"
+        }
+      ],
+      "dept": "NEUFO"
+    }
+  ],
+  "alumni": [
+    {
+      "name": "Foivos Markopoulos"
+    },
+    {
+      "name": "Leena Williams"
+    },
+    {
+      "name": "Stéphane Pagès"
+    },
+    {
+      "name": "Jérôme Randall"
+    },
+    {
+      "name": "Frédéric Gambino"
+    },
+    {
+      "name": "Tanika Bawa"
+    },
+    {
+      "name": "Nandkishor Mule"
+    },
+    {
+      "name": "Claudia Morin Raig"
+    },
+    {
+      "name": "Laura Küffer"
+    },
+    {
+      "name": "Christina Georgiou"
+    },
+    {
+      "name": "Vassilis Kehayas"
+    },
+    {
+      "name": "Kok Sin Lee"
+    },
+    {
+      "name": "Federico Brandalise"
+    },
+    {
+      "name": "Michele Cane"
+    },
+    {
+      "name": "Daniela Baptista",
+      "first3": "DAB"
+    },
+    {
+      "name": "Daniel Lebrecht"
+    },
+    {
+      "name": "Vanessa Schubert"
     }
   ]
 }

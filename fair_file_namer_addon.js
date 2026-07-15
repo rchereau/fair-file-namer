@@ -29,7 +29,7 @@
   'use strict';
 
   var ADDON = {
-    rootVar: 'FNG_SIDELOAD', name: 'FAIR File Namer', version: '3.0.0',
+    rootVar: 'FNG_SIDELOAD', name: 'FAIR File Namer', version: '1.0.0',
     category: 'Data', type: 'fairFileNamer', label: 'FAIR File Namer'
   };
   var LS_KEY = 'fng.library.v3';
@@ -46,6 +46,9 @@
   var LS_SHOWPATH = 'fng.machine.showLiteralPath'; // opt-in: record unverified absolute path
   var LS_ANALYTICS = 'fng.analytics.queue';      // buffered usage-event pings (flushed to endpoint)
   var LS_FSROOT = 'fng.machine.dataFolder';      // per-machine label of the chosen File System Access data folder
+  var LS_THEME = 'fng.machine.theme';           // per-machine colour theme
+  var LS_OPTPL = 'fng.machine.opTemplates';     // per-operator last lab/file/folder template (this machine)
+  var LS_TEXTSIZE = 'fng.machine.textScale';    // per-operator UI text size (this machine)
   var LS_FSPATH = 'fng.machine.dataFolderPath';  // per-machine absolute path of that folder (the browser cannot read it from the picker)
 
   // Display options for the rendered metadata document.
@@ -103,11 +106,11 @@
       labs: [{
         id: 'lab-demo', name: 'Demo Lab',
         fileTemplates: [{
-          id: 'tpl1', name: 'Acquisition', default: true, separator: '_',
+          id: 'tpl1', name: 'Lab Default', default: true, separator: '_',
           fieldIds: ['f-lab', 'f-dept', 'f-oper', 'f-dev', 'f-proj', 'f-samp', 'f-cond', 'f-date']
         }],
         folderTemplates: [{
-          id: 'fld1', name: 'Project tree', default: true, separator: '/',
+          id: 'fld1', name: 'Lab Default', default: true, separator: '/',
           fieldIds: ['f-proj', 'f-samp']
         }]
       }]
@@ -423,6 +426,12 @@
     deviceGroups().forEach(function (g) { (g.devices || []).forEach(function (d) { if (!found && d.name === name) found = d; }); });
     return found;
   }
+  function isPlatformDevice(name) {
+    if (!name) return false;
+    var plat = false;
+    (ROOT.platforms || []).forEach(function (pf) { (pf.devices || []).forEach(function (d) { if (d.name === name) plat = true; }); });
+    return plat;
+  }
   function groupOfDevice(name) {
     var gid = '__lab';
     deviceGroups().forEach(function (g) { (g.devices || []).forEach(function (d) { if (d.name === name) gid = g.id; }); });
@@ -439,37 +448,83 @@
   function uid(p) { return (p || 'x') + Math.random().toString(36).slice(2, 7); }
   function R() { return ADDON.rootVar; }
 
+  /* ---- colour themes ------------------------------------------------------
+   * Each theme is a set of CSS custom properties applied to the .fng root.
+   * The base stylesheet only references var(--...), so switching a theme is a
+   * matter of swapping this one block (injected at the top of css()). */
+  var THEMES = {
+    dark:  { label: 'Midnight', scheme: 'dark',
+      v: { bg:'#0b0e14', sf:'#10131b', pn:'#171b26', bd:'#2a3142', tx:'#dde4f0', tx2:'#ffffff', dim:'#aab4c9', ac:'#4af0a0', acink:'#04150c', acglow:'rgba(74,240,160,.45)', chrome:'#04060b', shadow:'inset 0 1px 0 rgba(255,255,255,.06), 0 10px 26px rgba(255,255,255,.03)', code:'#ffd9a0', danger:'#ff6f5e', warn:'#e0b341', hair:'rgba(255,255,255,.06)' } },
+    slate: { label: 'Slate', scheme: 'dark',
+      v: { bg:'#0f172a', sf:'#111c33', pn:'#182541', bd:'#2c3a56', tx:'#e2e8f0', tx2:'#f8fafc', dim:'#a3b0c4', ac:'#38bdf8', acink:'#04121f', acglow:'rgba(56,189,248,.45)', chrome:'#080d18', shadow:'inset 0 1px 0 rgba(255,255,255,.055), 0 10px 26px rgba(120,180,240,.035)', code:'#fdba74', danger:'#fb7185', warn:'#fbbf24', hair:'rgba(255,255,255,.06)' } },
+    nord:  { label: 'Nord', scheme: 'dark',
+      v: { bg:'#2e3440', sf:'#333b4a', pn:'#3b4252', bd:'#4c586e', tx:'#e5e9f0', tx2:'#f4f6fb', dim:'#b4bccd', ac:'#88c0d0', acink:'#10161e', acglow:'rgba(136,192,208,.5)', chrome:'#262b34', shadow:'inset 0 1px 0 rgba(255,255,255,.05), 0 10px 26px rgba(216,222,233,.05)', code:'#ebcb8b', danger:'#d0868f', warn:'#d08770', hair:'rgba(255,255,255,.05)' } },
+    paper: { label: 'Paper (light)', scheme: 'light',
+      v: { bg:'#f5f6f8', sf:'#ffffff', pn:'#ffffff', bd:'#d3d8e0', tx:'#1f2733', tx2:'#0b1220', dim:'#4b5563', ac:'#0e9f6e', acink:'#ffffff', acglow:'rgba(14,159,110,.4)', chrome:'#e6e8ec', shadow:'0 6px 24px rgba(0,0,0,.10), 0 1px 3px rgba(0,0,0,.08)', code:'#a3560a', danger:'#c0392b', warn:'#9a6a0b', hair:'rgba(15,23,42,.07)' } },
+    grey:  { label: 'Grey (light)', scheme: 'light',
+      v: { bg:'#e8eaed', sf:'#ffffff', pn:'#ffffff', bd:'#cfd4dc', tx:'#1f2733', tx2:'#0b1220', dim:'#4b5563', ac:'#3f6fb5', acink:'#ffffff', acglow:'rgba(63,111,181,.4)', chrome:'#dbdee3', shadow:'0 6px 22px rgba(0,0,0,.11), 0 1px 3px rgba(0,0,0,.09)', code:'#a3560a', danger:'#c0392b', warn:'#9a6a0b', hair:'rgba(15,23,42,.07)' } },
+    unige: { label: 'UNIGE', scheme: 'light',
+      v: { bg:'#f2f3f5', sf:'#ffffff', pn:'#ffffff', bd:'#e2dee3', tx:'#26262b', tx2:'#141417', dim:'#63636d', ac:'#c8006b', acink:'#ffffff', acglow:'rgba(200,0,107,.35)', chrome:'#e5e6ea', shadow:'0 6px 24px rgba(0,0,0,.10), 0 1px 3px rgba(0,0,0,.08)', code:'#a1005a', danger:'#c0392b', warn:'#9a6a0b', hair:'rgba(0,0,0,.06)' } }
+  };
+  // Theme choice is per operator per device: a JSON map { operator: theme, '': deviceDefault }.
+  function themeAll() { try { var raw = localStorage.getItem(LS_THEME); if (!raw) return {}; var o = JSON.parse(raw); return (o && typeof o === 'object') ? o : {}; } catch (e) { return {}; } }
+  function themeGetFor(op) { var m = themeAll(); var t = (op && m[op]) || m[''] || 'dark'; return THEMES[t] ? t : 'dark'; }
+  function themeSetFor(op, v) { try { var m = themeAll(); m[op || ''] = v; localStorage.setItem(LS_THEME, JSON.stringify(m)); } catch (e) {} }
+  // UI text size is also per operator per device: a { operator: scale, '': deviceDefault } map.
+  function clampScale(v) { v = parseFloat(v); if (!(v > 0)) v = 1; return Math.min(1.6, Math.max(0.8, Math.round(v * 100) / 100)); }
+  function tsAll() { try { var raw = localStorage.getItem(LS_TEXTSIZE); if (!raw) return {}; var o = JSON.parse(raw); return (o && typeof o === 'object') ? o : {}; } catch (e) { return {}; } }
+  function tsGetFor(op) { var m = tsAll(); var v = (op && m[op] != null) ? m[op] : (m[''] != null ? m[''] : 1); return clampScale(v); }
+  function tsSetFor(op, v) { try { var m = tsAll(); m[op || ''] = clampScale(v); localStorage.setItem(LS_TEXTSIZE, JSON.stringify(m)); } catch (e) {} }
+  function activeScale() { var v = (ROOT.ui && ROOT.ui.fontScale != null) ? ROOT.ui.fontScale : null; return clampScale(v != null ? v : tsGetFor('')); }
+  function activeTheme() {
+    var t = (ROOT.ui && ROOT.ui.theme) || '';
+    if (t && THEMES[t]) return t;
+    return themeGetFor('');
+  }
+  function themeVars(t) {
+    var d = THEMES[t] || THEMES.dark, v = d.v;
+    return '--bg:' + v.bg + ';--sf:' + v.sf + ';--pn:' + v.pn + ';--bd:' + v.bd
+      + ';--tx:' + v.tx + ';--tx2:' + v.tx2 + ';--dim:' + v.dim + ';--ac:' + v.ac
+      + ';--ac-ink:' + v.acink + ';--ac-glow:' + v.acglow + ';--code:' + v.code
+      + ';--danger:' + v.danger + ';--warn:' + v.warn + ';--hair:' + v.hair
+      + ';color-scheme:' + d.scheme + ';';
+  }
+  ROOT.setTheme = function (v) { if (!THEMES[v]) v = 'dark'; ROOT.ui.theme = v; themeSetFor(currentOperator() || '', v); rerender(); };
+  ROOT.bumpText = function (dir) { var v = clampScale(activeScale() + (dir < 0 ? -0.1 : 0.1)); ROOT.ui.fontScale = v; tsSetFor(currentOperator() || '', v); rerender(); };
+
   function css() {
     return '<style>'
-      + '.fng{font-family:inherit;color:#cdd5e3;color-scheme:dark;--ac:#4af0a0;--bd:#222838;--pn:#171b26;--sf:#10131b;--dim:#919bb4;line-height:1.5;}'
+      + '.fng{' + themeVars(activeTheme()) + '}'
+      + '.fng-scale{zoom:' + activeScale() + ';}'
+      + '.fng{font-family:inherit;color:var(--tx);background:var(--bg);line-height:1.5;min-height:100%;}'
       + '.fng *{box-sizing:border-box;}'
       + '.fng h3{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);margin:18px 0 8px;font-weight:600;}'
       + '.fng .lead{font-size:13px;color:var(--dim);margin:2px 0 10px;}'
       + '.fng-tabs{display:flex;gap:4px;border-bottom:1px solid var(--bd);margin-bottom:16px;}'
       + '.fng-tab{background:none;border:none;color:var(--dim);font-size:13px;padding:8px 12px;cursor:pointer;border-bottom:2px solid transparent;}'
       + '.fng-tab.on{color:var(--ac);border-bottom-color:var(--ac);}'
-      + '.fng-help{max-width:820px;line-height:1.6;color:#c2cbe0;}'
-      + '.fng-help h2{font-size:17px;color:#fff;margin:26px 0 8px;border-bottom:1px solid var(--bd);padding-bottom:6px;}'
+      + '.fng-help{max-width:820px;line-height:1.6;color:var(--tx);}'
+      + '.fng-help h2{font-size:17px;color:var(--tx2);margin:26px 0 8px;border-bottom:1px solid var(--bd);padding-bottom:6px;}'
       + '.fng-help h3{font-size:14px;color:var(--ac);margin:18px 0 6px;}'
       + '.fng-help p{margin:8px 0;font-size:14px;}'
       + '.fng-help ul,.fng-help ol{margin:8px 0 8px 20px;font-size:14px;}'
       + '.fng-help li{margin:5px 0;}'
       + '.fng-help code{background:rgba(255,255,255,.06);padding:1px 5px;border-radius:4px;font-size:13px;}'
-      + '.fng-help .lead{color:#b2bed7;}'
+      + '.fng-help .lead{color:var(--tx);}'
       + '.fng-where{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0;}'
       + '.fng-where>div{border:1px solid var(--bd);border-radius:8px;padding:12px 14px;background:var(--sf);}'
-      + '.fng-where h4{margin:0 0 6px;font-size:13px;color:#fff;}'
+      + '.fng-where h4{margin:0 0 6px;font-size:13px;color:var(--tx2);}'
       + '.fng-shot{margin:14px 0;border:1px solid var(--bd);border-radius:8px;overflow:hidden;background:var(--sf);}'
       + '.fng-shot img{display:block;width:100%;height:auto;}'
       + '.fng-shot-ph{flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:130px;padding:22px;text-align:center;color:var(--dim);font-size:13px;background:repeating-linear-gradient(45deg,transparent,transparent 10px,rgba(255,255,255,.025) 10px,rgba(255,255,255,.025) 20px);}'
-      + '.fng-shot figcaption{padding:8px 12px;font-size:12px;color:#a3adc1;border-top:1px solid var(--bd);}'
+      + '.fng-shot figcaption{padding:8px 12px;font-size:12px;color:var(--dim);border-top:1px solid var(--bd);}'
       + '@media(max-width:640px){.fng-where{grid-template-columns:1fr;}}'
       + '.fng-row{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;}'
       + '.fng-f{display:flex;flex-direction:column;gap:4px;}'
       + '.fng-l{font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--dim);}'
       + '.fng-l.req:after{content:" *";color:var(--ac);}'
-      + '.fng-in,.fng-sel,.fng-ta{background:var(--pn);border:1px solid var(--bd);border-radius:6px;color:#eaf0fa;font-size:14px;padding:7px 9px;outline:none;font-family:inherit;}'
-      + '.fng-sel option,.fng-sel optgroup{background-color:#171b26;color:#eaf0fa;}'
+      + '.fng-in,.fng-sel,.fng-ta{background:var(--pn);border:1px solid var(--bd);border-radius:6px;color:var(--tx2);font-size:14px;padding:7px 9px;outline:none;font-family:inherit;}'
+      + '.fng-sel option,.fng-sel optgroup{background-color:var(--pn);color:var(--tx2);}'
       + '.fng-in:focus,.fng-sel:focus,.fng-ta:focus{border-color:var(--ac);}'
       + '.fng-ta{width:100%;min-height:58px;resize:vertical;}'
       + '.fng-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;}'
@@ -488,7 +543,7 @@
       + '.fng-mtile{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:10px;border:1px solid transparent;border-radius:16px;padding:26px 16px;cursor:pointer;transition:background .15s,border-color .15s,transform .1s,box-shadow .15s;}'
       + '.fng-mtile:hover{transform:translateY(-2px);}'
       + '.fng-mtile-i{font-size:35px;line-height:1;filter:drop-shadow(0 2px 6px rgba(0,0,0,.35));}'
-      + '.fng-mtile-t{font-size:16px;font-weight:600;color:#eef3fb;}'
+      + '.fng-mtile-t{font-size:16px;font-weight:600;color:var(--tx2);}'
       + '.fng-mtile.t-build{background:linear-gradient(140deg,rgba(74,240,160,.22),rgba(74,240,160,.04));border-color:rgba(74,240,160,.35);}'
       + '.fng-mtile.t-build:hover{background:linear-gradient(140deg,rgba(74,240,160,.34),rgba(74,240,160,.08));border-color:rgba(74,240,160,.7);box-shadow:0 8px 22px rgba(74,240,160,.12);}'
       + '.fng-mtile.t-dev{background:linear-gradient(140deg,rgba(126,184,247,.22),rgba(126,184,247,.04));border-color:rgba(126,184,247,.35);}'
@@ -498,27 +553,27 @@
       + '.fng-modal-card.fng-bigcard{width:92vw;max-width:900px;}'
       + '.fng-modal-card.fng-rvcard{width:94vw;max-width:1000px;}'
       + '.fng-save{margin-top:8px;padding:8px 10px;border:1px solid var(--bd);border-radius:10px;background:rgba(255,255,255,.02);}'
-      + '.fng-save-cur{font-size:13.5px;color:#dbe3f0;}'
-      + '.fng-fslist{margin:4px 0 0;padding-left:18px;font-size:13.5px;color:#dbe3f0;}'
+      + '.fng-save-cur{font-size:13.5px;color:var(--tx);}'
+      + '.fng-fslist{margin:4px 0 0;padding-left:18px;font-size:13.5px;color:var(--tx);}'
       + '.fng-fslist li{margin:2px 0;}'
       + '.fng-rv{display:flex;gap:14px;align-items:flex-start;}'
       + '.fng-rv-nav{flex:none;width:172px;display:flex;flex-direction:column;gap:6px;}'
-      + '.fng-rv-navb{display:flex;justify-content:space-between;align-items:center;gap:8px;background:var(--pn);border:1px solid var(--bd);border-radius:8px;color:#cdd6e6;padding:9px 11px;cursor:pointer;font-size:14px;text-align:left;}'
-      + '.fng-rv-navb.on{border-color:var(--ac);color:#fff;background:rgba(74,240,160,.08);}'
+      + '.fng-rv-navb{display:flex;justify-content:space-between;align-items:center;gap:8px;background:var(--pn);border:1px solid var(--bd);border-radius:8px;color:var(--tx);padding:9px 11px;cursor:pointer;font-size:14px;text-align:left;}'
+      + '.fng-rv-navb.on{border-color:var(--ac);color:var(--tx2);background:rgba(74,240,160,.08);}'
       + '.fng-rv-count{flex:none;background:rgba(255,255,255,.1);border-radius:10px;padding:1px 8px;font-size:12px;}'
       + '.fng-rv-body{flex:1;min-width:0;max-height:60vh;overflow:auto;display:flex;flex-direction:column;gap:10px;}'
       + '.fng-rv-bar{display:flex;gap:8px;}'
       + '.fng-rv-card{border:1px solid var(--bd);border-radius:10px;padding:10px 12px;border-left:3px solid var(--bd);}'
       + '.fng-rv-card.s-added{border-left-color:#4af0a0;}'
-      + '.fng-rv-card.s-removed{border-left-color:#f0604a;}'
+      + '.fng-rv-card.s-removed{border-left-color:var(--danger);}'
       + '.fng-rv-card.s-changed{border-left-color:#e0b341;}'
       + '.fng-rv-card.rej{opacity:.45;}'
       + '.fng-rv-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}'
       + '.fng-rv-badge{flex:none;font-size:12px;font-weight:700;border-radius:5px;padding:2px 7px;}'
       + '.fng-rv-badge.b-added{background:rgba(74,240,160,.16);color:#4af0a0;}'
-      + '.fng-rv-badge.b-removed{background:rgba(240,96,74,.16);color:#f0815a;}'
+      + '.fng-rv-badge.b-removed{background:rgba(240,96,74,.16);color:var(--danger);}'
       + '.fng-rv-badge.b-changed{background:rgba(224,179,65,.16);color:#e0b341;}'
-      + '.fng-rv-label{flex:1;min-width:120px;font-weight:600;color:#eaf0fa;}'
+      + '.fng-rv-label{flex:1;min-width:120px;font-weight:600;color:var(--tx2);}'
       + '.fng-rv-dec{flex:none;display:flex;gap:6px;}'
       + '.fng-rv-sides{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;}'
       + '.fng-rv-card.s-added .fng-rv-sides,.fng-rv-card.s-removed .fng-rv-sides{grid-template-columns:1fr;}'
@@ -527,7 +582,7 @@
       + '.fng-rv-prop{display:flex;gap:8px;padding:3px 0;font-size:13.5px;align-items:baseline;}'
       + '.fng-rv-prop.chg{background:rgba(224,179,65,.1);border-radius:4px;}'
       + '.fng-rv-k{flex:none;width:92px;color:var(--dim);}'
-      + '.fng-rv-v{color:#dbe3f0;word-break:break-word;}'
+      + '.fng-rv-v{color:var(--tx);word-break:break-word;}'
       + '.fng-rv-prop .fng-in,.fng-rv-prop .fng-sel,.fng-rv-prop .fng-ta{flex:1;min-width:0;}'
       + '.fng-rv-empty{color:var(--dim);font-style:italic;font-size:13.5px;}'
       + '@media (max-width:640px){.fng-rv{flex-direction:column;}.fng-rv-nav{width:100%;flex-direction:row;flex-wrap:wrap;}.fng-rv-sides{grid-template-columns:1fr;}}'
@@ -538,7 +593,7 @@
       + '.fng-devtab.on{color:var(--ac);border-color:var(--ac);background:rgba(74,240,160,.08);}'
       + '.fng-devrow{display:flex;gap:6px;align-items:flex-start;}'
       + '.fng-devlist{flex:1;display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-height:34px;}'
-      + '.fng-devopt{background:var(--pn);border:1px solid var(--bd);border-radius:6px;color:#eaf0fa;font-size:13px;padding:6px 11px;cursor:pointer;}'
+      + '.fng-devopt{background:var(--pn);border:1px solid var(--bd);border-radius:6px;color:var(--tx2);font-size:13px;padding:6px 11px;cursor:pointer;}'
       + '.fng-devopt:hover{border-color:var(--ac);}'
       + '.fng-devopt.on{border-color:var(--ac);color:var(--ac);background:rgba(74,240,160,.12);}'
       + '.fng-devbtn{width:100%;text-align:left;padding:7px 9px;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}'
@@ -547,7 +602,7 @@
       + '.fng-elab{position:absolute;top:42px;right:8px;z-index:2;display:inline-flex;align-items:center;gap:6px;background:#007782;border:1px solid rgba(255,255,255,.18);border-radius:7px;padding:4px 8px 4px 6px;text-decoration:none;box-shadow:0 2px 8px rgba(0,0,0,.32);transition:transform .1s,box-shadow .15s,filter .15s;}'
       + '.fng-elab:hover{transform:translateY(-1px);box-shadow:0 5px 14px rgba(0,0,0,.42);filter:brightness(1.08);}'
       + '.fng-elab img{height:22px;display:block;}'
-      + '.fng-elab-go{color:#fff;font-size:16px;line-height:1;font-weight:700;}'
+      + '.fng-elab-go{color:var(--tx2);font-size:16px;line-height:1;font-weight:700;}'
       + '.fng-modal-card.fng-dmcard{width:92vw;max-width:880px;height:min(80vh,640px);display:flex;flex-direction:column;overflow:hidden;}'
       + '.fng-dmcard .fng-dmbody{flex:1 1 auto;min-height:0;align-items:stretch;overflow:hidden;}'
       + '.fng-dmcard .fng-dmleft{max-height:none;min-height:0;}'
@@ -559,31 +614,31 @@
       + '.fng-dmmid{flex:1 1 0;min-width:0;max-height:62vh;overflow:auto;}'
       + '.fng-dmright{flex:1 1 0;min-width:0;max-height:62vh;overflow:auto;}'
       + '.fng-tree{display:flex;flex-direction:column;gap:2px;}'
-      + '.fng-treefolder{text-align:left;background:transparent;border:none;color:#cdd5e3;font-size:14px;font-weight:600;padding:6px 8px;cursor:pointer;border-radius:6px;}'
-      + '.fng-treefolder.sub{font-weight:500;font-size:13px;color:#c2cce4;}'
+      + '.fng-treefolder{text-align:left;background:transparent;border:none;color:var(--tx);font-size:14px;font-weight:600;padding:6px 8px;cursor:pointer;border-radius:6px;}'
+      + '.fng-treefolder.sub{font-weight:500;font-size:13px;color:var(--tx);}'
       + '.fng-treefolder:hover{background:var(--pn);}'
       + '.fng-treekids{display:flex;flex-direction:column;gap:2px;margin-left:10px;border-left:1px solid var(--bd);padding-left:6px;}'
-      + '.fng-treeitem{text-align:left;background:transparent;border:none;color:#c2cce4;font-size:13px;padding:5px 8px;cursor:pointer;border-radius:6px;}'
-      + '.fng-treeitem:hover{background:var(--pn);color:#eaf0fa;}'
+      + '.fng-treeitem{text-align:left;background:transparent;border:none;color:var(--tx);font-size:13px;padding:5px 8px;cursor:pointer;border-radius:6px;}'
+      + '.fng-treeitem:hover{background:var(--pn);color:var(--tx2);}'
       + '.fng-treeitem.on{background:rgba(74,240,160,.12);color:var(--ac);}'
       + '.fng-treeadd{text-align:left;background:transparent;border:none;color:var(--dim);font-size:12px;padding:5px 8px;cursor:pointer;}'
       + '.fng-treeadd:hover{color:var(--ac);}'
       + '.fng-favrow{display:flex;align-items:center;gap:2px;border-radius:6px;}'
       + '.fng-favrow.on{background:rgba(74,240,160,.12);}'
-      + '.fng-favname{flex:1;text-align:left;background:transparent;border:none;color:#c2cce4;font-size:13px;padding:5px 8px;cursor:pointer;border-radius:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}'
-      + '.fng-favname:hover{color:#eaf0fa;}'
+      + '.fng-favname{flex:1;text-align:left;background:transparent;border:none;color:var(--tx);font-size:13px;padding:5px 8px;cursor:pointer;border-radius:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}'
+      + '.fng-favname:hover{color:var(--tx2);}'
       + '.fng-favrow.on .fng-favname{color:var(--ac);}'
       + '.fng-favstar{background:transparent;border:none;color:#f0c419;font-size:14px;line-height:1;cursor:pointer;padding:4px 7px;border-radius:6px;}'
       + '.fng-favstar:hover{background:var(--pn);}'
       + '.fng-devpickgrid{display:flex;gap:10px;flex-wrap:wrap;}'
-      + '.fng-pickcard{flex:1 1 200px;display:flex;flex-direction:column;gap:4px;align-items:flex-start;background:var(--pn);border:1px solid var(--bd);border-radius:8px;color:#eaf0fa;font-size:15px;padding:14px;cursor:pointer;text-align:left;}'
+      + '.fng-pickcard{flex:1 1 200px;display:flex;flex-direction:column;gap:4px;align-items:flex-start;background:var(--pn);border:1px solid var(--bd);border-radius:8px;color:var(--tx2);font-size:15px;padding:14px;cursor:pointer;text-align:left;}'
       + '.fng-pickcard:hover{border-color:var(--ac);}'
       + '.fng-pickcard .fng-muted{font-size:12px;}'
       + '.fng-devpicklist{display:flex;flex-direction:column;gap:6px;max-height:340px;overflow:auto;margin-top:4px;}'
-      + '.fng-pickrow{text-align:left;background:var(--pn);border:1px solid var(--bd);border-radius:6px;color:#eaf0fa;font-size:14px;padding:9px 12px;cursor:pointer;}'
+      + '.fng-pickrow{text-align:left;background:var(--pn);border:1px solid var(--bd);border-radius:6px;color:var(--tx2);font-size:14px;padding:9px 12px;cursor:pointer;}'
       + '.fng-pickrow:hover{border-color:var(--ac);}'
       + '.fng-pickrow.on{border-color:var(--ac);color:var(--ac);background:rgba(74,240,160,.12);}'
-      + '.fng-btn{background:transparent;border:1px solid var(--bd);border-radius:6px;color:#c2cce4;font-size:13px;padding:7px 12px;cursor:pointer;}'
+      + '.fng-btn{background:transparent;border:1px solid var(--bd);border-radius:6px;color:var(--tx);font-size:13px;padding:7px 12px;cursor:pointer;}'
       + '.fng-btn:hover{border-color:var(--ac);color:var(--ac);}'
       + '.fng-btn.pri{border-color:var(--ac);color:var(--ac);}'
       + '.fng-btn.sm{padding:4px 9px;font-size:12px;}'
@@ -592,48 +647,48 @@
       // example/preview box
       + '.fng-ex{background:var(--sf);border:1px solid var(--ac);border-radius:8px;padding:12px 14px;margin-top:12px;}'
       + '.fng-ex .h{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--ac);margin-bottom:6px;}'
-      + '.fng-name{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:17px;color:#fff;word-break:break-all;min-height:20px;}'
+      + '.fng-name{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:17px;color:var(--tx2);word-break:break-all;min-height:20px;}'
       + '.fng-name .sep{color:#465}'
       + '.fng-namerow{display:flex;align-items:flex-start;gap:10px;}'
       + '.fng-namerow .fng-name{flex:1;min-width:0;}'
       + '.fng-copy{flex:none;background:transparent;border:1px solid var(--bd);border-radius:6px;color:var(--dim);cursor:pointer;padding:5px 7px;line-height:0;}'
       + '.fng-copy:hover{border-color:var(--ac);color:var(--ac);}'
-      + '.fng-path{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;color:#b7c8e7;margin-top:7px;word-break:break-all;}'
+      + '.fng-path{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;color:var(--tx);margin-top:7px;word-break:break-all;}'
       + '.fng-pathrow{display:flex;align-items:center;gap:8px;margin-top:7px;}'
       + '.fng-pathrow .fng-path{flex:1;min-width:0;margin-top:0;}'
       // tiles
       + '.fng-tiles{display:flex;flex-wrap:wrap;gap:7px;min-height:38px;padding:8px;border:1px dashed var(--bd);border-radius:8px;background:rgba(255,255,255,.012);}'
-      + '.fng-tile{display:inline-flex;align-items:center;gap:7px;background:var(--pn);border:1px solid var(--bd);border-radius:7px;padding:6px 9px;font-size:13px;color:#eaf0fa;cursor:grab;user-select:none;}'
+      + '.fng-tile{display:inline-flex;align-items:center;gap:7px;background:var(--pn);border:1px solid var(--bd);border-radius:7px;padding:6px 9px;font-size:13px;color:var(--tx2);cursor:grab;user-select:none;}'
       + '.fng-tile .dot{width:7px;height:7px;border-radius:2px;flex:none;}'
       + '.fng-tile{transition:background .1s ease,border-color .1s ease;}'
       + '.fng-tile.dragging{opacity:.4;border-style:dashed;border-color:var(--ac);}'
       + '.fng-tile .rm{border:none;background:none;color:var(--dim);cursor:pointer;font-size:14px;padding:0;line-height:1;}'
-      + '.fng-tile .rm:hover{color:#f07080;}'
-      + '.fng-avail .fng-tile{cursor:pointer;border-style:dashed;color:#c2cce4;}'
+      + '.fng-tile .rm:hover{color:var(--danger);}'
+      + '.fng-avail .fng-tile{cursor:pointer;border-style:dashed;color:var(--tx);}'
       + '.fng-avail .fng-tile:hover{border-color:var(--ac);color:var(--ac);}'
       + '.fng-mini{display:flex;flex-wrap:wrap;gap:6px;align-items:center;}'
       + '.fng-chiprm{display:inline-flex;align-items:center;gap:6px;background:var(--pn);border:1px solid var(--bd);border-radius:14px;padding:4px 6px 4px 11px;font-size:13px;}'
       + '.fng-chiprm button{border:none;background:none;color:var(--dim);cursor:pointer;}'
-      + '.fng-chiprm button:hover{color:#f07080;}'
+      + '.fng-chiprm button:hover{color:var(--danger);}'
       + '.fng-card{border:1px solid var(--bd);border-radius:8px;padding:12px;margin-top:8px;background:rgba(255,255,255,.012);}'
       + '.fng-adv summary{cursor:pointer;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);margin-top:18px;}'
       + '.fng-adv[open] summary{color:var(--ac);}'
       + '.fng-muted{color:var(--dim);font-size:13px;}'
       + '.fng-sep{width:46px;text-align:center;}'
-      + '.fng-auto{font-size:10px;letter-spacing:.05em;color:#0d0f12;background:var(--ac);border-radius:3px;padding:1px 5px;text-transform:none;}'
-      + '.fng-ro{background:var(--sf);border:1px dashed var(--bd);border-radius:6px;color:#b7c8e7;font-size:14px;padding:7px 9px;}'
+      + '.fng-auto{font-size:10px;letter-spacing:.05em;color:var(--ac-ink);background:var(--ac);border-radius:3px;padding:1px 5px;text-transform:none;}'
+      + '.fng-ro{background:var(--sf);border:1px dashed var(--bd);border-radius:6px;color:var(--tx);font-size:14px;padding:7px 9px;}'
       + '.fng-hint{margin-top:5px;font-size:12px;}'
       + '.fng-x2{color:var(--dim);cursor:pointer;text-decoration:underline;}'
-      + '.fng-x2:hover{color:#f07080;}'
+      + '.fng-x2:hover{color:var(--danger);}'
       // rendered metadata document + toolbar
       + '.fng-toolbar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;background:var(--pn);border:1px solid var(--bd);border-bottom:none;border-radius:8px 8px 0 0;padding:6px 8px;}'
-      + '.fng-tsel{background:var(--sf);border:1px solid var(--bd);border-radius:5px;color:#eaf0fa;font-size:13px;padding:3px 6px;}'
-      + '.fng-tb{background:var(--sf);border:1px solid var(--bd);border-radius:5px;color:#cdd5e3;font-size:13px;min-width:28px;padding:3px 7px;cursor:pointer;}'
+      + '.fng-tsel{background:var(--sf);border:1px solid var(--bd);border-radius:5px;color:var(--tx2);font-size:13px;padding:3px 6px;}'
+      + '.fng-tb{background:var(--sf);border:1px solid var(--bd);border-radius:5px;color:var(--tx);font-size:13px;min-width:28px;padding:3px 7px;cursor:pointer;}'
       + '.fng-tb:hover{border-color:var(--ac);color:var(--ac);}'
       + '.fng-tdiv{width:1px;align-self:stretch;background:var(--bd);margin:0 3px;}'
       + '.fng-doc{background:var(--sf);border:1px solid var(--bd);border-radius:0 0 8px 8px;padding:14px 16px;line-height:1.6;}'
       + '.fng-doc-h{font-size:1.15em;color:var(--ac);margin:0 0 8px;letter-spacing:0;text-transform:none;}'
-      + '.fng-doc code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.92em;color:#ffd9a0;word-break:break-all;}'
+      + '.fng-doc code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.92em;color:var(--code);word-break:break-all;}'
       + '.fng-doc-t{border-collapse:collapse;width:100%;margin:4px 0;}'
       + '.fng-doc-t th,.fng-doc-t td{border:1px solid var(--bd);padding:4px 9px;text-align:left;word-break:break-word;}'
       + '.fng-doc-t th{color:var(--dim);font-weight:600;font-size:.85em;text-transform:uppercase;letter-spacing:.04em;}'
@@ -647,17 +702,44 @@
       + '.fng-modal-card{background:var(--pn);border:1px solid var(--bd);border-radius:10px;padding:18px;width:min(440px,92vw);max-height:85vh;overflow:auto;box-shadow:0 12px 40px rgba(0,0,0,.5);}'
       + '.fng-modal-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}'
       + '.fng-modal-x{background:none;border:none;color:var(--dim);font-size:17px;cursor:pointer;}'
-      + '.fng-modal-x:hover{color:#f07080;}'
+      + '.fng-modal-x:hover{color:var(--danger);}'
       // required / validation / copy feedback / recent
       + '.fng-l.req:after{content:" *";color:var(--ac);}'
-      + '.fng-fillrow input:invalid,.fng-fillrow select:invalid{border-color:#e0533a;background:rgba(224,83,58,.07);}'
-      + '.fng-devempty{border-color:#e0533a !important;}'
+      + '.fng-fillrow input:invalid,.fng-fillrow select:invalid{border-color:var(--danger);background:rgba(224,83,58,.07);}'
+      + '.fng-devempty{border-color:var(--danger) !important;}'
       + '.fng-copy.ok{border-color:var(--ac);color:var(--ac);}'
       + '.fng-recent{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:3px 0;}'
-      + '.fng-recent code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;color:#ffd9a0;word-break:break-all;}'
-      + '.fng-bang{color:#f0604a;font-weight:700;}'
-      + '.fng-dupcell{color:#f0604a;}'
-      + '.fng-dupin{border-color:#f0604a !important;}'
+      + '.fng-recent code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;color:var(--code);word-break:break-all;}'
+      + '.fng-bang{color:var(--danger);font-weight:700;}'
+      + '.fng-dupcell{color:var(--danger);}'
+      + '.fng-dupin{border-color:var(--danger) !important;}'
+      + '.fng-ftwrap{display:inline-flex;align-items:center;gap:6px;}'
+      + '.fng-ft{border:1px solid var(--bd);background:transparent;color:var(--dim);border-radius:6px;font-size:13px;padding:7px 12px;cursor:pointer;transition:background .15s,border-color .15s,color .15s,box-shadow .15s;}'
+      + '.fng-ft:disabled{opacity:.5;cursor:not-allowed;}'
+      + '.fng-ft.ready{border-color:var(--ac);background:var(--ac);color:var(--ac-ink);font-weight:600;animation:fng-pulse 1.6s ease-in-out infinite;}'
+      + '.fng-ft.ready:hover{filter:brightness(1.06);}'
+      + '.fng-ft.done{border-color:var(--ac);color:var(--ac);background:transparent;font-weight:600;cursor:default;}'
+      + '@keyframes fng-pulse{0%,100%{box-shadow:0 0 0 0 transparent;}50%{box-shadow:0 0 0 5px var(--ac-glow),0 0 18px 3px var(--ac-glow);}}'
+      + '.fng-gear{flex:none;display:inline-flex;align-items:center;justify-content:center;background:transparent;border:1px solid var(--bd);border-radius:6px;color:var(--dim);cursor:pointer;padding:6px;line-height:0;}'
+      + '.fng-gear:hover{border-color:var(--ac);color:var(--ac);}'
+      + '.fng-splash{display:flex;align-items:flex-start;justify-content:center;padding:5vh 12px 24px;}'
+      + '.fng-splash-card{width:100%;max-width:440px;background:var(--pn);border:1px solid var(--bd);border-radius:14px;padding:26px 24px;box-shadow:0 12px 40px rgba(0,0,0,.28);}'
+      + '.fng-splash-h{font-size:20px;font-weight:700;color:var(--tx2);margin:0 0 4px;}'
+      + '.fng-splash-lead{font-size:13px;color:var(--dim);margin:0 0 18px;}'
+      + '.fng-splash-list{display:flex;flex-direction:column;gap:8px;max-height:52vh;overflow:auto;}'
+      + '.fng-splash-op{display:flex;align-items:center;justify-content:space-between;gap:10px;text-align:left;background:var(--sf);border:1px solid var(--bd);border-radius:9px;color:var(--tx);font-size:15px;padding:12px 14px;cursor:pointer;transition:border-color .12s,background .12s,transform .08s;}'
+      + '.fng-splash-op:hover{border-color:var(--ac);transform:translateY(-1px);}'
+      + '.fng-splash-op.last{border-color:var(--ac);}'
+      + '.fng-splash-tag{flex:none;font-size:11px;color:var(--ac-ink);background:var(--ac);border-radius:10px;padding:2px 8px;}'
+      + '.fng-splash-skip{display:block;width:100%;margin-top:16px;background:none;border:none;color:var(--dim);font-size:12.5px;cursor:pointer;text-decoration:underline;}'
+      + '.fng-splash-skip:hover{color:var(--tx);}'
+      + '.fng-topbar{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;border-bottom:1px solid var(--bd);margin-bottom:16px;}'
+      + '.fng-topbar .fng-tabs{border-bottom:none;margin-bottom:0;}'
+      + '.fng-thsel{font-size:12px;height:30px;padding:0 8px;width:150px;flex:none;}'
+      + '.fng-topctl{display:flex;align-items:center;gap:8px;flex:none;margin-bottom:6px;}'
+      + '.fng-tsz{display:inline-flex;gap:4px;}'
+      + '.fng-tszb{display:inline-flex;align-items:center;justify-content:center;width:34px;height:30px;padding:0;background:transparent;border:1px solid var(--bd);border-radius:6px;color:var(--tx);font-size:13px;font-weight:700;line-height:1;cursor:pointer;}'
+      + '.fng-tszb:hover{border-color:var(--ac);color:var(--ac);}'
       + '</style>';
   }
   function dot(i) { return '<span class="dot" style="background:' + SEG[i % SEG.length] + '"></span>'; }
@@ -667,7 +749,10 @@
    * ======================================================================== */
   ROOT.ui = { mode: 'use', labId: null, tplId: null, values: {}, notesHtml: '', dateOverride: '',
     docFont: (function () { try { return localStorage.getItem(LS_DOCFONT) || 'sans'; } catch (e) { return 'sans'; } })(),
-    docSize: (function () { try { return localStorage.getItem(LS_DOCSIZE) || 'm'; } catch (e) { return 'm'; } })() };
+    docSize: (function () { try { return localStorage.getItem(LS_DOCSIZE) || 'm'; } catch (e) { return 'm'; } })(),
+    theme: themeGetFor(''),
+    fontScale: tsGetFor(''),
+    picked: false };
   ROOT.build = { labId: null, kind: 'file', tplId: null };
   ROOT.newField = { name: '', type: 'freetext', optionsCsv: '', format: 'YYYYMMDD' };
   ROOT.fieldDlg = { fieldId: null };   // which field's attribute popup is open
@@ -687,6 +772,9 @@
   function removeFav(name) { favSet(favDevices().filter(function (n) { return n !== name; })); }
   function machineDept() { try { return localStorage.getItem(LS_DEPT) || ''; } catch (e) { return ''; } }
   function machineOperator() { try { return localStorage.getItem(LS_OPER) || ''; } catch (e) { return ''; } }
+  function opTplAll() { try { return JSON.parse(localStorage.getItem(LS_OPTPL) || '{}') || {}; } catch (e) { return {}; } }
+  function opTplGet(op) { var m = opTplAll(); return (op && m[op]) ? m[op] : null; }
+  function opTplSet(op, o) { if (!op) return; try { var m = opTplAll(); m[op] = o; localStorage.setItem(LS_OPTPL, JSON.stringify(m)); } catch (e) {} }
 
   // The value the ELN context provides for a field (null = user fills it manually).
   function elnAutoValueFor(f) {
@@ -735,6 +823,15 @@
   function labById(id) { return labs().filter(function (l) { return l.id === id; })[0]; }
   function tplsOf(lab, kind) { return kind === 'folder' ? lab.folderTemplates : lab.fileTemplates; }
   function defaultTpl(list) { return list.filter(function (t) { return t.default; })[0] || list[0] || null; }
+  // lab-default template first (stable) — used to order the selector lists
+  function sortDefaultFirst(list) { return (list || []).slice().sort(function (a, b) { return (b.default ? 1 : 0) - (a.default ? 1 : 0); }); }
+  // use-mode <option>s: default at the top, shown as "Lab Default"
+  function useTplOptions(list, selId) {
+    return sortDefaultFirst(list).map(function (t) {
+      var label = t.default ? 'Lab Default' : t.name;
+      return '<option value="' + esc(t.id) + '"' + (t.id === selId ? ' selected' : '') + '>' + esc(label) + '</option>';
+    }).join('');
+  }
 
   /* ==========================================================================
    * USE MODE
@@ -762,17 +859,19 @@
     if (!tpl) return '<div class="fng-row">' + labSel + '</div><p class="fng-muted" style="margin-top:12px">This lab has no templates yet.</p>';
 
     var tplSel = '<div class="fng-f"><span class="fng-l">File template</span><select class="fng-sel" onchange="' + R() + '.useTpl(this.value)">'
-      + lab.fileTemplates.map(function (t) { return '<option value="' + esc(t.id) + '"' + (t.id === tpl.id ? ' selected' : '') + '>' + esc(t.name) + '</option>'; }).join('')
+      + useTplOptions(lab.fileTemplates, tpl.id)
       + '</select></div>';
 
     var folderTpl = useFolderTpl(lab); if (folderTpl) ROOT.ui.folderTplId = folderTpl.id;
     var folderSel = (lab.folderTemplates && lab.folderTemplates.length)
       ? '<div class="fng-f"><span class="fng-l">Folder template</span><select class="fng-sel" onchange="' + R() + '.useFolderTpl(this.value)">'
-        + lab.folderTemplates.map(function (t) { return '<option value="' + esc(t.id) + '"' + (folderTpl && t.id === folderTpl.id ? ' selected' : '') + '>' + esc(t.name) + '</option>'; }).join('')
+        + useTplOptions(lab.folderTemplates, folderTpl && folderTpl.id)
         + '</select></div>'
       : '';
 
     applyDefaults(lab, tpl);
+    var _op = currentOperator();
+    if (_op) opTplSet(_op, { labId: lab.id, tplId: tpl.id, folderTplId: folderTpl ? folderTpl.id : '' });
     var inputs = inputFields(tpl, L).map(function (f) {
       var v = ROOT.ui.values[f.id] || '';
       // fields the ELN fills automatically are shown locked
@@ -1112,18 +1211,20 @@
     var segs = (tpl.fieldIds || []).map(function (id, i) {
       var f = fieldById(L, id);
       var v = encodeField(f, ROOT.ui.values, ctx, effFmt(tpl, f));
-      if (v) return '<span style="color:' + SEG[i % SEG.length] + '">' + esc(v) + '</span>';
+      if (v) return esc(v);                                  // monochrome in Use (segment colours kept in Manage)
       return '<span class="fng-ph">&lt;' + esc(f ? f.name : '?') + '&gt;</span>';
     });
     var sepc = '<span class="sep">' + esc(tpl.separator || '_') + '</span>';
     var nameHtml = segs.length ? segs.join(sepc) : '<span class="fng-muted">add fields to this template…</span>';
     var folder = useFolderTpl(lab);
-    var fileCard = '<div class="fng-ex"' + (missingInputs().length ? ' style="border-color:#f0604a"' : '') + '><div class="h">File name</div>'
+    var fileCard = '<div class="fng-ex"' + (missingInputs().length ? ' style="border-color:var(--danger)"' : '') + '><div class="h">File name</div>'
       + '<div class="fng-namerow"><div class="fng-name">' + nameHtml + '</div>'
       + '<button class="fng-copy" id="fng-copybtn" title="Copy file name" onclick="' + R() + '.copyName()">'
       + '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path></svg>'
       + '</button></div></div>';
-    var folderCard = '<div class="fng-ex"' + ((missingInputs().length || !localBase() || !fsTreeReady()) ? ' style="border-color:#f0604a"' : '') + '><div class="h">Folder</div>' + locationBlock(folder) + '</div>';
+    var _plat = isPlatformDevice(currentDeviceName());
+    var _folderRed = missingInputs().length || (!_plat && (!localBase() || !fsTreeReady()));
+    var folderCard = '<div class="fng-ex"' + (_folderRed ? ' style="border-color:var(--danger)"' : '') + '><div class="h">Folder</div>' + locationBlock(folder) + '</div>';
     return '<div id="fng-ex">' + fileCard + folderCard + '</div>';
   }
 
@@ -1172,6 +1273,32 @@
     if (f && f.source === 'operator') { rerender(); return; }   // reload that operator's configs
     refreshUsePreview(); refreshHeader();
   };
+  // Operator splash: choosing a name restores that operator's last lab/templates
+  // on this machine (config is already per-operator) and opens the full page.
+  ROOT.pickOperator = function (name) {
+    ROOT.ui.touched = true;
+    try { if (name) localStorage.setItem(LS_OPER, name); } catch (e) {}
+    var mem = name ? opTplGet(name) : null;
+    if (mem) {
+      if (mem.labId) ROOT.ui.labId = mem.labId;
+      if (mem.tplId) ROOT.ui.tplId = mem.tplId;
+      if (mem.folderTplId) ROOT.ui.folderTplId = mem.folderTplId;
+      ROOT.ui.values = {};                                 // avoid stale values from another lab
+    }
+    try {
+      var lab = useLab(), tpl = lab && useFileTpl(lab);
+      if (tpl) (tpl.fieldIds || []).forEach(function (fid) {
+        var f = fieldById(ROOT.library, fid);
+        if (f && f.source === 'operator') ROOT.ui.values[fid] = name;
+      });
+    } catch (e) {}
+    ROOT.ui.theme = themeGetFor(name);
+    ROOT.ui.fontScale = tsGetFor(name);
+    ROOT.ui.picked = true;
+    rerender();
+  };
+  ROOT.pickOperatorAt = function (i) { var n = (ROOT._splashOps || [])[i]; if (n != null) ROOT.pickOperator(n); };
+  ROOT.skipPick = function () { ROOT.ui.picked = true; rerender(); };
   function refreshUsePreview() { var el = document.getElementById('fng-ex'); if (el) el.outerHTML = usePreview(); }
   // refresh only the rendered header — never the notes editor (keeps the cursor)
   function refreshHeader() { var el = document.getElementById('fng-md-header'); if (el) el.innerHTML = headerHtml(); }
@@ -1536,7 +1663,7 @@
 
   ROOT.setStorageStatus = function (v) { try { localStorage.setItem(LS_STORAGE, v); } catch (e) {} refreshUsePreview(); refreshHeader(); };
   ROOT.setStorageDate = function (v) { try { if (v) localStorage.setItem(LS_STORAGE_DATE, v); else localStorage.removeItem(LS_STORAGE_DATE); } catch (e) {} refreshHeader(); };
-  ROOT.toggleLiteralPath = function (on) { try { localStorage.setItem(LS_SHOWPATH, on ? '1' : '0'); } catch (e) {} refreshUsePreview(); refreshHeader(); };
+  ROOT.toggleLiteralPath = function (on) { try { localStorage.setItem(LS_SHOWPATH, on ? '1' : '0'); } catch (e) {} refreshHeader(); if (ROOT.ui.folderInfo) rerender(); else refreshUsePreview(); };
 
   // The block shown under the file name in the Use tab: relative path, intended
   // archive (with a local-vs-NAS nudge), the controlled storage status, and the
@@ -1547,6 +1674,12 @@
       var b = localBase();
       var cs = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path></svg>';
       var relDir = folderSubtree();
+      if (isPlatformDevice(currentDeviceName())) {
+        html += '<div class="fng-pathrow"><div class="fng-path" title="Recommended folder tree on the platform storage">' + esc(relDir || '(folder tree)') + '</div>'
+          + '<button class="fng-copy" title="Copy folder tree" onclick="' + R() + '.copyLocalPath()">' + cs + '</button></div>';
+        html += '<div class="fng-muted" style="font-size:12px;margin-top:4px">This is a <b>shared platform device</b>, so a personal local root folder can\u2019t be set here. Save your data under this folder tree on the platform\u2019s storage, then transfer it to NASAC.</div>';
+        return html;                                         // no local-root input, no Create folder tree on a platform
+      }
       var fullDir = b ? joinPath(b, relDir) : '';
       if (fullDir) {
         html += '<div class="fng-pathrow"><div class="fng-path" title="Folder on this machine — paste this into your file explorer to open it">' + esc(fullDir) + '</div>'
@@ -1556,7 +1689,6 @@
           + '<button class="fng-copy" id="fng-localcopy" title="Copy folder path" onclick="' + R() + '.copyLocalPath()">' + cs + '</button></div>';
         html += '<div class="fng-muted" style="font-size:12px;margin-top:3px">Set your local root folder below to show the full folder path.</div>';
       }
-      if (ROOT.ui.createdSubtree && ROOT.ui.createdSubtree === folderSubtree()) html += '<div style="font-size:12px;margin-top:3px;color:#2CC98A">✓ Subfolders created on this machine.</div>';
       var editing = !b || ROOT.ui.rootEdit;
       html += '<div class="fng-f" style="margin-top:6px"><span class="fng-l">Local root folder <span class="fng-muted" style="font-weight:400">(the full path where you save data on this machine — type or paste it once)</span></span>';
       if (editing) {
@@ -1575,15 +1707,6 @@
       html += '</div>';
     }
     html += fsSaveSection(folder);
-    var root = archiveRoot();
-    if (folder && root) {
-      html += '<div class="fng-muted" style="font-size:12px;margin-top:8px">Recommended transfer destination (NASAC): <code>' + esc(root) + '</code> — move the raw data here after acquisition (edit this path in Manage › Build templates).</div>';
-      if (looksLocalRoot(root)) html += '<div style="font-size:12px;margin-top:2px;color:#f0a860">⚠ This looks like a local drive. Raw data should be archived on NASAC (a //server/share path).</div>';
-      html += '<label style="display:flex;gap:6px;align-items:center;font-size:12px;color:#a3adc1;margin-top:6px;cursor:pointer">'
-        + '<input type="checkbox"' + (showLiteralPath() ? ' checked' : '') + ' onchange="' + R() + '.toggleLiteralPath(this.checked)"> '
-        + 'Also record the full transfer path (NASAC) in the metadata</label>';
-      if (showLiteralPath()) html += '<div class="fng-path" style="opacity:.85;margin-top:4px" title="Full path after transferring to NASAC — recommended target, not verified">' + esc(curPath()) + '</div>';
-    }
     return html;
   }
   function curPath() {
@@ -1780,8 +1903,9 @@
 
   function fsSaveSection(folder) {
     if (!folder) return '';
+    var gear = '<button class="fng-gear" title="What this does &amp; transfer settings" onclick="' + R() + '.openFolderInfo()"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg></button>';
     if (!fsSupported()) {
-      return '<div class="fng-save"><div class="fng-l">Folder tree (this machine)</div>'
+      return '<div class="fng-save"><div class="fng-row" style="justify-content:space-between;align-items:center;gap:8px"><span class="fng-l" style="margin:0">Folder tree (this machine)</span>' + gear + '</div>'
         + '<div style="margin:6px 0 0;padding:8px 10px;border-radius:8px;background:rgba(214,158,46,.14);border:1px solid rgba(214,158,46,.55);font-size:12px;line-height:1.5">\u26A0\uFE0F <b>Create folder tree isn\u2019t available in this browser</b> (it needs Chrome or Edge), so the tool can\u2019t place the metadata file for you. Create the destination folder yourself, then use <b>Download .json</b> above and save the metadata into that folder \u2014 the FOLDER box stays red as a reminder until then.</div></div>';
     }
     var st = fsRootState();
@@ -1798,14 +1922,41 @@
       warn = '<p class="fng-muted" style="font-size:12px;margin:6px 0 0">You\u2019ll be asked to '
         + 'pick this folder the first time, so the browser can create folders in it.</p>';
     }
+    var miss = missingInputs().length, noRoot = !localBase(), hasSegs = fsSubSegs().length;
+    var done = hasSegs && ROOT.ui.createdSubtree === folderSubtree();
+    var ftCls = 'fng-ft', ftLabel = 'Create folder tree', ftDis = '';
+    if (done) { ftCls += ' done'; ftLabel = 'Folder tree created \u2713'; }
+    else if (miss || noRoot) { ftDis = ' disabled'; }        // greyed until every field + local root is set
+    else { ftCls += ' ready'; }                              // green + pulsing glow, until clicked
     return '<div class="fng-save"><div class="fng-row" style="justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap">'
       + '<span class="fng-l" style="margin:0">Folder tree (this machine)</span>'
-      + '<button class="fng-btn pri" onclick="' + R() + '.createTree()">Create folder tree</button></div>'
+      + '<span class="fng-ftwrap"><button class="' + ftCls + '"' + ftDis + ' onclick="' + R() + '.createTree()">' + ftLabel + '</button>' + gear + '</span></div>'
       + warn
-      + '<p class="fng-muted" style="font-size:12px;margin:5px 0 0">Creates the missing subfolders under your <b>local root folder</b>; the metadata path then switches from <i>Recommended local full path</i> to <i>Full path</i>.</p>'
-      + (ROOT._fsRoot ? '<p class="fng-muted" style="font-size:12px;margin:6px 0 0">✅ <b>Access granted.</b> When you click <b>Copy file name</b>, the metadata <code>.json</code> is written into that experiment’s folder (once its folder tree exists) — not before, and never by creating folders on its own.<span id="fng-autosave" style="color:var(--ac);display:block;margin-top:2px"></span></p>' : '')
       + '</div>';
   }
+  // The gear next to Create folder tree opens this card. It holds the verbose
+  // explanation + the NASAC transfer-destination info and the opt-in full-path
+  // toggle — kept out of the main FOLDER box so that box stays visually light.
+  function folderInfoModal() {
+    if (!ROOT.ui.folderInfo) return '';
+    var root = archiveRoot();
+    var body = '<p class="fng-muted" style="font-size:13px;margin:0 0 10px">Creates the missing subfolders under your <b>local root folder</b>; the metadata path then switches from <i>Recommended local full path</i> to <i>Full path</i>.</p>'
+      + (ROOT._fsRoot ? '<p class="fng-muted" style="font-size:13px;margin:0 0 10px">\u2705 <b>Access granted.</b> When you click <b>Copy file name</b>, the metadata <code>.json</code> is written into that experiment\u2019s folder (once its folder tree exists) \u2014 not before, and never by creating folders on its own.</p>' : '');
+    if (root) {
+      body += '<div class="fng-muted" style="font-size:13px;margin-top:12px">Recommended transfer destination (NASAC): <code>' + esc(root) + '</code> \u2014 move the raw data here after acquisition (edit this path in Manage \u203A Build templates).</div>';
+      if (looksLocalRoot(root)) body += '<div style="font-size:12px;margin-top:4px;color:var(--warn)">\u26A0 This looks like a local drive. Raw data should be archived on NASAC (a //server/share path).</div>';
+      body += '<label style="display:flex;gap:8px;align-items:center;font-size:13px;color:var(--tx);margin-top:12px;cursor:pointer">'
+        + '<input type="checkbox"' + (showLiteralPath() ? ' checked' : '') + ' onchange="' + R() + '.toggleLiteralPath(this.checked)"> '
+        + 'Also record the full transfer path (NASAC) in the metadata</label>';
+      if (showLiteralPath()) body += '<div class="fng-path" style="opacity:.85;margin-top:6px" title="Full path after transferring to NASAC \u2014 recommended target, not verified">' + esc(curPath()) + '</div>';
+    }
+    return '<div class="fng-modal" onmousedown="' + R() + '._fib=(event.target===this)" onmouseup="if(event.target===this&&' + R() + '._fib)' + R() + '.closeFolderInfo()">'
+      + '<div class="fng-modal-card"><div class="fng-modal-h"><h3 style="margin:0">Folder tree &amp; transfer</h3>'
+      + '<button class="fng-modal-x" title="Close" onclick="' + R() + '.closeFolderInfo()">\u2715</button></div>'
+      + body + '</div></div>';
+  }
+  ROOT.openFolderInfo = function () { ROOT.ui.folderInfo = true; rerender(); };
+  ROOT.closeFolderInfo = function () { ROOT.ui.folderInfo = false; rerender(); };
 
   function renderFsConfirm() {
     if (!ROOT.ui.fsConfirm || !ROOT._fsPending) return '';
@@ -2606,6 +2757,13 @@
       + '&destination=' + encodeURIComponent(dest)
       + '&scanRoot=' + encodeURIComponent(base)
       + '&destRoot=' + encodeURIComponent(root);
+    // Identify the current operator so the batch scan lists only THIS operator's
+    // folders — nobody is asked to take responsibility for another operator's data.
+    var opNm = (typeof currentOperator === 'function' ? (currentOperator() || '') : '');
+    var opObj = (opNm && typeof operatorByName === 'function') ? (operatorByName(opNm) || {}) : {};
+    if (opNm) url += '&operator=' + encodeURIComponent(opNm);
+    if (opObj.email) url += '&operatorEmail=' + encodeURIComponent(opObj.email);
+    if (opObj.orcid) url += '&operatorOrcid=' + encodeURIComponent(opObj.orcid);
     toast('Opening SafeTransfer\u2026 confirm the source and destination there, then Start.');
     stLaunch(url);
   };
@@ -2747,7 +2905,7 @@
     var list = buildTpls(lab), tpl = buildTpl(lab);
     var tplSel = list.length
       ? '<div class="fng-f"><span class="fng-l">Template</span><select class="fng-sel" onchange="' + R() + '.pickTpl(this.value)">'
-        + list.map(function (t) { return '<option value="' + esc(t.id) + '"' + (tpl && t.id === tpl.id ? ' selected' : '') + '>' + esc(t.name) + (t.default ? ' (default)' : '') + '</option>'; }).join('') + '</select></div>'
+        + sortDefaultFirst(list).map(function (t) { return '<option value="' + esc(t.id) + '"' + (tpl && t.id === tpl.id ? ' selected' : '') + '>' + esc(t.name) + (t.default ? ' (default)' : '') + '</option>'; }).join('') + '</select></div>'
       : '<span class="fng-muted">no templates yet</span>';
 
     var head = '<div class="fng-row">' + labSel + kindSel + tplSel
@@ -2817,7 +2975,7 @@
     var list = buildTpls(lab), tpl = buildTpl(lab);
     var tplSel = list.length
       ? '<div class="fng-f"><span class="fng-l">Template</span><select class="fng-sel" onchange="' + R() + '.pickTpl(this.value)">'
-        + list.map(function (t) { return '<option value="' + esc(t.id) + '"' + (tpl && t.id === tpl.id ? ' selected' : '') + '>' + esc(t.name) + (t.default ? ' (default)' : '') + '</option>'; }).join('') + '</select></div>'
+        + sortDefaultFirst(list).map(function (t) { return '<option value="' + esc(t.id) + '"' + (tpl && t.id === tpl.id ? ' selected' : '') + '>' + esc(t.name) + (t.default ? ' (default)' : '') + '</option>'; }).join('') + '</select></div>'
       : '<span class="fng-muted">no templates yet</span>';
     var head = '<div class="fng-row">' + labSel + kindSel + tplSel
       + '<button class="fng-btn sm" onclick="' + R() + '.addTpl()">+ New</button>'
@@ -2843,12 +3001,15 @@
     var L = ROOT.library;
     var nameRow = '<div class="fng-row" style="margin:12px 0 4px">'
       + '<div class="fng-f" style="flex:1;min-width:160px"><span class="fng-l">Template name</span>'
-      + '<input class="fng-in" value="' + esc(tpl.name) + '" oninput="' + R() + '.setTplName(this.value)"></div>'
+      + '<input class="fng-in" value="' + esc(tpl.name) + '" onchange="' + R() + '.setTplName(this.value)"></div>'
       + '<div class="fng-f"><span class="fng-l">Separator</span>'
       + '<input class="fng-in fng-sep" value="' + esc(tpl.separator || (ROOT.build.kind === 'folder' ? '/' : '_')) + '" maxlength="1" oninput="' + R() + '.setSep(this.value)"></div>'
       + '<div class="fng-f"><span class="fng-l">Default for lab</span>'
       + '<select class="fng-sel" onchange="' + R() + '.setDefault(this.value)"><option value="0">no</option><option value="1"' + (tpl.default ? ' selected' : '') + '>yes</option></select></div>'
       + '</div>';
+    var estHint = (tpl.default || (tpl.fieldIds && tpl.fieldIds.length))
+      ? '<div class="fng-muted" style="font-size:11px;margin:-4px 0 8px">Typing a different name here saves a <b>new</b> template (a copy) and keeps “' + esc(tpl.name) + '” unchanged. Use <b>+ Add template</b> for a blank one.</div>'
+      : '';
 
     var baseRow = ROOT.build.kind === 'folder'
       ? '<div class="fng-f" style="margin:8px 0"><span class="fng-l">Recommended transfer destination (NASAC) — written in the metadata as where to archive the raw data; the tool never asserts the file is already there</span>'
@@ -2872,7 +3033,7 @@
       return '<span class="fng-tile" onclick="' + R() + '.addTile(\'' + f.id + '\')">+ ' + esc(f.name) + '</span>';
     }).join('') || '<span class="fng-muted">all fields are in use</span>';
 
-    return nameRow + baseRow
+    return nameRow + estHint + baseRow
       + '<p class="lead">Drag the tiles to set the order (they shift as you drag). <b>Double-click</b> (or ✎) a tile to edit its format. ✕ removes it; click a field below to add it.</p>'
       + '<div class="fng-tiles" id="fng-tilebox" ondragover="' + R() + '.tileDragOver(event)" ondrop="' + R() + '.tileDrop(event)">' + tiles + '</div>'
       + '<h3 style="margin-top:14px">Available fields</h3>'
@@ -3110,7 +3271,16 @@
     var lab = buildLab(), list = buildTpls(lab), i = list.findIndex(function (t) { return t.id === ROOT.build.tplId; });
     if (i >= 0) list.splice(i, 1); ROOT.build.tplId = null; rerender();
   };
-  ROOT.setTplName = function (v) { var t = buildTpl(buildLab()); if (t) t.name = v; dirty(); };
+  ROOT.setTplName = function (v) {
+    var lab = buildLab(), t = buildTpl(lab); if (!t) return;
+    v = (v == null ? '' : String(v)).trim();
+    if (!v || v === t.name) return;                        // nothing changed
+    var established = !!t.default || !!(t.fieldIds && t.fieldIds.length);
+    if (!established) { t.name = v; rerender(); return; }   // naming a fresh/blank template: in place
+    // renaming an established template would clobber it (this bit the lab default twice) — fork a copy
+    var c = JSON.parse(JSON.stringify(t)); c.id = uid('tpl'); c.name = v; c.default = false;
+    buildTpls(lab).push(c); ROOT.build.tplId = c.id; rerender();
+  };
   ROOT.setSep = function (v) { var t = buildTpl(buildLab()); if (t) { t.separator = v || (ROOT.build.kind === 'folder' ? '/' : '_'); refreshExample(); } };
   ROOT.setBasePath = function (v) { var t = buildTpl(buildLab()); if (t) { t.basePath = v; dirty(); refreshExample(); } };
   ROOT.setDefault = function (v) {
@@ -3681,8 +3851,27 @@
   /* ==========================================================================
    * SHELL
    * ======================================================================== */
+  function operatorSplash() {
+    var L = ROOT.library || {};
+    var ops = (L.operators || []).slice().sort(function (a, b) { return cmpName(opName(a), opName(b)); }).map(opName);
+    ROOT._splashOps = ops;                                  // index-addressed to avoid quoting names into onclick
+    var last = machineOperator();
+    var rows = ops.map(function (n, i) {
+      return '<button class="fng-splash-op' + (n === last ? ' last' : '') + '" onclick="' + R() + '.pickOperatorAt(' + i + ')">'
+        + '<span>' + esc(n) + '</span>' + (n === last ? '<span class="fng-splash-tag">last used</span>' : '') + '</button>';
+    }).join('');
+    return '<div class="fng-splash"><div class="fng-splash-card">'
+      + '<div class="fng-splash-h">Who\u2019s using this device?</div>'
+      + '<p class="fng-splash-lead">Pick your name to load your templates and settings on this computer.</p>'
+      + '<div class="fng-splash-list">' + (rows || '<p class="fng-muted">No operators in the library yet.</p>') + '</div>'
+      + '<button class="fng-splash-skip" onclick="' + R() + '.skipPick()">Skip \u2014 continue without selecting</button>'
+      + '</div></div>';
+  }
   function shell() {
     if (ROOT._platformMode) return '<div class="fng">' + css() + renderPlatformAdmin() + platformsPublishDialog() + '</div>';
+    if (!ROOT.ui.picked && ROOT.library && (ROOT.library.operators || []).length) {
+      return '<div class="fng">' + css() + operatorSplash() + '</div>';
+    }
     var master = ROOT._isMaster !== false;
     // Tab bar: Use for everyone, Manage only for the library steward, Help for everyone.
     var tabs = '<div class="fng-tabs">'
@@ -3690,8 +3879,16 @@
       + (master ? '<button class="fng-tab' + (ROOT.ui.mode === 'manage' ? ' on' : '') + '" onclick="' + R() + '.go(\'manage\')">Manage</button>' : '')
       + '<button class="fng-tab' + (ROOT.ui.mode === 'help' ? ' on' : '') + '" onclick="' + R() + '.go(\'help\')">Help</button>'
       + '</div>';
+    var thsel = '<select class="fng-sel fng-thsel" title="Colour theme" onchange="' + R() + '.setTheme(this.value)">'
+      + Object.keys(THEMES).map(function (k) { return '<option value="' + k + '"' + (k === activeTheme() ? ' selected' : '') + '>' + esc(THEMES[k].label) + '</option>'; }).join('')
+      + '</select>';
+    var tsz = '<span class="fng-tsz">'
+      + '<button class="fng-tszb" title="Smaller text" aria-label="Decrease text size" onclick="' + R() + '.bumpText(-1)">A\u2212</button>'
+      + '<button class="fng-tszb" title="Larger text" aria-label="Increase text size" onclick="' + R() + '.bumpText(1)">A+</button>'
+      + '</span>';
+    var topbar = '<div class="fng-topbar">' + tabs + '<span class="fng-topctl">' + tsz + thsel + '</span></div>';
     var body = ROOT.ui.mode === 'help' ? renderHelp() : ((ROOT.ui.mode === 'manage' && master) ? renderManage() : renderUse());
-    return '<div class="fng">' + css() + tabs + body + renderDevManager() + renderConfigManager() + renderFsConfirm() + '</div>';
+    return '<div class="fng">' + css() + topbar + '<div class="fng-scale">' + body + '</div>' + renderDevManager() + renderConfigManager() + renderFsConfirm() + folderInfoModal() + '</div>';
   }
   ROOT.go = function (m) { ROOT.ui.mode = m; rerender(); };
   ROOT.shotFail = function (img) { try { img.style.display = 'none'; var ph = img.parentNode.querySelector('.fng-shot-ph'); if (ph) ph.style.display = 'flex'; } catch (e) {} };
@@ -3782,12 +3979,29 @@
       + '</div>';
   }
 
+  // Standalone (side-load) only: paint the whole page — body, header, edges —
+  // with the active theme, via CSS custom properties index.html references.
+  function applyPageTheme() {
+    if (typeof document === 'undefined' || !document.documentElement) return;
+    try {
+      var v = (THEMES[activeTheme()] || THEMES.dark).v;
+      var st = document.documentElement.style;
+      st.setProperty('--pg-bg', v.chrome);   // sides + header: a surround matched to the theme
+      st.setProperty('--pg-tx', v.tx);
+      st.setProperty('--pg-h1', v.tx2);
+      st.setProperty('--pg-bd', v.bd);
+      st.setProperty('--pg-dim', v.dim);
+      st.setProperty('--pg-link', v.ac);
+      st.setProperty('--pg-tile', v.bg);     // the centre tile (the app) follows the theme
+      st.setProperty('--pg-shadow', v.shadow); // dark themes: light edge/glow; light themes: drop-shadow
+    } catch (e) {}
+  }
   function rerender() {
     // Auto-persist on this machine so edits are never lost (no Save button).
     if (!ROOT._platformMode && ROOT.library) { try { localStorage.setItem(libCacheKey(), JSON.stringify(ROOT.library)); } catch (e) {} }
     if (ROOT._platformMode && ROOT.platformEdit) { try { localStorage.setItem('fng.platform.' + ROOT._platformSlug, JSON.stringify(ROOT.platformEdit)); } catch (e) {} }
     var host = ROOT._host || document.getElementById('fng-host');
-    if (host) { host.innerHTML = shell(); return; }
+    if (host) { host.innerHTML = shell(); if (ROOT._host) applyPageTheme(); return; }
     var sd = ROOT._sectionData;
     if (sd && sd.section && sd.section.setContent) { try { sd.section.setContent(shell()); } catch (e) {} }
   }
@@ -3907,6 +4121,7 @@
           ROOT.library = loadLibrary({});
           ROOT._savedSnapshot = snapshot();
           host.innerHTML = shell();
+          applyPageTheme();
         }
         try {
           fngRender();
@@ -3959,7 +4174,7 @@
   /* --- headless test exports ---------------------------------------------- */
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = { sanitizeVal: sanitizeVal, fmtDate: fmtDate, encodeField: encodeField,
-      buildName: buildName, inputFields: inputFields, defaultLibrary: defaultLibrary, normalize: normalize,
+      buildName: buildName, inputFields: inputFields, defaultLibrary: defaultLibrary, THEMES: THEMES, css: css, themeVars: themeVars, activeTheme: activeTheme, shell: shell, operatorSplash: operatorSplash, folderInfoModal: folderInfoModal, activeScale: activeScale, fsSaveSection: fsSaveSection, normalize: normalize,
       normalizeIndex: normalizeIndex, normalizePlatformFile: normalizePlatformFile,
       deviceGroups: deviceGroups, findDeviceByName: findDeviceByName, groupOfDevice: groupOfDevice,
       headerObject: headerObject, sidecar: sidecar, relPath: relPath, folderSubtree: folderSubtree, archiveRoot: archiveRoot, curName: curName, curPath: curPath, storageStatus: storageStatus, looksLocalRoot: looksLocalRoot, showLiteralPath: showLiteralPath, locationBlock: locationBlock, headerMarkdown: headerMarkdown, ideUrl: ideUrl, cmpName: cmpName, notesMarkdown: notesMarkdown, clipboardHtml: clipboardHtml, notesNonEmpty: notesNonEmpty, buildAnalyticsEvent: buildAnalyticsEvent, favDevices: favDevices, isFav: isFav, addFav: addFav, removeFav: removeFav, devmgrTree: devmgrTree, renderManage: renderManage, isDirty: isDirty, diffLibraries: diffLibraries, fsProbe: fsProbe, fsMkdirp: fsMkdirp, fsWrite: fsWrite, openEln: function(){return ROOT.openEln.apply(ROOT,arguments);}, currentOperatorEmail: currentOperatorEmail,
